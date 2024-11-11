@@ -3,6 +3,7 @@ import { presets } from './presets.js';
 import * as GCodePreview from 'gcode-preview';
 import { defaultSettings } from './default-settings.js';
 import { debounce, humanFileSize, readFile } from './utils.js';
+import { exportSTL } from './export-stl.js';
 
 const defaultPreset = 'multicolor';
 const preferDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
@@ -220,6 +221,11 @@ export const app = (window.app = createApp({
       });
     });
 
+    function exportScene() {
+      console.log(preview.scene);
+      exportSTL(preview.scene , 'preview.stl', true);
+    }
+
     return {
       presets,
       activeTab,
@@ -241,7 +247,8 @@ export const app = (window.app = createApp({
       loadGCodeFromServer,
       startLoadingProgressive,
       loadDroppedFile,
-      selectPreset
+      selectPreset,
+      exportScene
     };
   }
 }).mount('#app'));
