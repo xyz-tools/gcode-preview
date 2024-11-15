@@ -8,6 +8,10 @@ on:
     branches:
       - develop
       - v3.x
+permissions:
+  checks: write
+  contents: read
+  pull-requests: write
 
 jobs:
   build_and_preview:
