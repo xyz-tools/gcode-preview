@@ -10,7 +10,7 @@ on:
       - v3.x
 permissions:
   checks: write
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
