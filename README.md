@@ -3,6 +3,9 @@ A simple [G-code](https://en.wikipedia.org/wiki/G-code) parser & viewer lib with
 
 Join us on <a href="https://discord.gg/w2bsGRE6S4">discord</a>
 
+## New org: XYZ Tools
+11-11-2024 This repo was moved to a brand new org which is a collaboration between @remcoder and @sophiedeziel for everything 3D printing related.
+
 ## Feature summary
 - multi-color
 - tube geometry
