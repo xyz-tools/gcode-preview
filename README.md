@@ -17,8 +17,8 @@ Join us on <a href="https://discord.gg/w2bsGRE6S4">discord</a>
 ## Demo 
 
 Click to see the interactive demo:
-[<img title="click to see the demo" width="320" alt="image" src="https://github.com/remcoder/gcode-preview/assets/461650/d965d30f-101e-40d3-8ad7-c8257dd7866a">](https://gcode-preview.web.app/)
 
+[<img title="click to see the demo" width="320" alt="image" src="https://github.com/user-attachments/assets/4e663193-0a01-4fe2-864b-a8ffb18cbcd8">](https://gcode-preview.web.app/)
 
 ## Installation
 
