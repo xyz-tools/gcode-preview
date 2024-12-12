@@ -581,7 +581,7 @@ export class WebGLPreview {
 
       // we'll execute the commands immediately, for now
       this.interpreter.execute(commands, this.job);
-      
+
       tail = str.slice(idxNewLine);
     } while (!result.done);
     console.debug('read from stream', size);
