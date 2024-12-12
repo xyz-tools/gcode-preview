@@ -577,10 +577,15 @@ export class WebGLPreview {
       const maxFullLine = str.slice(0, idxNewLine);
 
       // parse increments but don't render yet
-      this.parser.parseGCode(tail + maxFullLine);
+      const { commands } = this.parser.parseGCode(tail + maxFullLine);
+
+      // we'll execute the commands immediately, for now
+      this.interpreter.execute(commands, this.job);
+
       tail = str.slice(idxNewLine);
     } while (!result.done);
     console.debug('read from stream', size);
+    this.render();
   }
 
   private initGui() {
