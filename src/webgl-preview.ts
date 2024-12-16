@@ -126,6 +126,7 @@ export class WebGLPreview {
   private stats?: Stats;
   private statsContainer?: HTMLElement;
   private devGui?: DevGUI;
+  private preserveDrawingBuffer = false;
 
   constructor(opts: GCodePreviewOptions) {
     this.minLayerThreshold = opts.minLayerThreshold ?? this.minLayerThreshold;
@@ -188,7 +189,7 @@ export class WebGLPreview {
       const container = document.getElementById(this.targetId);
       if (!container) throw new Error('Unable to find element ' + this.targetId);
 
-      this.renderer = new WebGLRenderer({ preserveDrawingBuffer: true });
+      this.renderer = new WebGLRenderer({ preserveDrawingBuffer: this.preserveDrawingBuffer });
       this.canvas = this.renderer.domElement;
 
       container.appendChild(this.canvas);
@@ -196,7 +197,7 @@ export class WebGLPreview {
       this.canvas = opts.canvas;
       this.renderer = new WebGLRenderer({
         canvas: this.canvas,
-        preserveDrawingBuffer: true
+        preserveDrawingBuffer: this.preserveDrawingBuffer
       });
     }
 
@@ -576,10 +577,15 @@ export class WebGLPreview {
       const maxFullLine = str.slice(0, idxNewLine);
 
       // parse increments but don't render yet
-      this.parser.parseGCode(tail + maxFullLine);
+      const { commands } = this.parser.parseGCode(tail + maxFullLine);
+
+      // we'll execute the commands immediately, for now
+      this.interpreter.execute(commands, this.job);
+
       tail = str.slice(idxNewLine);
     } while (!result.done);
     console.debug('read from stream', size);
+    this.render();
   }
 
   private initGui() {
