@@ -51,7 +51,7 @@
     "version:patch": "npm version patch",
     "version:minor": "npm version minor",
     "predeploy": "npm run build && npm run copy-deps && npm run copy-dist",
-    "copy-deps": "copyfiles -f node_modules/three/build/three.module.js demo/lib/three/build && copyfiles -f node_modules/lil-gui/dist/lil-gui.esm.min.js demo/lib/lil-gui/dist",
+    "copy-deps": "copyfiles -f node_modules/three/build/three.module.js demo/lib/three/build && copyfiles -f node_modules/three/build/three.core.js demo/lib/three/build && copyfiles -f node_modules/lil-gui/dist/lil-gui.esm.min.js demo/lib/lil-gui/dist",
     "copy-dist": "copyfiles -f dist/gcode-preview.es.js demo/dist",
     "deploy:preview": "live-server demo",
     "typedoc": "typedoc",
