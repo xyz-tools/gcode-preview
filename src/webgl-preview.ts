@@ -275,7 +275,6 @@ export class WebGLPreview {
     if (this.countLayers > 1 && value > 0) {
       this._startLayer = value;
       if (value <= this.countLayers) {
-        console.log(value);
         const layer = this.job.layers[value - 1];
         this.minPlane.constant = -this.minPlane.normal.y * layer.z;
         this.clippingPlanes = [this.minPlane, this.maxPlane];
@@ -481,7 +480,6 @@ export class WebGLPreview {
   }
 
   private renderPaths(endPathNumber: number = Infinity): void {
-    console.log('rendering paths');
     if (this.renderTravel) {
       this.renderPathsAsLines(this.job.travels.slice(this.renderPathIndex, endPathNumber), this._travelColor);
     }
