@@ -483,7 +483,7 @@ export class WebGLPreview {
 
     const lineVertices: number[] = [];
 
-    // lines need to be offset. 
+    // lines need to be offset.
     // The gcode specifies the nozzle height which is the top of the extrusion.
     // The line doesn't have a constant height in world coords so it should be rendered at horizontal midplane of the extrusion layer.
     // Otherwise the line will be clipped by the clipping plane.
@@ -491,8 +491,8 @@ export class WebGLPreview {
 
     paths.forEach((path) => {
       for (let i = 0; i < path.vertices.length - 3; i += 3) {
-        lineVertices.push(path.vertices[i], path.vertices[i + 1] -0.1, path.vertices[i + 2] + offset);
-        lineVertices.push(path.vertices[i + 3], path.vertices[i + 4]-0.1, path.vertices[i + 5] + offset);
+        lineVertices.push(path.vertices[i], path.vertices[i + 1] - 0.1, path.vertices[i + 2] + offset);
+        lineVertices.push(path.vertices[i + 3], path.vertices[i + 4] - 0.1, path.vertices[i + 5] + offset);
       }
     });
 
