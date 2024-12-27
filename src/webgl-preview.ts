@@ -37,7 +37,6 @@ export type GCodePreviewOptions = {
   buildVolume?: BuildVolume;
   backgroundColor?: ColorRepresentation;
   canvas?: HTMLCanvasElement;
-  debug?: boolean;
   endLayer?: number;
   extrusionColor?: ColorRepresentation | ColorRepresentation[];
   initialCameraPosition?: number[];
@@ -81,10 +80,6 @@ export class WebGLPreview {
   _singleLayerMode = false;
   buildVolume?: BuildVolume;
   initialCameraPosition = [-100, 400, 450];
-  /**
-   * @deprecated Use the dev mode options instead.
-   */
-  debug = false;
   inches = false;
   nonTravelmoves: string[] = [];
   disableGradient = false;
@@ -134,7 +129,6 @@ export class WebGLPreview {
     this.lineHeight = opts.lineHeight;
     this.buildVolume = opts.buildVolume && new BuildVolume(opts.buildVolume.x, opts.buildVolume.y, opts.buildVolume.z);
     this.initialCameraPosition = opts.initialCameraPosition ?? this.initialCameraPosition;
-    this.debug = opts.debug ?? this.debug;
     this.renderExtrusion = opts.renderExtrusion ?? this.renderExtrusion;
     this.renderTravel = opts.renderTravel ?? this.renderTravel;
     this.nonTravelmoves = opts.nonTravelMoves ?? this.nonTravelmoves;
