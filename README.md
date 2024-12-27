@@ -163,8 +163,6 @@ It would be great if you want to help! Maybe you'd like to help out with:
 - ❤️ Thank you @Sindarius for implementing G2/G3 arc support.
 - ❤️ Thank you @Zeng95 for providing a React & Typescript example.
 
-## Changelog
-Jump to the [CHANGELOG](CHANGELOG.md)
 ## Known issues
 ### Preview doesn't render in Brave
 This is caused by the device recognition shield in Brave. By changing the setting for "Device Recognition" in Shield settings to "Allow all device recognition attemps" or "Only block cross-site device recognition attemps" you should not get this error.
