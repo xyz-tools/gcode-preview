@@ -165,7 +165,7 @@ export class WebGLPreview {
 
     console.info('Using THREE r' + REVISION);
     console.debug('opts', opts);
-    
+
     this.canvas = opts.canvas;
     this.renderer = new WebGLRenderer({
       canvas: this.canvas,
