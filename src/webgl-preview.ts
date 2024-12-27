@@ -58,7 +58,6 @@ export type GCodePreviewOptions = {
    * @deprecated Please see the demo how to implement drag and drop.
    */
   allowDragNDrop?: boolean;
-  /** @experimental */
   devMode?: boolean | DevModeOptions;
 };
 
@@ -106,7 +105,7 @@ export class WebGLPreview {
   private _lastSegmentColor?: Color;
   private _toolColors: Record<number, Color> = {};
 
-  // debug
+  // dev mode
   private devMode?: boolean | DevModeOptions = false;
   private _lastRenderTime = 0;
   private _wireframe = false;
