@@ -59,20 +59,12 @@ export type GCodePreviewOptions = {
    * @deprecated Please see the demo how to implement drag and drop.
    */
   allowDragNDrop?: boolean;
-  /**
-   * @deprecated Please use the `canvas` param instead.
-   */
-  targetId?: string;
   /** @experimental */
   devMode?: boolean | DevModeOptions;
 };
 
 export class WebGLPreview {
   minLayerThreshold: number;
-  /**
-   * @deprecated Please use the `canvas` param instead.
-   */
-  targetId?: string;
   scene: Scene;
   camera: PerspectiveCamera;
   renderer: WebGLRenderer;
@@ -136,7 +128,6 @@ export class WebGLPreview {
     if (opts.backgroundColor !== undefined) {
       this.backgroundColor = new Color(opts.backgroundColor);
     }
-    this.targetId = opts.targetId;
     this.endLayer = opts.endLayer;
     this.startLayer = opts.startLayer;
     this.lineWidth = opts.lineWidth ?? 1;
@@ -151,6 +142,10 @@ export class WebGLPreview {
     this.extrusionWidth = opts.extrusionWidth;
     this.devMode = opts.devMode ?? this.devMode;
     this.stats = this.devMode ? new Stats() : undefined;
+
+    if (!opts.canvas) {
+      throw Error('Set either opts.canvas or opts.targetId');
+    }
 
     if (opts.extrusionColor !== undefined) {
       this.extrusionColor = opts.extrusionColor;
@@ -177,29 +172,12 @@ export class WebGLPreview {
 
     console.info('Using THREE r' + REVISION);
     console.debug('opts', opts);
-
-    if (this.targetId) {
-      console.warn('`targetId` is deprecated and will removed in the future. Use `canvas` instead.');
-    }
-
-    if (!opts.canvas) {
-      if (!this.targetId) {
-        throw Error('Set either opts.canvas or opts.targetId');
-      }
-      const container = document.getElementById(this.targetId);
-      if (!container) throw new Error('Unable to find element ' + this.targetId);
-
-      this.renderer = new WebGLRenderer({ preserveDrawingBuffer: this.preserveDrawingBuffer });
-      this.canvas = this.renderer.domElement;
-
-      container.appendChild(this.canvas);
-    } else {
-      this.canvas = opts.canvas;
-      this.renderer = new WebGLRenderer({
-        canvas: this.canvas,
-        preserveDrawingBuffer: this.preserveDrawingBuffer
-      });
-    }
+    
+    this.canvas = opts.canvas;
+    this.renderer = new WebGLRenderer({
+      canvas: this.canvas,
+      preserveDrawingBuffer: this.preserveDrawingBuffer
+    });
 
     this.renderer.localClippingEnabled = true;
     this.camera = new PerspectiveCamera(25, this.canvas.offsetWidth / this.canvas.offsetHeight, 10, 5000);
