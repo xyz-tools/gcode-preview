@@ -277,6 +277,9 @@ export class WebGLPreview {
     }
   }
 
+  get singleLayerMode(): boolean {
+    return this._singleLayerMode;
+  }
   set singleLayerMode(value: boolean) {
     this._singleLayerMode = value;
     if (value) {
