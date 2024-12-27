@@ -97,6 +97,7 @@ export class WebGLPreview {
   private minPlane = new Plane(new Vector3(0, 1, 0), 0.6);
   private maxPlane = new Plane(new Vector3(0, -1, 0), 0.1);
   private clippingPlanes: Plane[] = [];
+  private prevStartLayer = 0;
 
   // colors
   private _backgroundColor = new Color(0xe0e0e0);
@@ -263,7 +264,7 @@ export class WebGLPreview {
     if (this.countLayers > 1 && value > 0) {
       this._endLayer = value;
       if (this._singleLayerMode === true) {
-        this.startLayer = this._endLayer;
+        this.startLayer = this._endLayer - 1;
       }
       if (value <= this.countLayers) {
         const layer = this.job.layers[value - 1];
@@ -279,7 +280,10 @@ export class WebGLPreview {
   set singleLayerMode(value: boolean) {
     this._singleLayerMode = value;
     if (value) {
-      this.startLayer = this.endLayer - 1;
+      this.prevStartLayer = this._startLayer;
+      this.startLayer = this._endLayer - 1;
+    } else {
+      this.startLayer = this.prevStartLayer;
     }
   }
 

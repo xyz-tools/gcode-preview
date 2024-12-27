@@ -216,6 +216,9 @@ export const app = (window.app = createApp({
       watchEffect(() => {
         preview.startLayer = +settings.value.startLayer;
         preview.endLayer = +settings.value.endLayer;
+      });
+
+      watchEffect(() => {
         preview.singleLayerMode = settings.value.singleLayerMode;
       });
     });
