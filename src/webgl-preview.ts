@@ -37,7 +37,6 @@ export type GCodePreviewOptions = {
   buildVolume?: BuildVolume;
   backgroundColor?: ColorRepresentation;
   canvas?: HTMLCanvasElement;
-  debug?: boolean;
   endLayer?: number;
   extrusionColor?: ColorRepresentation | ColorRepresentation[];
   initialCameraPosition?: number[];
@@ -59,20 +58,11 @@ export type GCodePreviewOptions = {
    * @deprecated Please see the demo how to implement drag and drop.
    */
   allowDragNDrop?: boolean;
-  /**
-   * @deprecated Please use the `canvas` param instead.
-   */
-  targetId?: string;
-  /** @experimental */
   devMode?: boolean | DevModeOptions;
 };
 
 export class WebGLPreview {
   minLayerThreshold: number;
-  /**
-   * @deprecated Please use the `canvas` param instead.
-   */
-  targetId?: string;
   scene: Scene;
   camera: PerspectiveCamera;
   renderer: WebGLRenderer;
@@ -89,10 +79,6 @@ export class WebGLPreview {
   _singleLayerMode = false;
   buildVolume?: BuildVolume;
   initialCameraPosition = [-100, 400, 450];
-  /**
-   * @deprecated Use the dev mode options instead.
-   */
-  debug = false;
   inches = false;
   nonTravelmoves: string[] = [];
   disableGradient = false;
@@ -111,6 +97,7 @@ export class WebGLPreview {
   private minPlane = new Plane(new Vector3(0, 1, 0), 0.6);
   private maxPlane = new Plane(new Vector3(0, -1, 0), 0.1);
   private clippingPlanes: Plane[] = [];
+  private prevStartLayer = 0;
 
   // colors
   private _backgroundColor = new Color(0xe0e0e0);
@@ -119,7 +106,7 @@ export class WebGLPreview {
   private _lastSegmentColor?: Color;
   private _toolColors: Record<number, Color> = {};
 
-  // debug
+  // dev mode
   private devMode?: boolean | DevModeOptions = false;
   private _lastRenderTime = 0;
   private _wireframe = false;
@@ -136,14 +123,12 @@ export class WebGLPreview {
     if (opts.backgroundColor !== undefined) {
       this.backgroundColor = new Color(opts.backgroundColor);
     }
-    this.targetId = opts.targetId;
     this.endLayer = opts.endLayer;
     this.startLayer = opts.startLayer;
     this.lineWidth = opts.lineWidth ?? 1;
     this.lineHeight = opts.lineHeight;
     this.buildVolume = opts.buildVolume && new BuildVolume(opts.buildVolume.x, opts.buildVolume.y, opts.buildVolume.z);
     this.initialCameraPosition = opts.initialCameraPosition ?? this.initialCameraPosition;
-    this.debug = opts.debug ?? this.debug;
     this.renderExtrusion = opts.renderExtrusion ?? this.renderExtrusion;
     this.renderTravel = opts.renderTravel ?? this.renderTravel;
     this.nonTravelmoves = opts.nonTravelMoves ?? this.nonTravelmoves;
@@ -151,6 +136,10 @@ export class WebGLPreview {
     this.extrusionWidth = opts.extrusionWidth;
     this.devMode = opts.devMode ?? this.devMode;
     this.stats = this.devMode ? new Stats() : undefined;
+
+    if (!opts.canvas) {
+      throw Error('Set either opts.canvas or opts.targetId');
+    }
 
     if (opts.extrusionColor !== undefined) {
       this.extrusionColor = opts.extrusionColor;
@@ -178,28 +167,11 @@ export class WebGLPreview {
     console.info('Using THREE r' + REVISION);
     console.debug('opts', opts);
 
-    if (this.targetId) {
-      console.warn('`targetId` is deprecated and will removed in the future. Use `canvas` instead.');
-    }
-
-    if (!opts.canvas) {
-      if (!this.targetId) {
-        throw Error('Set either opts.canvas or opts.targetId');
-      }
-      const container = document.getElementById(this.targetId);
-      if (!container) throw new Error('Unable to find element ' + this.targetId);
-
-      this.renderer = new WebGLRenderer({ preserveDrawingBuffer: this.preserveDrawingBuffer });
-      this.canvas = this.renderer.domElement;
-
-      container.appendChild(this.canvas);
-    } else {
-      this.canvas = opts.canvas;
-      this.renderer = new WebGLRenderer({
-        canvas: this.canvas,
-        preserveDrawingBuffer: this.preserveDrawingBuffer
-      });
-    }
+    this.canvas = opts.canvas;
+    this.renderer = new WebGLRenderer({
+      canvas: this.canvas,
+      preserveDrawingBuffer: this.preserveDrawingBuffer
+    });
 
     this.renderer.localClippingEnabled = true;
     this.camera = new PerspectiveCamera(25, this.canvas.offsetWidth / this.canvas.offsetHeight, 10, 5000);
@@ -275,7 +247,6 @@ export class WebGLPreview {
     if (this.countLayers > 1 && value > 0) {
       this._startLayer = value;
       if (value <= this.countLayers) {
-        console.log(value);
         const layer = this.job.layers[value - 1];
         this.minPlane.constant = -this.minPlane.normal.y * layer.z;
         this.clippingPlanes = [this.minPlane, this.maxPlane];
@@ -293,7 +264,7 @@ export class WebGLPreview {
     if (this.countLayers > 1 && value > 0) {
       this._endLayer = value;
       if (this._singleLayerMode === true) {
-        this.startLayer = this._endLayer;
+        this.startLayer = this._endLayer - 1;
       }
       if (value <= this.countLayers) {
         const layer = this.job.layers[value - 1];
@@ -306,10 +277,16 @@ export class WebGLPreview {
     }
   }
 
+  get singleLayerMode(): boolean {
+    return this._singleLayerMode;
+  }
   set singleLayerMode(value: boolean) {
     this._singleLayerMode = value;
     if (value) {
-      this.startLayer = this.endLayer - 1;
+      this.prevStartLayer = this._startLayer;
+      this.startLayer = this._endLayer - 1;
+    } else {
+      this.startLayer = this.prevStartLayer;
     }
   }
 
@@ -481,7 +458,6 @@ export class WebGLPreview {
   }
 
   private renderPaths(endPathNumber: number = Infinity): void {
-    console.log('rendering paths');
     if (this.renderTravel) {
       this.renderPathsAsLines(this.job.travels.slice(this.renderPathIndex, endPathNumber), this._travelColor);
     }
@@ -499,7 +475,6 @@ export class WebGLPreview {
   }
 
   private renderPathsAsLines(paths: Path[], color: Color): void {
-    console.log(this.clippingPlanes);
     const material = new LineMaterial({
       color: Number(color.getHex()),
       linewidth: this.lineWidth,
@@ -507,10 +482,17 @@ export class WebGLPreview {
     });
 
     const lineVertices: number[] = [];
+
+    // lines need to be offset.
+    // The gcode specifies the nozzle height which is the top of the extrusion.
+    // The line doesn't have a constant height in world coords so it should be rendered at horizontal midplane of the extrusion layer.
+    // Otherwise the line will be clipped by the clipping plane.
+    const offset = -this.lineHeight / 2;
+
     paths.forEach((path) => {
       for (let i = 0; i < path.vertices.length - 3; i += 3) {
-        lineVertices.push(path.vertices[i], path.vertices[i + 1], path.vertices[i + 2]);
-        lineVertices.push(path.vertices[i + 3], path.vertices[i + 4], path.vertices[i + 5]);
+        lineVertices.push(path.vertices[i], path.vertices[i + 1] - 0.1, path.vertices[i + 2] + offset);
+        lineVertices.push(path.vertices[i + 3], path.vertices[i + 4] - 0.1, path.vertices[i + 5] + offset);
       }
     });
 
