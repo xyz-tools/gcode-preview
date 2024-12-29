@@ -2,6 +2,10 @@ import { Path, PathType } from './path';
 import { GCodeCommand } from './gcode-parser';
 import { Job } from './job';
 
+
+// eslint-disable-next-line no-unused-vars
+type Method = (...args: unknown[]) => unknown;
+
 /**
  * Interprets and executes G-code commands, updating the job state accordingly
  *
@@ -14,6 +18,11 @@ export class Interpreter {
   // eslint-disable-next-line no-unused-vars
   [key: string]: (...args: unknown[]) => unknown;
 
+  private retractions = 0;
+  private wipes = 0;
+  private feedrateChanges = 0;
+  private points = 0;
+
   /**
    * Executes an array of G-code commands, updating the provided job
    * @param commands - Array of GCodeCommand objects to execute
@@ -24,13 +33,21 @@ export class Interpreter {
     job.resumeLastPath();
     commands.forEach((command) => {
       if (command.gcode !== undefined) {
-        if (this[command.gcode] === undefined) {
+        
+        if (typeof this[command.gcode] !== 'function') {
           return;
         }
-        this[command.gcode](command, job);
+        const method = this[command.gcode] as Method;
+        method.bind(this)(command, job);
       }
     });
     job.finishPath();
+
+    console.debug('Done processing gcode', measure.duration.toFixed(0) + 'ms');
+    console.debug(this.retractions, 'retractions');
+    console.debug(this.wipes, 'wipes');
+    console.debug(this.feedrateChanges, 'feedrateChanges');
+    console.debug(this.points, 'points');
 
     return job;
   }
@@ -49,8 +66,23 @@ export class Interpreter {
 
     // discard zero length moves
     if (x === undefined && y === undefined && z === undefined) {
+      // console.warn('Discarding zero length move');
+      if (e > 0 ) {
+        this.retractions++;
+      }
+
+      else if (e < 0) {
+        this.wipes++;
+      }
+
+      if (f !== undefined) {
+        this.feedrateChanges++;
+      }
+      
       return;
     }
+
+    this.points++;
 
     const { state } = job;
     let currentPath = job.inprogressPath;
