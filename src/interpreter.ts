@@ -45,9 +45,14 @@ export class Interpreter {
    * G0 is for rapid moves (non-extrusion), G1 is for linear moves (with optional extrusion).
    */
   g0(command: GCodeCommand, job: Job): void {
-    const { x, y, z, e } = command.params;
-    const { state } = job;
+    const { x, y, z, e, f } = command.params;
 
+    // discard zero length moves
+    if (x === undefined && y === undefined && z === undefined) {
+      return;
+    }
+
+    const { state } = job;
     let currentPath = job.inprogressPath;
     const pathType = e > 0 ? PathType.Extrusion : PathType.Travel;
 
