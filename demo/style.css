@@ -283,6 +283,7 @@ footer {
   border-radius: 5px;
   margin: 10px;
   transform: translateZ(0);
+  animation-delay: 2000ms;
 }
 
 .widget > img {
