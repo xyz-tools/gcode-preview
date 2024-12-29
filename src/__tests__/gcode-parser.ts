@@ -21,6 +21,17 @@ test('a single extrusion cmd should parse attributes', () => {
   expect(cmd.params.e).toEqual(1.9);
 });
 
+// G1 X61.769 Y90.734 E-.27245
+test('E value that doesn\' have a leading 0 should be parsed as if there was a 0', () => {
+  const parser = new Parser();
+  const gcode = `G1 X61.769 Y90.734 E-.27245`;
+  const parsed = parser.parseGCode(gcode);
+  const cmd = parsed.commands[0];
+  expect(cmd.params.x).toEqual(61.769);
+  expect(cmd.params.y).toEqual(90.734);
+  expect(cmd.params.e).toEqual(-0.27245);
+});
+
 test('multiple cmd results in an array of commands', () => {
   const parser = new Parser();
   const gcode = `G1 X5 Y6 Z3 E1.9
