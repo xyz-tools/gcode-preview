@@ -95,6 +95,8 @@ export class Interpreter {
       currentPath = this.breakPath(job, pathType);
     }
 
+    // e is omitted bc currently we're assuming relative extrusion distances
+    // see also https://github.com/xyz-tools/gcode-preview/issues/179
     state.x = x ?? state.x;
     state.y = y ?? state.y;
     state.z = z ?? state.z;
