@@ -30,6 +30,7 @@ export class Interpreter {
    * @returns The updated job instance
    */
   execute(commands: GCodeCommand[], job = new Job()): Job {
+    performance.mark('start execution');
     job.resumeLastPath();
     commands.forEach((command) => {
       if (command.gcode !== undefined) {
@@ -43,6 +44,8 @@ export class Interpreter {
     });
     job.finishPath();
 
+    performance.mark('end execution');
+    const measure = performance.measure('execution', 'start execution', 'end execution');
     console.debug('Done processing gcode', measure.duration.toFixed(0) + 'ms');
     console.debug(this.retractions, 'retractions');
     console.debug(this.wipes, 'wipes');
