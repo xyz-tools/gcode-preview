@@ -1,10 +1,13 @@
 {
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": [
-    "src/gcode-preview.ts"
+    "src/gcode-preview.ts", "src/gcode-parser.ts"
   ],
   "out": "demo/docs",
   "includeVersion": true,
   "excludeInternal": true,
   "customCss": "typedoc.css",
+  "navigationLinks": {
+    "Demo": "http://gcode-preview.web.app"
+  }
 }
