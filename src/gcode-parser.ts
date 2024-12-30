@@ -95,7 +95,7 @@ export class GCodeCommand {
 
     /** The parsed parameters */
     public params: GCodeParameters,
-    
+
     /** Optional comment from the G-code line */
     public comment?: string
   ) {}
@@ -122,7 +122,7 @@ type Metadata = { thumbnails: Record<string, Thumbnail> };
 export class Parser {
   /** Metadata extracted from G-code comments, including thumbnails */
   metadata: Metadata = { thumbnails: {} };
-  
+
   /** Original G-code lines stored for reference */
   lines: string[] = [];
 
