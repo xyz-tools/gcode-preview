@@ -20,7 +20,6 @@ import {
   Color,
   ColorRepresentation,
   Euler,
-  Fog,
   Group,
   Material,
   MeshLambertMaterial,
@@ -176,9 +175,6 @@ export class WebGLPreview {
     this.renderer.localClippingEnabled = true;
     this.camera = new PerspectiveCamera(25, this.canvas.offsetWidth / this.canvas.offsetHeight, 10, 5000);
     this.camera.position.fromArray(this.initialCameraPosition);
-    const fogFar = (this.camera as PerspectiveCamera).far;
-    const fogNear = fogFar * 0.8;
-    this.scene.fog = new Fog(this._backgroundColor, fogNear, fogFar);
 
     this.resize();
 
