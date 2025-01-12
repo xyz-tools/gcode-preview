@@ -4,7 +4,7 @@ import * as GCodePreview from 'gcode-preview';
 import { defaultSettings } from './default-settings.js';
 import { debounce, humanFileSize, readFile } from './utils.js';
 
-const defaultPreset = 'multicolor';
+const defaultPreset = 'arcs';
 const preferDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
 const initialBackgroundColor = preferDarkMode.matches ? '#141414' : '#eee';
 const statsContainer = () => document.querySelector('.sidebar');

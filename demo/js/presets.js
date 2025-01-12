@@ -1,16 +1,4 @@
 export const presets = {
-  multicolor: {
-    title: 'multicolor benchy',
-    file: 'gcodes/3DBenchy-Multi-part.gcode',
-    extrusionColor: ['#CF439D', 'rgb(84,74,187)', 'white', 'rgb(83,209,104)'],
-    topLayerColor: undefined,
-    lastSegmentColor: undefined,
-    buildVolume: {
-      x: 180,
-      y: 180,
-      z: 100
-    }
-  },
   mach3: {
     title: 'CNC tool path',
     file: 'gcodes/mach3.gcode',
