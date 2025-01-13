@@ -1,6 +1,11 @@
 import { ShaderMaterial } from "three/src/materials/ShaderMaterial.js";
 import { Color } from "three/src/math/Color.js";
 
+/* 
+  This file contains a custom ShaderMaterial that calculates the lighting of a mesh based on the normal of the mesh and a fixed light direction. 
+  The material also allows for setting the color, ambient light intensity, directional light intensity, and brightness. 
+*/
+
 // Vertex Shader
 const vertexShader = `
   varying vec3 vNormal;

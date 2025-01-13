@@ -100,6 +100,12 @@ export class WebGLPreview {
   private clippingPlanes: Plane[] = [];
   private prevStartLayer = 0;
 
+  // shader material
+  private materials: ShaderMaterial[] =[];
+  private _ambientLight = 0.4;
+  private _directionalLight = 1.3;
+  private _brightness = 1.3;
+
   // colors
   private _backgroundColor = new Color(0xe0e0e0);
   private _travelColor = new Color(0x990000);
@@ -115,50 +121,7 @@ export class WebGLPreview {
   private statsContainer?: HTMLElement;
   private devGui?: DevGUI;
   private preserveDrawingBuffer = false;
-  private materials: ShaderMaterial[] =[];
-  private _ambientLight = 0.4;
   
-
-  get ambientLight(): number {
-    return this._ambientLight;
-  }
-  set ambientLight(value: number) {
-    this._ambientLight = value;
-
-    // update material uniforms
-    this.materials.forEach((material) => {
-      material.uniforms.ambient.value = value;
-    });
-  }
-
-  // same for dictional light
-  private _directionalLight = 1.3;
-  get directionalLight(): number {
-    return this._directionalLight;
-  }
-  set directionalLight(value: number) {
-    this._directionalLight = value;
-
-    // update material uniforms
-    this.materials.forEach((material) => {
-      material.uniforms.directional.value = value;
-    });
-  }
-
-  // and brightness
-  private _brightness = 1.3;
-  get brightness(): number {
-    return this._brightness;
-  }
-  set brightness(value: number) {
-    this._brightness = value;
-
-    // update material uniforms
-    this.materials.forEach((material) => {
-      material.uniforms.brightness.value = value;
-    });
-  }
-
 
   constructor(opts: GCodePreviewOptions) {
     this.minLayerThreshold = opts.minLayerThreshold ?? this.minLayerThreshold;
@@ -333,6 +296,42 @@ export class WebGLPreview {
     } else {
       this.startLayer = this.prevStartLayer;
     }
+  }
+
+  get ambientLight(): number {
+    return this._ambientLight;
+  }
+  set ambientLight(value: number) {
+    this._ambientLight = value;
+
+    // update material uniforms
+    this.materials.forEach((material) => {
+      material.uniforms.ambient.value = value;
+    });
+  }
+
+  get directionalLight(): number {
+    return this._directionalLight;
+  }
+  set directionalLight(value: number) {
+    this._directionalLight = value;
+
+    // update material uniforms
+    this.materials.forEach((material) => {
+      material.uniforms.directional.value = value;
+    });
+  }
+
+  get brightness(): number {
+    return this._brightness;
+  }
+  set brightness(value: number) {
+    this._brightness = value;
+
+    // update material uniforms
+    this.materials.forEach((material) => {
+      material.uniforms.brightness.value = value;
+    });
   }
 
   /** @internal */
