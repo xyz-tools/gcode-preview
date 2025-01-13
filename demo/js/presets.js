@@ -81,5 +81,25 @@ export const presets = {
       y: 200,
       z: 150
     }
+  },
+  marlin: {
+    title: 'multicolor Nemo (6MB)',
+    file: 'https://storage.googleapis.com/gcode-preview.firebasestorage.app/Marlin.gcode',
+    model: {
+      name: 'Marlin (multi-material remix)',
+      designer: 'cipis',
+      license: 'CC BY-NC-SA',
+      original: 'https://www.thingiverse.com/thing:387266'
+    },
+    extrusionWidth: 0.5,
+    extrusionColor: ['orange', 'black', 'white'],
+    travelColor: 'red',
+    topLayerColor: undefined,
+    lastSegmentColor: undefined,
+    buildVolume: {
+      x: 250,
+      y: 250,
+      z: 0
+    }
   }
 };

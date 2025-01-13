@@ -47,13 +47,23 @@ const fragmentShader = `
   }
 `;
 
-// ShaderMaterial
+// cachedMaterial is used to store the material so that it is only created once for every color
+export const cachedMaterials: { [color: number]: ShaderMaterial } = {};
+
+// TODO: remove the cache or add a way to clear it
+
 export function createColorMaterial(
   color: number,
   ambient: number,
   directional: number,
   brightness: number
 ): ShaderMaterial {
+  // Check if the material for the given color is already cached
+  if (cachedMaterials[color]) {
+    return cachedMaterials[color];
+  }
+  console.log('createColorMaterial. not cached');
+
   const material = new ShaderMaterial({
     vertexShader,
     fragmentShader,
@@ -64,6 +74,9 @@ export function createColorMaterial(
       brightness: { value: brightness }
     }
   });
+
+  // Cache the material
+  cachedMaterials[color] = material;
 
   return material;
 }

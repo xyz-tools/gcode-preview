@@ -201,13 +201,21 @@ export class WebGLPreview {
       // loop over the object and convert all colors to Color
       for (const [index, color] of value.entries()) {
         this._extrusionColor[index] = new Color(color);
+        if (!this.materials[index]) {
+          this.materials[index] = createColorMaterial(
+            this._extrusionColor[index].getHex(),
+            this.ambientLight,
+            this.directionalLight,
+            this.brightness
+          );
+        }
+        const material = this.materials[index];
+        material.uniforms.uColor.value = this._extrusionColor[index];
       }
       return;
     }
     this._extrusionColor = new Color(value);
-    this.materials.forEach((material) => {
-      material.uniforms.uColor.value = this._extrusionColor;
-    });
+    this.materials[0].uniforms.uColor.value = this._extrusionColor;
   }
 
   get backgroundColor(): Color {
@@ -537,6 +545,7 @@ export class WebGLPreview {
     this.group?.add(line);
   }
 
+  // TODO: add back clipping planes
   private renderPathsAsTubes(paths: Path[], color: Color): void {
     const colorNumber = Number(color.getHex());
     const geometries: BufferGeometry[] = [];
