@@ -213,7 +213,6 @@ export const app = (window.app = createApp({
         preview.renderExtrusion = settings.value.renderExtrusion;
         preview.renderTubes = settings.value.renderTubes;
         preview.extrusionWidth = +settings.value.extrusionWidth;
-        preview.extrusionColor = settings.value.colors.length === 1 ? settings.value.colors[0] : settings.value.colors;
 
         // TODO: should be a quick update:
         preview.topLayerColor = settings.value.highlightTopLayer ? settings.value.topLayerColor : undefined;
@@ -229,6 +228,10 @@ export const app = (window.app = createApp({
 
       watchEffect(() => {
         preview.singleLayerMode = settings.value.singleLayerMode;
+      });
+
+      watchEffect(() => {
+        preview.extrusionColor = settings.value.colors.length === 1 ? settings.value.colors[0] : settings.value.colors;
       });
     });
 

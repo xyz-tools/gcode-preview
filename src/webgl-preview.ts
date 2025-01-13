@@ -12,6 +12,7 @@ import { DevGUI, DevModeOptions } from './dev-gui';
 import { Interpreter } from './interpreter';
 import { Job } from './job';
 import { Path } from './path';
+import { createColorMaterial } from './helpers/colorMaterial';
 
 import {
   AmbientLight,
@@ -113,6 +114,7 @@ export class WebGLPreview {
   private statsContainer?: HTMLElement;
   private devGui?: DevGUI;
   private preserveDrawingBuffer = false;
+  private materials: Material[] =[];
 
   constructor(opts: GCodePreviewOptions) {
     this.minLayerThreshold = opts.minLayerThreshold ?? this.minLayerThreshold;
@@ -200,6 +202,9 @@ export class WebGLPreview {
       return;
     }
     this._extrusionColor = new Color(value);
+    this.materials.forEach((material) => {
+      material.uniforms.uColor.value = this._extrusionColor;
+    });
   }
 
   get backgroundColor(): Color {
@@ -301,6 +306,8 @@ export class WebGLPreview {
   }
 
   private initScene() {
+    this.materials = [];
+
     while (this.scene.children.length > 0) {
       this.scene.remove(this.scene.children[0]);
     }
@@ -504,11 +511,15 @@ export class WebGLPreview {
     const colorNumber = Number(color.getHex());
     const geometries: BufferGeometry[] = [];
 
-    const material = new MeshLambertMaterial({
-      color: colorNumber,
-      wireframe: this._wireframe,
-      clippingPlanes: this.clippingPlanes
-    });
+    // const material = new MeshLambertMaterial({
+    //   color: colorNumber,
+    //   wireframe: this._wireframe,
+    //   clippingPlanes: this.clippingPlanes
+    // });
+
+    const material = createColorMaterial(colorNumber);
+
+    this.materials.push(material);
 
     paths.forEach((path) => {
       const geometry = path.geometry({
