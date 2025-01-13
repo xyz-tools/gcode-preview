@@ -21,6 +21,7 @@ export const app = (window.app = createApp({
     const layerCount = ref(0);
     const fileSize = ref(0);
     const fileName = ref('');
+    const model = ref(null);
     const dragging = ref(false);
     const settings = ref(Object.assign({}, defaultSettings));
     const enableDevMode = ref(false);
@@ -46,6 +47,7 @@ export const app = (window.app = createApp({
       dragging.value = false;
       const file = event.dataTransfer.files[0];
       fileName.value = file.name;
+      model.value = null;
       loadDroppedFile(file);
     };
 
@@ -146,6 +148,7 @@ export const app = (window.app = createApp({
       const canvas = document.querySelector('canvas.preview');
       const preset = presets[presetName];
       fileName.value = preset.file.replace(/^.*?\//, '');
+      model.value = preset.model;
       const options = Object.assign(
         {
           canvas,
@@ -231,6 +234,7 @@ export const app = (window.app = createApp({
       layerCount,
       fileSize,
       fileName,
+      model,
       dragging,
       settings,
       enableDevMode,

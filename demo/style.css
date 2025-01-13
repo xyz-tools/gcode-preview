@@ -305,3 +305,7 @@ footer {
   backdrop-filter: blur(5px);
   background-color: hsla(196, 45%, 15%, 0.5);
 }
+
+.is-size-8 {
+  font-size: 0.6rem !important;
+}
