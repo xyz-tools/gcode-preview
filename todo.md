@@ -19,7 +19,9 @@
 ## Completed Documentation Updates
 - dev-gui.ts: Removed duplicate documentation comments for all setup methods
 - interpreter.ts: Updated documentation for all tool selection methods (t1-t7)
-- webgl-preview.ts: Added documentation for:
+- webgl-preview.ts:
+  - Removed duplicate documentation comments
+  - Added documentation for:
   - initScene()
   - createGroup()
   - renderFrame()

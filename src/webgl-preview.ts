@@ -473,8 +473,11 @@ export class WebGLPreview {
 
   /**
    * Initializes the Three.js scene by clearing existing elements and setting up lights
+   * @remarks
+   * Clears all existing scene objects and disposables, then adds build volume visualization
+   * and lighting if 3D tube rendering is enabled.
    */
-  private initScene() {
+  private initScene(): void {
     while (this.scene.children.length > 0) {
       this.scene.remove(this.scene.children[0]);
     }
@@ -503,6 +506,9 @@ export class WebGLPreview {
    * Creates a new Three.js group for organizing rendered paths
    * @param name - Name for the group
    * @returns Configured Three.js group
+   * @remarks
+   * Sets up the group's orientation and position based on build volume dimensions.
+   * If no build volume is defined, uses a default position.
    */
   private createGroup(name: string): Group {
     const group = new Group();
@@ -572,6 +578,9 @@ export class WebGLPreview {
   /**
    * Renders a frame with the specified number of paths
    * @param pathCount - Number of paths to render in this frame
+   * @remarks
+   * Creates a new group for the frame and renders paths up to the specified count.
+   * Updates the renderPathIndex to track progress through the job's paths.
    */
   private renderFrame(pathCount: number): void {
     this.group = this.createGroup('parts' + this.renderPathIndex);
@@ -589,6 +598,12 @@ export class WebGLPreview {
   }
 
   // reset processing state
+  /**
+   * Resets the preview state to default values
+   * @remarks
+   * Resets layer ranges, single layer mode, and developer GUI state.
+   * Called when clearing the preview or starting a new job.
+   */
   private resetState(): void {
     this.startLayer = 1;
     this.endLayer = Infinity;
@@ -613,12 +628,24 @@ export class WebGLPreview {
     this.cancelAnimation();
   }
 
+  /**
+   * Cancels the current animation frame request
+   * @remarks
+   * Stops the animation loop and clears the animation frame ID.
+   * Called during cleanup to prevent memory leaks.
+   */
   private cancelAnimation(): void {
     if (this.animationFrameId !== undefined) cancelAnimationFrame(this.animationFrameId);
     this.animationFrameId = undefined;
   }
 
-  private _enableDropHandler() {
+  /**
+   * Enables drag and drop handling for G-code files
+   * @remarks
+   * Adds event listeners for drag and drop operations on the canvas.
+   * @deprecated This feature is deprecated - implement your own drag and drop handler
+   */
+  private _enableDropHandler(): void {
     console.warn('Drag and drop is deprecated as a library feature. See the demo how to implement your own.');
     this.canvas.addEventListener('dragover', (evt) => {
       evt.stopPropagation();
