@@ -4,7 +4,7 @@
 - [x] src/dev-gui.ts
 - [x] src/extrusion-geometry.ts
 - [x] src/gcode-parser.ts
-- [ ] src/gcode-preview.ts
+- [x] src/gcode-preview.ts
 - [ ] src/interpreter.ts
 - [ ] src/job.ts
 - [ ] src/path.ts
