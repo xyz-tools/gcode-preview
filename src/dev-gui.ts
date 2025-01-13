@@ -2,19 +2,19 @@ import { GUI } from 'lil-gui';
 
 /**
  * Configuration options for development mode GUI
+ * @property camera - Show camera controls (default: false)
+ * @property renderer - Show renderer stats (default: false)
+ * @property parser - Show parser/job stats (default: false)
+ * @property buildVolume - Show build volume controls (default: false)
+ * @property devHelpers - Show development helpers (default: false)
+ * @property statsContainer - Container element for stats display
  */
 export type DevModeOptions = {
-  /** Show camera controls (default: false) */
   camera?: boolean | false;
-  /** Show renderer stats (default: false) */
   renderer?: boolean | false;
-  /** Show parser/job stats (default: false) */
   parser?: boolean | false;
-  /** Show build volume controls (default: false) */
   buildVolume?: boolean | false;
-  /** Show development helpers (default: false) */
   devHelpers?: boolean | false;
-  /** Container element for stats display */
   statsContainer?: HTMLElement | undefined;
 };
 
@@ -159,10 +159,7 @@ class DevGUI {
   }
 
   /**
-   * Sets up the renderer stats panel
-   */
-  /**
-   * Sets up the renderer stats panel
+   * Sets up the renderer stats panel with memory and render call information
    */
   private setupRendererFolder(): void {
     const render = this.gui.addFolder('Render Info');
@@ -182,7 +179,7 @@ class DevGUI {
   }
 
   /**
-   * Sets up the camera controls panel
+   * Sets up the camera controls panel with position and rotation controls
    */
   private setupCameraFolder(): void {
     const camera = this.gui.addFolder('Camera');
@@ -204,7 +201,7 @@ class DevGUI {
   }
 
   /**
-   * Sets up the parser/job stats panel
+   * Sets up the parser/job stats panel with path and line count information
    */
   private setupParserFolder(): void {
     const parser = this.gui.addFolder('Job');
@@ -222,7 +219,7 @@ class DevGUI {
   }
 
   /**
-   * Sets up the build volume controls panel
+   * Sets up the build volume controls panel with dimension controls
    */
   private setupBuildVolumeFolder(): void {
     if (!this.watchedObject.buildVolume) {
@@ -262,7 +259,7 @@ class DevGUI {
   }
 
   /**
-   * Sets up the development helpers panel
+   * Sets up the development helpers panel with wireframe and render controls
    */
   private setupDevHelpers(): void {
     const devHelpers = this.gui.addFolder('Dev Helpers');
