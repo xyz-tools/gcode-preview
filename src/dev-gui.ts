@@ -33,10 +33,7 @@ class DevGUI {
    * @param watchedObject - The object to monitor and control
    * @param options - Configuration options for the GUI
    */
-  constructor(
-    watchedObject: WebGLPreview,
-    options?: DevModeOptions | undefined
-  ) {
+  constructor(watchedObject: WebGLPreview, options?: DevModeOptions | undefined) {
     this.watchedObject = watchedObject;
     this.options = options;
 
