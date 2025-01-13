@@ -1,12 +1,24 @@
 import { BufferGeometry, Color, Float32BufferAttribute, LineBasicMaterial, LineSegments } from 'three';
 
+/**
+ * A grid helper that creates a 2D grid in the XZ plane using Three.js LineSegments.
+ * The grid is centered at the origin and can be configured with different sizes and step intervals.
+ */
 class Grid extends LineSegments {
+  /**
+   * Creates a new Grid instance
+   * @param sizeX - Size of the grid along the X axis in world units
+   * @param stepX - Distance between grid lines along the X axis
+   * @param sizeZ - Size of the grid along the Z axis in world units
+   * @param stepZ - Distance between grid lines along the Z axis
+   * @param color - Color of the grid lines (can be Color, hex number, or CSS color string)
+   */
   constructor(
-    sizeX: number, // Size along the X axis
-    stepX: number, // Step distance along the X axis
-    sizeZ: number, // Size along the Z axis
-    stepZ: number, // Step distance along the Z axis
-    color: Color | string | number = 0x888888 // Single color for all grid lines
+    sizeX: number,
+    stepX: number,
+    sizeZ: number,
+    stepZ: number,
+    color: Color | string | number = 0x888888
   ) {
     // Convert color input to a Color object
     color = new Color(color);
@@ -71,10 +83,15 @@ class Grid extends LineSegments {
     super(geometry, material);
   }
 
-  // Override the type property for clarity and identification
+  /**
+   * The type of this object, used for identification and debugging
+   */
   override readonly type = 'GridHelper';
 
-  // Add dispose method for resource management
+  /**
+   * Disposes of the grid's geometry and material resources
+   * Call this method when the grid is no longer needed to free up memory
+   */
   dispose() {
     this.geometry.dispose();
     if (Array.isArray(this.material)) {
