@@ -15,7 +15,6 @@ import { Path } from './path';
 import { createColorMaterial } from './helpers/colorMaterial';
 
 import {
-  AmbientLight,
   BatchedMesh,
   BufferGeometry,
   Color,
@@ -25,7 +24,6 @@ import {
   Material,
   PerspectiveCamera,
   Plane,
-  PointLight,
   REVISION,
   Scene,
   ShaderMaterial,
