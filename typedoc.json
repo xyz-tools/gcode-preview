@@ -9,6 +9,6 @@
   "excludeExternals": true,
   "customCss": "typedoc.css",
   "navigationLinks": {
-    "Demo": "http://gcode-preview.web.app"
+    "Demo": "/"
   }
 }
