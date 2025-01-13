@@ -95,7 +95,12 @@ export class WebGLPreview {
   /** Three.js perspective camera */
   camera: PerspectiveCamera;
   /** Three.js WebGL renderer */
-  renderer: WebGLRenderer;
+  renderer: WebGLRenderer & {
+    info: {
+      render: { triangles: number; calls: number; lines: number; points: number };
+      memory: { geometries: number; textures: number };
+    };
+  };
   /** Orbit controls for camera */
   controls: OrbitControls;
   /** Canvas element being rendered to */
@@ -119,7 +124,11 @@ export class WebGLPreview {
   /** Whether single layer mode is enabled */
   _singleLayerMode = false;
   /** Build volume dimensions */
-  buildVolume?: BuildVolume;
+  buildVolume?: BuildVolume & {
+    x: number;
+    y: number;
+    z: number;
+  };
   /** Initial camera position [x, y, z] */
   initialCameraPosition = [-100, 400, 450];
   /** Whether to use inches instead of millimeters */
@@ -130,11 +139,14 @@ export class WebGLPreview {
   disableGradient = false;
 
   /** Job containing parsed G-code data */
-  private job: Job;
+  job: Job & {
+    state: { x: number; y: number; z: number };
+    paths: { length: number };
+  };
   /** G-code interpreter */
   private interpreter = new Interpreter();
   /** G-code parser */
-  private parser = new Parser();
+  parser = new Parser();
 
   // rendering
   /** Group containing all rendered paths */
@@ -174,9 +186,9 @@ export class WebGLPreview {
   /** Developer mode configuration */
   private devMode?: boolean | DevModeOptions = false;
   /** Last render time in milliseconds */
-  private _lastRenderTime = 0;
+  _lastRenderTime = 0;
   /** Whether to render in wireframe mode */
-  private _wireframe = false;
+  _wireframe = false;
   /** Performance stats */
   private stats?: Stats;
   /** Container for stats display */

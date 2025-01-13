@@ -22,16 +22,16 @@ export enum PathType {
 export class Path {
   /** Type of path movement */
   public travelType: PathType;
-  
+
   /** Width of extruded material */
   public extrusionWidth: number;
-  
+
   /** Height of extruded line */
   public lineHeight: number;
-  
+
   /** Tool number used for this path */
   public tool: number;
-  
+
   /** Internal storage for path vertices */
   private _vertices: number[];
 

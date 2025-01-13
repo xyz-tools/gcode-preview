@@ -53,7 +53,7 @@ class DevGUI {
   };
   private options?: DevModeOptions | undefined;
   private openFolders: string[] = [];
-  
+
   /**
    * Creates a new DevGUI instance
    * @param watchedObject - The object to monitor and control

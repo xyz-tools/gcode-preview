@@ -46,7 +46,7 @@ export class Layer {
   public height: number = 0;
   /** Z position of this layer */
   public z: number = 0;
-  
+
   /**
    * Creates a new Layer instance
    * @param layer - Layer number
@@ -229,7 +229,7 @@ class NonApplicableIndexer extends Error {}
 export class Indexer {
   /** The indexes being managed by this indexer */
   protected indexes: unknown;
-  
+
   /**
    * Creates a new Indexer instance
    * @param indexes - The indexes to manage
@@ -237,7 +237,7 @@ export class Indexer {
   constructor(indexes: unknown) {
     this.indexes = indexes;
   }
-  
+
   /**
    * Sorts a path into the appropriate index
    * @param path - Path to sort
@@ -255,7 +255,7 @@ export class Indexer {
 class TravelTypeIndexer extends Indexer {
   /** Indexes containing arrays of paths for each travel type */
   protected declare indexes: Record<string, Path[]>;
-  
+
   /**
    * Creates a new TravelTypeIndexer
    * @param indexes - Object containing arrays for travel and extrusion paths
@@ -292,13 +292,13 @@ class NonPlanarPathError extends NonApplicableIndexer {
 export class LayersIndexer extends Indexer {
   /** Default tolerance for layer height differences */
   static readonly DEFAULT_TOLERANCE = 0.05;
-  
+
   /** Array of layers being managed */
   protected declare indexes: Layer[];
-  
+
   /** Tolerance for layer height differences */
   private tolerance: number;
-  
+
   /**
    * Creates a new LayersIndexer
    * @param indexes - Array to store layers
@@ -362,7 +362,7 @@ export class LayersIndexer extends Indexer {
 class ToolIndexer extends Indexer {
   /** 2D array of paths indexed by tool number */
   protected declare indexes: Path[][];
-  
+
   /**
    * Creates a new ToolIndexer
    * @param indexes - 2D array to store paths by tool
@@ -370,7 +370,7 @@ class ToolIndexer extends Indexer {
   constructor(indexes: Path[][]) {
     super(indexes);
   }
-  
+
   /**
    * Sorts a path into the appropriate tool's path array
    * @param path - Path to sort

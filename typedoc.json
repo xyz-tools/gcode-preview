@@ -1,7 +1,7 @@
 {
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": [
-    "src/gcode-preview.ts", "src/gcode-parser.ts"
+    "src/*.ts"
   ],
   "out": "demo/docs",
   "includeVersion": true,

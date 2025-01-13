@@ -13,13 +13,7 @@ class Grid extends LineSegments {
    * @param stepZ - Distance between grid lines along the Z axis
    * @param color - Color of the grid lines (can be Color, hex number, or CSS color string)
    */
-  constructor(
-    sizeX: number,
-    stepX: number,
-    sizeZ: number,
-    stepZ: number,
-    color: Color | string | number = 0x888888
-  ) {
+  constructor(sizeX: number, stepX: number, sizeZ: number, stepZ: number, color: Color | string | number = 0x888888) {
     // Convert color input to a Color object
     color = new Color(color);
 
