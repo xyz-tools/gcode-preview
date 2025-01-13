@@ -12,4 +12,4 @@
 - [ ] src/webgl-preview.ts
 - [x] src/helpers/grid.ts
 - [x] src/helpers/line-box.ts
-- [ ] src/helpers/three-utils.ts
+- [x] src/helpers/three-utils.ts
