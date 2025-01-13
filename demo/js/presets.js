@@ -16,6 +16,12 @@ export const presets = {
   arcs: {
     title: 'Arcs with G2/G3',
     file: 'gcodes/screw.gcode',
+    model: {
+      name: 'Screw and Nut',
+      designer: 'YSoft_be3D',
+      license: 'CC BY-NC-SA 3.0',
+      original: 'https://www.thingiverse.com/thing:387266'
+    },
     extrusionWidth: 0.5,
     extrusionColor: ['rgb(83,209,104)'],
     travelColor: 'red',
@@ -28,7 +34,13 @@ export const presets = {
     }
   },
   'vase-mode': {
-    title: 'Vase mode',
+    title: 'vase mode',
+    model: {
+      name: 'Twisted 6-sided Vase Basic',
+      designer: 'MaakMijnIdee',
+      license: 'CC BY-NC-SA 3.0',
+      original: 'https://www.thingiverse.com/thing:18672'
+    },
     file: 'gcodes/vase.gcode',
     lineWidth: 0,
     lineHeight: 0.4,
@@ -50,6 +62,12 @@ export const presets = {
   'travel-moves': {
     title: 'Travel moves',
     file: 'gcodes/plant-sign.gcode',
+    model: {
+      name: 'Plant Sign',
+      designer: 'SpoonUnit',
+      license: 'CC BY-NC-SA 3.0',
+      original: 'https://www.thingiverse.com/thing:1013494'
+    },
     lineWidth: 1,
     renderExtrusion: true,
     renderTubes: true,

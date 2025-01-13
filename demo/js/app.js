@@ -21,6 +21,7 @@ export const app = (window.app = createApp({
     const layerCount = ref(0);
     const fileSize = ref(0);
     const fileName = ref('');
+    const model = ref(null);
     const dragging = ref(false);
     const settings = ref(Object.assign({}, defaultSettings));
     const enableDevMode = ref(false);
@@ -46,6 +47,7 @@ export const app = (window.app = createApp({
       dragging.value = false;
       const file = event.dataTransfer.files[0];
       fileName.value = file.name;
+      model.value = null;
       loadDroppedFile(file);
     };
 
@@ -69,7 +71,13 @@ export const app = (window.app = createApp({
       } = preview;
       const { thumbnails } = parser.metadata;
 
-      thumbnail.value = thumbnails['220x124']?.src;
+      // thumbnail.value = thumbnails['220x124']?.src;
+      // get largest thumbnail available
+      const thumbnailSizes = Object.keys(thumbnails).map((size) => parseInt(size.split('x')[0]));
+      const largestThumbnailSize = Math.max(...thumbnailSizes);
+      const largestThumbnailKey = Object.keys(thumbnails).find((key) => key.startsWith(`${largestThumbnailSize}x`));
+      thumbnail.value = thumbnails[largestThumbnailKey]?.src;
+
       layerCount.value = countLayers;
       const colors = extrusionColor instanceof Array ? extrusionColor : [extrusionColor];
       const currentSettings = {
@@ -145,7 +153,8 @@ export const app = (window.app = createApp({
     const selectPreset = async (presetName) => {
       const canvas = document.querySelector('canvas.preview');
       const preset = presets[presetName];
-      fileName.value = preset.file.replace(/^.*?\//, '');
+      fileName.value = preset.file.split('/').pop();
+      model.value = preset.model;
       const options = Object.assign(
         {
           canvas,
@@ -231,6 +240,7 @@ export const app = (window.app = createApp({
       layerCount,
       fileSize,
       fileName,
+      model,
       dragging,
       settings,
       enableDevMode,
