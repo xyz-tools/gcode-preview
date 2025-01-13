@@ -59,6 +59,6 @@
   },
   "dependencies": {
     "lil-gui": "^0.19.2",
-    "three": "0.171.0"
+    "three": "0.172.0"
   }
 }
