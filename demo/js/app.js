@@ -71,7 +71,13 @@ export const app = (window.app = createApp({
       } = preview;
       const { thumbnails } = parser.metadata;
 
-      thumbnail.value = thumbnails['220x124']?.src;
+      // thumbnail.value = thumbnails['220x124']?.src;
+      // get largest thumbnail available
+      const thumbnailSizes = Object.keys(thumbnails).map((size) => parseInt(size.split('x')[0]));
+      const largestThumbnailSize = Math.max(...thumbnailSizes);
+      const largestThumbnailKey = Object.keys(thumbnails).find((key) => key.startsWith(`${largestThumbnailSize}x`));
+      thumbnail.value = thumbnails[largestThumbnailKey]?.src;
+
       layerCount.value = countLayers;
       const colors = extrusionColor instanceof Array ? extrusionColor : [extrusionColor];
       const currentSettings = {
