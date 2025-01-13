@@ -153,7 +153,7 @@ export const app = (window.app = createApp({
     const selectPreset = async (presetName) => {
       const canvas = document.querySelector('canvas.preview');
       const preset = presets[presetName];
-      fileName.value = preset.file.replace(/^.*?\//, '');
+      fileName.value = preset.file.split('/').pop();
       model.value = preset.model;
       const options = Object.assign(
         {
