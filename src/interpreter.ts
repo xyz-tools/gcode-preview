@@ -36,12 +36,13 @@ export class Interpreter {
   }
 
   /**
-   * Executes a G0/G1 linear move command
+   * Executes a linear move command (G0/G1)
    * @param command - GCodeCommand containing move parameters
    * @param job - Job instance to update
    * @remarks
    * Handles both rapid moves (G0) and linear moves (G1). Updates the job state
    * and adds points to the current path based on the command parameters.
+   * G0 is for rapid moves (non-extrusion), G1 is for linear moves (with optional extrusion).
    */
   g0(command: GCodeCommand, job: Job): void {
     const { x, y, z, e } = command.params;
@@ -64,13 +65,14 @@ export class Interpreter {
   g1 = this.g0;
 
   /**
-   * Executes a G2/G3 arc move command
+   * Executes an arc move command (G2/G3)
    * @param command - GCodeCommand containing arc parameters
    * @param job - Job instance to update
    * @remarks
    * Handles both clockwise (G2) and counter-clockwise (G3) arc moves. Supports
    * both I/J center offset and R radius modes. Calculates intermediate points
    * along the arc and updates the job state accordingly.
+   * G2 is for clockwise arcs, G3 is for counter-clockwise arcs.
    */
   g2(command: GCodeCommand, job: Job): void {
     const { x, y, z, e } = command.params;
@@ -201,65 +203,89 @@ export class Interpreter {
   }
 
   /**
-   * Executes a T0 command to select tool 0
+   * Selects tool 0 (T0)
    * @param command - GCodeCommand containing the command
    * @param job - Job instance to update
+   * @remarks
+   * Updates the job state to use tool 0. Tools are typically used for
+   * multi-extruder setups or different print heads.
    */
   t0(command: GCodeCommand, job: Job): void {
     job.state.tool = 0;
   }
   /**
-   * Executes a T1 command to select tool 1
+   * Selects tool 1 (T1)
    * @param command - GCodeCommand containing the command
    * @param job - Job instance to update
+   * @remarks
+   * Updates the job state to use tool 1. Tools are typically used for
+   * multi-extruder setups or different print heads.
    */
   t1(command: GCodeCommand, job: Job): void {
     job.state.tool = 1;
   }
   /**
-   * Executes a T2 command to select tool 2
+   * Selects tool 2 (T2)
    * @param command - GCodeCommand containing the command
    * @param job - Job instance to update
+   * @remarks
+   * Updates the job state to use tool 2. Tools are typically used for
+   * multi-extruder setups or different print heads.
    */
   t2(command: GCodeCommand, job: Job): void {
     job.state.tool = 2;
   }
   /**
-   * Executes a T3 command to select tool 3
+   * Selects tool 3 (T3)
    * @param command - GCodeCommand containing the command
    * @param job - Job instance to update
+   * @remarks
+   * Updates the job state to use tool 3. Tools are typically used for
+   * multi-extruder setups or different print heads.
    */
   t3(command: GCodeCommand, job: Job): void {
     job.state.tool = 3;
   }
   /**
-   * Executes a T4 command to select tool 4
+   * Selects tool 4 (T4)
    * @param command - GCodeCommand containing the command
    * @param job - Job instance to update
+   * @remarks
+   * Updates the job state to use tool 4. Tools are typically used for
+   * multi-extruder setups or different print heads.
    */
   t4(command: GCodeCommand, job: Job): void {
     job.state.tool = 4;
   }
   /**
-   * Executes a T5 command to select tool 5
+   * Selects tool 5 (T5)
    * @param command - GCodeCommand containing the command
    * @param job - Job instance to update
+   * @remarks
+   * Updates the job state to use tool 5. Tools are typically used for
+   * multi-extruder setups or different print heads.
    */
   t5(command: GCodeCommand, job: Job): void {
     job.state.tool = 5;
   }
   /**
-   * Executes a T6 command to select tool 6
+   * Selects tool 6 (T6)
    * @param command - GCodeCommand containing the command
    * @param job - Job instance to update
+   * @remarks
+   * Updates the job state to use tool 6. Tools are typically used for
+   * multi-extruder setups or different print heads.
    */
   t6(command: GCodeCommand, job: Job): void {
     job.state.tool = 6;
   }
   /**
-   * Executes a T7 command to select tool 7
+   * Selects tool 7 (T7)
    * @param command - GCodeCommand containing the command
    * @param job - Job instance to update
+   * @remarks
+   * Updates the job state to use tool 7. Tools are typically used for
+   * multi-extruder setups or different print heads.
    */
   t7(command: GCodeCommand, job: Job): void {
     job.state.tool = 7;
