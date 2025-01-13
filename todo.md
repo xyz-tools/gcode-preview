@@ -1,4 +1,4 @@
-# TSDoc Documentation Todo
+  # TSDoc Documentation Todo
 
 - [x] src/build-volume.ts
 - [x] src/dev-gui.ts
@@ -6,10 +6,10 @@
 - [x] src/gcode-parser.ts
 - [x] src/gcode-preview.ts
 - [x] src/interpreter.ts
-- [ ] src/job.ts
-- [ ] src/path.ts
-- [ ] src/thumbnail.ts
+- [x] src/job.ts
+- [x] src/path.ts
+- [x] src/thumbnail.ts
 - [ ] src/webgl-preview.ts
-- [ ] src/helpers/grid.ts
-- [ ] src/helpers/line-box.ts
+- [x] src/helpers/grid.ts
+- [x] src/helpers/line-box.ts
 - [ ] src/helpers/three-utils.ts
