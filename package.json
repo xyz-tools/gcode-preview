@@ -45,7 +45,7 @@
     "lint": "prettier --check . && eslint -c .eslintrc.js .",
     "lint:fix": "eslint -c .eslintrc.js . --fix",
     "prettier:fix": "prettier --plugin-search-dir . --write .",
-    "test": "vitest",
+    "test": "vitest run",
     "test:watch": "vitest --watch",
     "preversion": "npm run typeCheck && npm run test && npm run lint",
     "version:patch": "npm version patch",
