@@ -2,7 +2,7 @@
 
 - [x] src/build-volume.ts
 - [x] src/dev-gui.ts
-- [ ] src/extrusion-geometry.ts
+- [x] src/extrusion-geometry.ts
 - [ ] src/gcode-parser.ts
 - [ ] src/gcode-preview.ts
 - [ ] src/interpreter.ts
