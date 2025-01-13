@@ -89,9 +89,9 @@ class DevGUI {
     render.add(this.webglPreview.renderer.info.memory, 'textures').listen();
     render.add(this.webglPreview, '_lastRenderTime').listen();
 
-    render.add(this.webglPreview, 'ambientLight', 0, 1, 0.01 );
-    render.add(this.webglPreview, 'directionalLight', 0, 2, 0.1 );
-    render.add(this.webglPreview, 'brightness', 0, 2, 0.1 );
+    render.add(this.webglPreview, 'ambientLight', 0, 1, 0.01);
+    render.add(this.webglPreview, 'directionalLight', 0, 2, 0.1);
+    render.add(this.webglPreview, 'brightness', 0, 2, 0.1);
   }
 
   private setupCameraFolder(): void {

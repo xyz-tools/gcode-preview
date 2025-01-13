@@ -1,5 +1,5 @@
-import { ShaderMaterial } from "three/src/materials/ShaderMaterial.js";
-import { Color } from "three/src/math/Color.js";
+import { ShaderMaterial } from 'three/src/materials/ShaderMaterial.js';
+import { Color } from 'three/src/math/Color.js';
 
 /* 
   This file contains a custom ShaderMaterial that calculates the lighting of a mesh based on the normal of the mesh and a fixed light direction. 
@@ -48,8 +48,13 @@ const fragmentShader = `
 `;
 
 // ShaderMaterial
-export function createColorMaterial(color: number, ambient: number, directional: number, brightness: number): ShaderMaterial {
-  console.log(color, ambient, directional); 
+export function createColorMaterial(
+  color: number,
+  ambient: number,
+  directional: number,
+  brightness: number
+): ShaderMaterial {
+  console.log(color, ambient, directional);
   const material = new ShaderMaterial({
     vertexShader,
     fragmentShader,
@@ -63,4 +68,3 @@ export function createColorMaterial(color: number, ambient: number, directional:
 
   return material;
 }
-

@@ -23,7 +23,6 @@ import {
   Euler,
   Group,
   Material,
-  MeshLambertMaterial,
   PerspectiveCamera,
   Plane,
   PointLight,
@@ -101,7 +100,7 @@ export class WebGLPreview {
   private prevStartLayer = 0;
 
   // shader material
-  private materials: ShaderMaterial[] =[];
+  private materials: ShaderMaterial[] = [];
   private _ambientLight = 0.4;
   private _directionalLight = 1.3;
   private _brightness = 1.3;
@@ -121,7 +120,6 @@ export class WebGLPreview {
   private statsContainer?: HTMLElement;
   private devGui?: DevGUI;
   private preserveDrawingBuffer = false;
-  
 
   constructor(opts: GCodePreviewOptions) {
     this.minLayerThreshold = opts.minLayerThreshold ?? this.minLayerThreshold;
