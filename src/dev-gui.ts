@@ -1,4 +1,5 @@
 import { GUI } from 'lil-gui';
+import { WebGLPreview } from './webgl-preview';
 
 /**
  * Configuration options for development mode GUI
@@ -23,34 +24,7 @@ export type DevModeOptions = {
  */
 class DevGUI {
   private gui: GUI;
-  private watchedObject: {
-    renderer: {
-      info: {
-        render: { triangles: number; calls: number; lines: number; points: number };
-        memory: { geometries: number; textures: number };
-      };
-    };
-    camera: {
-      position: { x: number; y: number; z: number };
-      rotation: { x: number; y: number; z: number };
-    };
-    job: {
-      state: { x: number; y: number; z: number };
-      paths: { length: number };
-    };
-    parser: {
-      lines: { length: number };
-    };
-    buildVolume?: {
-      x: number;
-      y: number;
-      z: number;
-    };
-    _lastRenderTime: number;
-    _wireframe: boolean;
-    render: () => void;
-    clear: () => void;
-  };
+  private watchedObject: WebGLPreview;
   private options?: DevModeOptions | undefined;
   private openFolders: string[] = [];
 
@@ -60,34 +34,7 @@ class DevGUI {
    * @param options - Configuration options for the GUI
    */
   constructor(
-    watchedObject: {
-      renderer: {
-        info: {
-          render: { triangles: number; calls: number; lines: number; points: number };
-          memory: { geometries: number; textures: number };
-        };
-      };
-      camera: {
-        position: { x: number; y: number; z: number };
-        rotation: { x: number; y: number; z: number };
-      };
-      job: {
-        state: { x: number; y: number; z: number };
-        paths: { length: number };
-      };
-      parser: {
-        lines: { length: number };
-      };
-      buildVolume?: {
-        x: number;
-        y: number;
-        z: number;
-      };
-      _lastRenderTime: number;
-      _wireframe: boolean;
-      render: () => void;
-      clear: () => void;
-    },
+    watchedObject: WebGLPreview,
     options?: DevModeOptions | undefined
   ) {
     this.watchedObject = watchedObject;
