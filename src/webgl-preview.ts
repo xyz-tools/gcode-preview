@@ -643,7 +643,7 @@ export class WebGLPreview {
    * Enables drag and drop handling for G-code files
    * @remarks
    * Adds event listeners for drag and drop operations on the canvas.
-   * @deprecated This feature is deprecated - implement your own drag and drop handler
+   * @deprecated This feature is deprecated
    */
   private _enableDropHandler(): void {
     console.warn('Drag and drop is deprecated as a library feature. See the demo how to implement your own.');

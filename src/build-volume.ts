@@ -4,7 +4,7 @@ import { LineBox } from './helpers/line-box';
 import { type Disposable } from './helpers/three-utils';
 
 /**
- * Represents the build volume of a 3D printer, including visualization components
+ * Represents the build volume of a 3D printer.
  */
 export class BuildVolume {
   /** Width of the build volume in mm */
@@ -13,7 +13,7 @@ export class BuildVolume {
   y: number;
   /** Height of the build volume in mm */
   z: number;
-  /** Color used for visualization elements */
+  /** Color used for the grid */
   color: number;
   /** List of disposable objects that need cleanup */
   private disposables: Disposable[] = [];
