@@ -54,7 +54,6 @@ export function createColorMaterial(
   directional: number,
   brightness: number
 ): ShaderMaterial {
-  console.log(color, ambient, directional);
   const material = new ShaderMaterial({
     vertexShader,
     fragmentShader,

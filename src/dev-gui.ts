@@ -69,7 +69,6 @@ class DevGUI {
       .map((folder) => {
         return folder._title;
       });
-    console.log(this.openFolders);
     localStorage.setItem('dev-gui-open', JSON.stringify({ open: this.openFolders }));
   }
 
