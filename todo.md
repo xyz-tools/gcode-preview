@@ -5,7 +5,7 @@
 - [x] src/extrusion-geometry.ts
 - [x] src/gcode-parser.ts
 - [x] src/gcode-preview.ts
-- [ ] src/interpreter.ts
+- [x] src/interpreter.ts
 - [ ] src/job.ts
 - [ ] src/path.ts
 - [ ] src/thumbnail.ts
