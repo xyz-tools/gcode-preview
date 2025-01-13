@@ -102,8 +102,8 @@ export class GCodeCommand {
   /* eslint-enable no-unused-vars */
 }
 
-type ParseResult = { metadata: Metadata; commands: GCodeCommand[] };
-type Metadata = { thumbnails: Record<string, Thumbnail> };
+export type ParseResult = { metadata: Metadata; commands: GCodeCommand[] };
+export type Metadata = { thumbnails: Record<string, Thumbnail> };
 
 /**
  * A G-code parser that processes G-code commands and extracts metadata.
