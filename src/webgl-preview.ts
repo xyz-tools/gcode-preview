@@ -115,6 +115,49 @@ export class WebGLPreview {
   private devGui?: DevGUI;
   private preserveDrawingBuffer = false;
   private materials: Material[] =[];
+  private _ambientLight = 0.4;
+  
+
+  get ambientLight(): number {
+    return this._ambientLight;
+  }
+  set ambientLight(value: number) {
+    this._ambientLight = value;
+
+    // update material uniforms
+    this.materials.forEach((material) => {
+      material.uniforms.ambient.value = value;
+    });
+  }
+
+  // same for dictional light
+  private _directionalLight = 1.3;
+  get directionalLight(): number {
+    return this._directionalLight;
+  }
+  set directionalLight(value: number) {
+    this._directionalLight = value;
+
+    // update material uniforms
+    this.materials.forEach((material) => {
+      material.uniforms.directional.value = value;
+    });
+  }
+
+  // and brightness
+  private _brightness = 1.3;
+  get brightness(): number {
+    return this._brightness;
+  }
+  set brightness(value: number) {
+    this._brightness = value;
+
+    // update material uniforms
+    this.materials.forEach((material) => {
+      material.uniforms.brightness.value = value;
+    });
+  }
+
 
   constructor(opts: GCodePreviewOptions) {
     this.minLayerThreshold = opts.minLayerThreshold ?? this.minLayerThreshold;
@@ -517,7 +560,7 @@ export class WebGLPreview {
     //   clippingPlanes: this.clippingPlanes
     // });
 
-    const material = createColorMaterial(colorNumber);
+    const material = createColorMaterial(colorNumber, this.ambientLight, this.directionalLight, this.brightness);
 
     this.materials.push(material);
 
