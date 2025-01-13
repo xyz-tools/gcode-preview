@@ -86,17 +86,17 @@ export interface GCodeParameters {
  */
 export class GCodeCommand {
   /* eslint-disable no-unused-vars */
+  /**
+   * Creates a new GCodeCommand instance
+   * @param src - The original G-code line
+   * @param gcode - The parsed G-code command (e.g., 'g0', 'g1')
+   * @param params - The parsed parameters
+   * @param comment - Optional comment from the G-code line
+   */
   constructor(
-    /** The original G-code line */
     public src: string,
-
-    /** The parsed G-code command (e.g., 'g0', 'g1') */
     public gcode: string,
-
-    /** The parsed parameters */
     public params: GCodeParameters,
-
-    /** Optional comment from the G-code line */
     public comment?: string
   ) {}
   /* eslint-enable no-unused-vars */
@@ -126,6 +126,22 @@ export class Parser {
   /** Original G-code lines stored for reference */
   lines: string[] = [];
 
+  /**
+   * Parses G-code input into commands and metadata
+   * @param input - G-code to parse, either as a string or array of lines
+   * @returns Object containing parsed metadata and commands
+   *
+   * @remarks
+   * This method handles both single-line and multi-line G-code input, extracting
+   * commands, parameters, and metadata such as thumbnails. It preserves comments
+   * and maintains the original source lines.
+   *
+   * @example
+   * ```typescript
+   * const parser = new Parser();
+   * const result = parser.parseGCode('G1 X100 Y100 F1000 ; Move to position');
+   * ```
+   */
   parseGCode(input: string | string[]): ParseResult {
     this.lines = Array.isArray(input) ? input : input.split('\n');
     const commands = this.lines2commands(this.lines);
@@ -139,7 +155,13 @@ export class Parser {
     return { metadata: this.metadata, commands: commands };
   }
 
-  private lines2commands(lines: string[]) {
+  /**
+   * Converts an array of G-code lines into GCodeCommand objects
+   * @param lines - Array of G-code lines to convert
+   * @returns Array of parsed GCodeCommand objects
+   * @private
+   */
+  private lines2commands(lines: string[]): GCodeCommand[] {
     return lines.map((l) => this.parseCommand(l));
   }
 
