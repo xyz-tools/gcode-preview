@@ -29,6 +29,7 @@ import {
   PointLight,
   REVISION,
   Scene,
+  ShaderMaterial,
   Vector3,
   WebGLRenderer
 } from 'three';
@@ -83,7 +84,7 @@ export class WebGLPreview {
   nonTravelmoves: string[] = [];
   disableGradient = false;
 
-  private job: Job;
+  job: Job;
   interpreter = new Interpreter();
   parser = new Parser();
 
@@ -114,7 +115,7 @@ export class WebGLPreview {
   private statsContainer?: HTMLElement;
   private devGui?: DevGUI;
   private preserveDrawingBuffer = false;
-  private materials: Material[] =[];
+  private materials: ShaderMaterial[] =[];
   private _ambientLight = 0.4;
   
 
