@@ -45,7 +45,7 @@
     "lint": "prettier --check . && eslint -c .eslintrc.js .",
     "lint:fix": "eslint -c .eslintrc.js . --fix",
     "prettier:fix": "prettier --plugin-search-dir . --write .",
-    "test": "vitest",
+    "test": "vitest run",
     "test:watch": "vitest --watch",
     "preversion": "npm run typeCheck && npm run test && npm run lint",
     "version:patch": "npm version patch",
@@ -55,7 +55,8 @@
     "copy-dist": "copyfiles -f dist/gcode-preview.es.js demo/dist",
     "deploy:preview": "live-server demo",
     "typedoc": "typedoc",
-    "typedoc:watch": "typedoc --watch"
+    "typedoc:watch": "typedoc --watch",
+    "check": "npm run typeCheck && npm run lint && npm run test"
   },
   "dependencies": {
     "lil-gui": "^0.19.2",
