@@ -1,6 +1,15 @@
 import { GUI } from 'lil-gui';
 import { WebGLPreview } from './webgl-preview';
 
+/**
+ * Configuration options for development mode GUI
+ * @property camera - Show camera controls (default: false)
+ * @property renderer - Show renderer stats (default: false)
+ * @property parser - Show parser/job stats (default: false)
+ * @property buildVolume - Show build volume controls (default: false)
+ * @property devHelpers - Show development helpers (default: false)
+ * @property statsContainer - Container element for stats display
+ */
 export type DevModeOptions = {
   camera?: boolean | false;
   renderer?: boolean | false;
@@ -10,12 +19,20 @@ export type DevModeOptions = {
   statsContainer?: HTMLElement | undefined;
 };
 
+/**
+ * Development GUI for debugging and monitoring the 3D preview
+ */
 class DevGUI {
   private gui: GUI;
   private webglPreview;
   private options?: DevModeOptions | undefined;
   private openFolders: string[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
+  /**
+   * Creates a new DevGUI instance
+   * @param watchedObject - The object to monitor and control
+   * @param options - Configuration options for the GUI
+   */
   constructor(webglPreview: WebGLPreview, options?: DevModeOptions | undefined) {
     this.webglPreview = webglPreview;
     this.options = options;
@@ -26,6 +43,9 @@ class DevGUI {
     this.setup();
   }
 
+  /**
+   * Sets up the development GUI with all configured panels
+   */
   setup(): void {
     this.loadOpenFolders();
     if (!this.options || this.options.renderer) {
@@ -49,6 +69,9 @@ class DevGUI {
     }
   }
 
+  /**
+   * Resets the GUI by destroying and recreating it
+   */
   reset(): void {
     this.gui.destroy();
     this.gui = new GUI();
@@ -56,10 +79,16 @@ class DevGUI {
     this.setup();
   }
 
+  /**
+   * Loads the state of open folders from localStorage
+   */
   loadOpenFolders(): void {
     this.openFolders = JSON.parse(localStorage.getItem('dev-gui-open') || '{}').open || [];
   }
 
+  /**
+   * Saves the state of open folders to localStorage
+   */
   saveOpenFolders(): void {
     this.openFolders = this.gui
       .foldersRecursive()
@@ -72,6 +101,9 @@ class DevGUI {
     localStorage.setItem('dev-gui-open', JSON.stringify({ open: this.openFolders }));
   }
 
+  /**
+   * Sets up the renderer stats panel with memory and render call information
+   */
   private setupRendererFolder(): void {
     const render = this.gui.addFolder('Render Info');
     if (!this.openFolders.includes('Render Info')) {
@@ -93,6 +125,9 @@ class DevGUI {
     render.add(this.webglPreview, 'brightness', 0, 2, 0.1);
   }
 
+  /**
+   * Sets up the camera controls panel with position and rotation controls
+   */
   private setupCameraFolder(): void {
     const camera = this.gui.addFolder('Camera');
     if (!this.openFolders.includes('Camera')) {
@@ -119,6 +154,9 @@ class DevGUI {
     cameraRotation.add(this.webglPreview.camera.rotation, 'z').listen();
   }
 
+  /**
+   * Sets up the parser/job stats panel with path and line count information
+   */
   private setupParserFolder(): void {
     const parser = this.gui.addFolder('Job');
     if (!this.openFolders.includes('Job')) {
@@ -134,6 +172,9 @@ class DevGUI {
     parser.add(this.webglPreview.parser.lines, 'length').name('lines.count').listen();
   }
 
+  /**
+   * Sets up the build volume controls panel with dimension controls
+   */
   private setupBuildVolumeFolder(): void {
     if (!this.webglPreview.buildVolume) {
       return;
@@ -171,6 +212,9 @@ class DevGUI {
       });
   }
 
+  /**
+   * Sets up the development helpers panel with wireframe and render controls
+   */
   private setupDevHelpers(): void {
     const devHelpers = this.gui.addFolder('Dev Helpers');
     if (!this.openFolders.includes('Dev Helpers')) {

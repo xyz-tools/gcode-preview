@@ -1,16 +1,37 @@
 import { BufferGeometry, Float32BufferAttribute, Vector2, Vector3 } from 'three';
 
+/**
+ * A geometry class for extruding 3D paths into volumetric shapes
+ */
 class ExtrusionGeometry extends BufferGeometry {
+  /**
+   * Parameters used to create this geometry
+   */
   parameters: {
+    /** Array of points defining the path */
     points: Vector3[];
+    /** Width of the extruded shape */
     lineWidth: number;
+    /** Height of the extruded shape */
     lineHeight: number;
+    /** Number of segments around the circumference */
     radialSegments: number;
+    /** Whether the path is closed */
     closed: boolean;
   };
 
+  /**
+   * The geometry type
+   */
   readonly type: string;
 
+  /**
+   * Creates a new ExtrusionGeometry
+   * @param points - Array of points defining the path (default: single point at origin)
+   * @param lineWidth - Width of the extruded shape (default: 0.6)
+   * @param lineHeight - Height of the extruded shape (default: 0.2)
+   * @param radialSegments - Number of segments around the circumference (default: 8)
+   */
   constructor(
     points: Vector3[] = [new Vector3()],
     lineWidth: number = 0.6,
@@ -55,6 +76,9 @@ class ExtrusionGeometry extends BufferGeometry {
 
     // functions
 
+    /**
+     * Generates all buffer data (vertices, normals, UVs, and indices)
+     */
     function generateBufferData(): void {
       for (let i = 0; i < points.length; i++) {
         generateSegment(i);
@@ -77,6 +101,10 @@ class ExtrusionGeometry extends BufferGeometry {
       generateIndices();
     }
 
+    /**
+     * Generates vertices and normals for a segment of the path
+     * @param i - Index of the segment to generate
+     */
     function generateSegment(i: number): void {
       // First get the tangent to the corner between the two segments.
 
@@ -106,6 +134,9 @@ class ExtrusionGeometry extends BufferGeometry {
       }
     }
 
+    /**
+     * Generates face indices to connect the vertices
+     */
     function generateIndices(): void {
       for (let j = 1; j < points.length; j++) {
         for (let i = 1; i <= radialSegments; i++) {
@@ -122,6 +153,9 @@ class ExtrusionGeometry extends BufferGeometry {
       }
     }
 
+    /**
+     * Generates UV coordinates for texture mapping
+     */
     function generateUVs(): void {
       for (let i = 0; i < points.length; i++) {
         for (let j = 0; j <= radialSegments; j++) {
@@ -133,6 +167,11 @@ class ExtrusionGeometry extends BufferGeometry {
       }
     }
 
+    /**
+     * Computes the corner angles (position, normal, binormal) for a segment
+     * @param i - Index of the segment
+     * @returns Array containing position, normal and binormal vectors
+     */
     function computeCornerAngles(i: number): Array<Vector3> {
       const P = points[i];
       const tangent = new Vector3();

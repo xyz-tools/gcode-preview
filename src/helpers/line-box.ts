@@ -1,6 +1,17 @@
 import { BufferGeometry, Float32BufferAttribute, Color, LineSegments, LineDashedMaterial } from 'three';
 
+/**
+ * A helper class that creates a 3D box outline with dashed lines using Three.js LineSegments.
+ * The box is centered at the origin and can be configured with different dimensions and colors.
+ */
 class LineBox extends LineSegments {
+  /**
+   * Creates a new LineBox instance
+   * @param x - Width of the box along the X axis
+   * @param y - Height of the box along the Y axis
+   * @param z - Depth of the box along the Z axis
+   * @param color - Color of the box lines (can be Color, hex number, or CSS color string)
+   */
   constructor(x: number, y: number, z: number, color: Color | number | string) {
     // Create geometry for the box
     const geometryBox = LineBox.createBoxGeometry(x, y, z);
@@ -18,7 +29,13 @@ class LineBox extends LineSegments {
     this.position.setY(y / 2);
   }
 
-  // Static method to create the box geometry
+  /**
+   * Creates the geometry for the box outline
+   * @param xSize - Width of the box along the X axis
+   * @param ySize - Height of the box along the Y axis
+   * @param zSize - Depth of the box along the Z axis
+   * @returns BufferGeometry containing the box's line segments
+   */
   static createBoxGeometry(xSize: number, ySize: number, zSize: number): BufferGeometry {
     const x = xSize / 2;
     const y = ySize / 2;
@@ -83,7 +100,10 @@ class LineBox extends LineSegments {
     return geometry;
   }
 
-  // Dispose method to clean up resources
+  /**
+   * Disposes of the box's geometry and material resources
+   * Call this method when the box is no longer needed to free up memory
+   */
   dispose() {
     this.geometry.dispose();
     if (Array.isArray(this.material)) {
