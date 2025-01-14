@@ -23,11 +23,9 @@ import {
   Group,
   Material,
   PerspectiveCamera,
-  Plane,
   REVISION,
   Scene,
   ShaderMaterial,
-  Vector3,
   WebGLRenderer
 } from 'three';
 
@@ -92,9 +90,6 @@ export class WebGLPreview {
   private _extrusionColor: Color | Color[] = WebGLPreview.defaultExtrusionColor;
   private animationFrameId?: number;
   private renderPathIndex?: number;
-  private minPlane = new Plane(new Vector3(0, 1, 0), 0.6);
-  private maxPlane = new Plane(new Vector3(0, -1, 0), 0.1);
-  private clippingPlanes: Plane[] = [];
   private prevStartLayer = 0;
 
   // shader material
@@ -208,9 +203,14 @@ export class WebGLPreview {
             this.directionalLight,
             this.brightness
           );
+          // Initialize clipping values
+          this.materials[index].uniforms.clipMinY.value = -Infinity;
+          this.materials[index].uniforms.clipMaxY.value = Infinity;
         }
         const material = this.materials[index];
-        material.uniforms.uColor.value = this._extrusionColor[index];
+        if (material && material.uniforms) {
+          material.uniforms.uColor.value = this._extrusionColor[index];
+        }
       }
       return;
     }
@@ -260,11 +260,13 @@ export class WebGLPreview {
       this._startLayer = value;
       if (value <= this.countLayers) {
         const layer = this.job.layers[value - 1];
-        this.minPlane.constant = -this.minPlane.normal.y * layer.z;
-        this.clippingPlanes = [this.minPlane, this.maxPlane];
+        this.materials.forEach((material) => {
+          material.uniforms.clipMinY.value = layer.z;
+        });
       } else {
-        this.minPlane.constant = 0;
-        this.clippingPlanes = [];
+        this.materials.forEach((material) => {
+          material.uniforms.clipMinY.value = -Infinity;
+        });
       }
     }
   }
@@ -280,11 +282,13 @@ export class WebGLPreview {
       }
       if (value <= this.countLayers) {
         const layer = this.job.layers[value - 1];
-        this.maxPlane.constant = -this.maxPlane.normal.y * layer.z;
-        this.clippingPlanes = [this.minPlane, this.maxPlane];
+        this.materials.forEach((material) => {
+          material.uniforms.clipMaxY.value = layer.z;
+        });
       } else {
-        this.maxPlane.constant = 0;
-        this.clippingPlanes = [];
+        this.materials.forEach((material) => {
+          material.uniforms.clipMaxY.value = Infinity;
+        });
       }
     }
   }
@@ -518,8 +522,7 @@ export class WebGLPreview {
   private renderPathsAsLines(paths: Path[], color: Color): void {
     const material = new LineMaterial({
       color: Number(color.getHex()),
-      linewidth: this.lineWidth,
-      clippingPlanes: this.clippingPlanes
+      linewidth: this.lineWidth
     });
 
     const lineVertices: number[] = [];
