@@ -1,8 +1,8 @@
 import { Parser } from './gcode-parser';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
 import { BuildVolume } from './build-volume';
 import { type Disposable } from './helpers/three-utils';
@@ -23,9 +23,11 @@ import {
   Group,
   Material,
   PerspectiveCamera,
+  Plane,
   REVISION,
   Scene,
   ShaderMaterial,
+  Vector3,
   WebGLRenderer
 } from 'three';
 
@@ -263,11 +265,30 @@ export class WebGLPreview {
         this.materials.forEach((material) => {
           material.uniforms.clipMinY.value = layer.z;
         });
+        this.updateLineClipping();
       } else {
         this.materials.forEach((material) => {
           material.uniforms.clipMinY.value = -Infinity;
         });
+        this.updateLineClipping();
       }
+    }
+  }
+
+  private updateLineClipping() {
+    if (this._startLayer && this._endLayer) {
+      const minZ = this.job.layers[this._startLayer - 1]?.z || 0;
+      const maxZ = this.job.layers[this._endLayer - 1]?.z || 0;
+      
+      this.scene.traverse(obj => {
+        if (obj instanceof LineSegments2) {
+          const material = obj.material as LineMaterial;
+          material.clippingPlanes = [
+            new Plane(new Vector3(0, 1, 0), -minZ),
+            new Plane(new Vector3(0, -1, 0), maxZ)
+          ];
+        }
+      });
     }
   }
 
@@ -285,10 +306,12 @@ export class WebGLPreview {
         this.materials.forEach((material) => {
           material.uniforms.clipMaxY.value = layer.z;
         });
+        this.updateLineClipping();
       } else {
         this.materials.forEach((material) => {
           material.uniforms.clipMaxY.value = Infinity;
         });
+        this.updateLineClipping();
       }
     }
   }
@@ -522,7 +545,11 @@ export class WebGLPreview {
   private renderPathsAsLines(paths: Path[], color: Color): void {
     const material = new LineMaterial({
       color: Number(color.getHex()),
-      linewidth: this.lineWidth
+      linewidth: this.lineWidth,
+      clippingPlanes: [
+        new Plane(new Vector3(0, 1, 0), this._startLayer ? -this.job.layers[this._startLayer - 1].z : 0),
+        new Plane(new Vector3(0, -1, 0), this._endLayer ? this.job.layers[this._endLayer - 1].z : 0)
+      ]
     });
 
     const lineVertices: number[] = [];
