@@ -303,7 +303,6 @@ export class WebGLPreview {
             this.directionalLight,
             this.brightness
           );
-          
         }
         const material = this.materials[index];
         if (material && material.uniforms) {
@@ -312,7 +311,7 @@ export class WebGLPreview {
       }
       return;
     }
-    
+
     this._extrusionColor = new Color(value);
     if (!this.materials[0]) {
       this.materials[0] = createColorMaterial(
@@ -322,7 +321,7 @@ export class WebGLPreview {
         this.brightness
       );
     }
-      
+
     this.materials[0].uniforms.uColor.value = this._extrusionColor;
   }
 
