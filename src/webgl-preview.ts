@@ -1,8 +1,8 @@
 import { Parser } from './gcode-parser';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
 import { BuildVolume } from './build-volume';
 import { type Disposable } from './helpers/three-utils';
@@ -12,9 +12,9 @@ import { DevGUI, DevModeOptions } from './dev-gui';
 import { Interpreter } from './interpreter';
 import { Job } from './job';
 import { Path } from './path';
+import { createColorMaterial } from './helpers/colorMaterial';
 
 import {
-  AmbientLight,
   BatchedMesh,
   BufferGeometry,
   Color,
@@ -22,12 +22,11 @@ import {
   Euler,
   Group,
   Material,
-  MeshLambertMaterial,
   PerspectiveCamera,
   Plane,
-  PointLight,
   REVISION,
   Scene,
+  ShaderMaterial,
   Vector3,
   WebGLRenderer
 } from 'three';
@@ -139,12 +138,9 @@ export class WebGLPreview {
   disableGradient = false;
 
   /** Job containing parsed G-code data */
-  job: Job & {
-    state: { x: number; y: number; z: number };
-    paths: { length: number };
-  };
+  job: Job;
   /** G-code interpreter */
-  private interpreter = new Interpreter();
+  interpreter = new Interpreter();
   /** G-code parser */
   parser = new Parser();
 
@@ -169,6 +165,12 @@ export class WebGLPreview {
   private clippingPlanes: Plane[] = [];
   /** Previous start layer before single layer mode */
   private prevStartLayer = 0;
+
+  // shader material
+  private materials: ShaderMaterial[] = [];
+  private _ambientLight = 0.4;
+  private _directionalLight = 1.3;
+  private _brightness = 1.3;
 
   // colors
   /** Background color */
@@ -294,10 +296,33 @@ export class WebGLPreview {
       // loop over the object and convert all colors to Color
       for (const [index, color] of value.entries()) {
         this._extrusionColor[index] = new Color(color);
+        if (!this.materials[index]) {
+          this.materials[index] = createColorMaterial(
+            this._extrusionColor[index].getHex(),
+            this.ambientLight,
+            this.directionalLight,
+            this.brightness
+          );
+        }
+        const material = this.materials[index];
+        if (material && material.uniforms) {
+          material.uniforms.uColor.value = this._extrusionColor[index];
+        }
       }
       return;
     }
+
     this._extrusionColor = new Color(value);
+    if (!this.materials[0]) {
+      this.materials[0] = createColorMaterial(
+        this._extrusionColor.getHex(),
+        this.ambientLight,
+        this.directionalLight,
+        this.brightness
+      );
+    }
+
+    this.materials[0].uniforms.uColor.value = this._extrusionColor;
   }
 
   /**
@@ -390,12 +415,30 @@ export class WebGLPreview {
       this._startLayer = value;
       if (value <= this.countLayers) {
         const layer = this.job.layers[value - 1];
-        this.minPlane.constant = -this.minPlane.normal.y * layer.z;
-        this.clippingPlanes = [this.minPlane, this.maxPlane];
+        this.materials.forEach((material) => {
+          material.uniforms.clipMinY.value = layer.z;
+        });
+        this.updateLineClipping();
       } else {
-        this.minPlane.constant = 0;
-        this.clippingPlanes = [];
+        this.materials.forEach((material) => {
+          material.uniforms.clipMinY.value = -Infinity;
+        });
+        this.updateLineClipping();
       }
+    }
+  }
+
+  private updateLineClipping() {
+    if (this._startLayer && this._endLayer) {
+      const minZ = this.job.layers[this._startLayer - 1]?.z || 0;
+      const maxZ = this.job.layers[this._endLayer - 1]?.z || 0;
+
+      this.scene.traverse((obj) => {
+        if (obj instanceof LineSegments2) {
+          const material = obj.material as LineMaterial;
+          material.clippingPlanes = [new Plane(new Vector3(0, 1, 0), -minZ), new Plane(new Vector3(0, -1, 0), maxZ)];
+        }
+      });
     }
   }
 
@@ -419,11 +462,15 @@ export class WebGLPreview {
       }
       if (value <= this.countLayers) {
         const layer = this.job.layers[value - 1];
-        this.maxPlane.constant = -this.maxPlane.normal.y * layer.z;
-        this.clippingPlanes = [this.minPlane, this.maxPlane];
+        this.materials.forEach((material) => {
+          material.uniforms.clipMaxY.value = layer.z;
+        });
+        this.updateLineClipping();
       } else {
-        this.maxPlane.constant = 0;
-        this.clippingPlanes = [];
+        this.materials.forEach((material) => {
+          material.uniforms.clipMaxY.value = Infinity;
+        });
+        this.updateLineClipping();
       }
     }
   }
@@ -450,6 +497,43 @@ export class WebGLPreview {
     }
   }
 
+  get ambientLight(): number {
+    return this._ambientLight;
+  }
+  set ambientLight(value: number) {
+    this._ambientLight = value;
+
+    // update material uniforms
+    this.materials.forEach((material) => {
+      material.uniforms.ambient.value = value;
+    });
+  }
+
+  get directionalLight(): number {
+    return this._directionalLight;
+  }
+  set directionalLight(value: number) {
+    this._directionalLight = value;
+
+    // update material uniforms
+    this.materials.forEach((material) => {
+      material.uniforms.directional.value = value;
+    });
+  }
+
+  get brightness(): number {
+    return this._brightness;
+  }
+  set brightness(value: number) {
+    this._brightness = value;
+
+    // update material uniforms
+    this.materials.forEach((material) => {
+      material.uniforms.brightness.value = value;
+    });
+  }
+
+  /** @internal */
   /**
    * Animation loop that continuously renders the scene
    * @internal
@@ -478,6 +562,7 @@ export class WebGLPreview {
    * and lighting if 3D tube rendering is enabled.
    */
   private initScene(): void {
+    this.materials = [];
     while (this.scene.children.length > 0) {
       this.scene.remove(this.scene.children[0]);
     }
@@ -490,15 +575,6 @@ export class WebGLPreview {
     if (this.buildVolume) {
       this.disposables.push(this.buildVolume);
       this.scene.add(this.buildVolume.createGroup());
-    }
-
-    if (this.renderTubes) {
-      const light = new AmbientLight(0xcccccc, 0.3 * Math.PI);
-      // threejs assumes meters but we use mm. So we need to scale the decay of the light
-      const dLight = new PointLight(0xffffff, Math.PI, undefined, 1 / 1000);
-      dLight.position.set(0, 500, 500);
-      this.scene.add(light);
-      this.scene.add(dLight);
     }
   }
 
@@ -705,7 +781,10 @@ export class WebGLPreview {
     const material = new LineMaterial({
       color: Number(color.getHex()),
       linewidth: this.lineWidth,
-      clippingPlanes: this.clippingPlanes
+      clippingPlanes: [
+        new Plane(new Vector3(0, 1, 0), this._startLayer ? -this.job.layers[this._startLayer - 1].z : 0),
+        new Plane(new Vector3(0, -1, 0), this._endLayer ? this.job.layers[this._endLayer - 1].z : 0)
+      ]
     });
 
     const lineVertices: number[] = [];
@@ -740,11 +819,15 @@ export class WebGLPreview {
     const colorNumber = Number(color.getHex());
     const geometries: BufferGeometry[] = [];
 
-    const material = new MeshLambertMaterial({
-      color: colorNumber,
-      wireframe: this._wireframe,
-      clippingPlanes: this.clippingPlanes
-    });
+    // const material = new MeshLambertMaterial({
+    //   color: colorNumber,
+    //   wireframe: this._wireframe,
+    //   clippingPlanes: this.clippingPlanes
+    // });
+
+    const material = createColorMaterial(colorNumber, this.ambientLight, this.directionalLight, this.brightness);
+
+    this.materials.push(material);
 
     paths.forEach((path) => {
       const geometry = path.geometry({
