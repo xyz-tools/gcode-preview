@@ -14,3 +14,18 @@ a.deprecated,
 a.deprecated span {
   color: grey;
 }
+
+.tsd-index-content {
+  background: #43474f;
+  padding: 10px;
+  display: none;
+}
+
+.tsd-sources,
+.tsd-sources a {
+  color: grey;
+}
+
+body {
+  font-family: Hevetica, Arial, sans-serif;
+}

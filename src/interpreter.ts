@@ -2,9 +2,24 @@ import { Path, PathType } from './path';
 import { GCodeCommand } from './gcode-parser';
 import { Job } from './job';
 
+/**
+ * Interprets and executes G-code commands, updating the job state accordingly
+ *
+ * @remarks
+ * This class handles the execution of G-code commands, translating them into
+ * movements and state changes in the print job. It supports common G-code commands
+ * including linear moves (G0/G1), arcs (G2/G3), unit changes (G20/G21), and tool selection.
+ */
 export class Interpreter {
   // eslint-disable-next-line no-unused-vars
   [key: string]: (...args: unknown[]) => unknown;
+
+  /**
+   * Executes an array of G-code commands, updating the provided job
+   * @param commands - Array of GCodeCommand objects to execute
+   * @param job - Job instance to update (default: new Job)
+   * @returns The updated job instance
+   */
   execute(commands: GCodeCommand[], job = new Job()): Job {
     job.resumeLastPath();
     commands.forEach((command) => {
@@ -20,6 +35,15 @@ export class Interpreter {
     return job;
   }
 
+  /**
+   * Executes a linear move command (G0/G1)
+   * @param command - GCodeCommand containing move parameters
+   * @param job - Job instance to update
+   * @remarks
+   * Handles both rapid moves (G0) and linear moves (G1). Updates the job state
+   * and adds points to the current path based on the command parameters.
+   * G0 is for rapid moves (non-extrusion), G1 is for linear moves (with optional extrusion).
+   */
   g0(command: GCodeCommand, job: Job): void {
     const { x, y, z, e } = command.params;
     const { state } = job;
@@ -40,6 +64,16 @@ export class Interpreter {
 
   g1 = this.g0;
 
+  /**
+   * Executes an arc move command (G2/G3)
+   * @param command - GCodeCommand containing arc parameters
+   * @param job - Job instance to update
+   * @remarks
+   * Handles both clockwise (G2) and counter-clockwise (G3) arc moves. Supports
+   * both I/J center offset and R radius modes. Calculates intermediate points
+   * along the arc and updates the job state accordingly.
+   * G2 is for clockwise arcs, G3 is for counter-clockwise arcs.
+   */
   g2(command: GCodeCommand, job: Job): void {
     const { x, y, z, e } = command.params;
     let { i, j, r } = command.params;
@@ -137,45 +171,136 @@ export class Interpreter {
 
   g3 = this.g2;
 
+  /**
+   * Executes a G20 command to set units to inches
+   * @param command - GCodeCommand containing the command
+   * @param job - Job instance to update
+   */
   g20(command: GCodeCommand, job: Job): void {
     job.state.units = 'in';
   }
 
+  /**
+   * Executes a G21 command to set units to millimeters
+   * @param command - GCodeCommand containing the command
+   * @param job - Job instance to update
+   */
   g21(command: GCodeCommand, job: Job): void {
     job.state.units = 'mm';
   }
 
+  /**
+   * Executes a G28 homing command
+   * @param command - GCodeCommand containing the command
+   * @param job - Job instance to update
+   * @remarks
+   * Moves all axes to their home positions (0,0,0) and updates the job state.
+   */
   g28(command: GCodeCommand, job: Job): void {
     job.state.x = 0;
     job.state.y = 0;
     job.state.z = 0;
   }
 
+  /**
+   * Selects tool 0 (T0)
+   * @param command - GCodeCommand containing the command
+   * @param job - Job instance to update
+   * @remarks
+   * Updates the job state to use tool 0. Tools are typically used for
+   * multi-extruder setups or different print heads.
+   */
   t0(command: GCodeCommand, job: Job): void {
     job.state.tool = 0;
   }
+  /**
+   * Selects tool 1 (T1)
+   * @param command - GCodeCommand containing the command
+   * @param job - Job instance to update
+   * @remarks
+   * Updates the job state to use tool 1. Tools are typically used for
+   * multi-extruder setups or different print heads.
+   */
   t1(command: GCodeCommand, job: Job): void {
     job.state.tool = 1;
   }
+  /**
+   * Selects tool 2 (T2)
+   * @param command - GCodeCommand containing the command
+   * @param job - Job instance to update
+   * @remarks
+   * Updates the job state to use tool 2. Tools are typically used for
+   * multi-extruder setups or different print heads.
+   */
   t2(command: GCodeCommand, job: Job): void {
     job.state.tool = 2;
   }
+  /**
+   * Selects tool 3 (T3)
+   * @param command - GCodeCommand containing the command
+   * @param job - Job instance to update
+   * @remarks
+   * Updates the job state to use tool 3. Tools are typically used for
+   * multi-extruder setups or different print heads.
+   */
   t3(command: GCodeCommand, job: Job): void {
     job.state.tool = 3;
   }
+  /**
+   * Selects tool 4 (T4)
+   * @param command - GCodeCommand containing the command
+   * @param job - Job instance to update
+   * @remarks
+   * Updates the job state to use tool 4. Tools are typically used for
+   * multi-extruder setups or different print heads.
+   */
   t4(command: GCodeCommand, job: Job): void {
     job.state.tool = 4;
   }
+  /**
+   * Selects tool 5 (T5)
+   * @param command - GCodeCommand containing the command
+   * @param job - Job instance to update
+   * @remarks
+   * Updates the job state to use tool 5. Tools are typically used for
+   * multi-extruder setups or different print heads.
+   */
   t5(command: GCodeCommand, job: Job): void {
     job.state.tool = 5;
   }
+  /**
+   * Selects tool 6 (T6)
+   * @param command - GCodeCommand containing the command
+   * @param job - Job instance to update
+   * @remarks
+   * Updates the job state to use tool 6. Tools are typically used for
+   * multi-extruder setups or different print heads.
+   */
   t6(command: GCodeCommand, job: Job): void {
     job.state.tool = 6;
   }
+  /**
+   * Selects tool 7 (T7)
+   * @param command - GCodeCommand containing the command
+   * @param job - Job instance to update
+   * @remarks
+   * Updates the job state to use tool 7. Tools are typically used for
+   * multi-extruder setups or different print heads.
+   */
   t7(command: GCodeCommand, job: Job): void {
     job.state.tool = 7;
   }
 
+  /**
+   * Creates a new path and sets it as the current in-progress path
+   * @param job - Job instance to update
+   * @param newType - Type of the new path
+   * @returns The newly created path
+   * @remarks
+   * This method is called when a path type change is detected (e.g. switching
+   * between travel and extrusion moves). It finalizes the current path and
+   * starts a new one of the specified type.
+   */
   private breakPath(job: Job, newType: PathType): Path {
     job.finishPath();
     const currentPath = new Path(newType, 0.6, 0.2, job.state.tool);

@@ -283,6 +283,7 @@ footer {
   border-radius: 5px;
   margin: 10px;
   transform: translateZ(0);
+  animation-delay: 2000ms;
 }
 
 .widget > img {
@@ -303,4 +304,8 @@ footer {
 .glass {
   backdrop-filter: blur(5px);
   background-color: hsla(196, 45%, 15%, 0.5);
+}
+
+.is-size-8 {
+  font-size: 0.6rem !important;
 }
