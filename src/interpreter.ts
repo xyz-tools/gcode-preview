@@ -5,6 +5,7 @@ import { Job } from './job';
 
 // eslint-disable-next-line no-unused-vars
 type Method = (...args: unknown[]) => unknown;
+type LookupTable = { [key: string]: Method | undefined };
 
 /**
  * Interprets and executes G-code commands, updating the job state accordingly
@@ -70,18 +71,16 @@ export class Interpreter {
     // discard zero length moves
     if (x === undefined && y === undefined && z === undefined) {
       // console.warn('Discarding zero length move');
-      if (e > 0 ) {
+      if (e > 0) {
         this.retractions++;
-      }
-
-      else if (e < 0) {
+      } else if (e < 0) {
         this.wipes++;
       }
 
       if (f !== undefined) {
         this.feedrateChanges++;
       }
-      
+
       return;
     }
 

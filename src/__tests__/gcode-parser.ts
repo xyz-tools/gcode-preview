@@ -22,7 +22,7 @@ test('a single extrusion cmd should parse attributes', () => {
 });
 
 // G1 X61.769 Y90.734 E-.27245
-test('E value that doesn\' have a leading 0 should be parsed as if there was a 0', () => {
+test("E value that doesn' have a leading 0 should be parsed as if there was a 0", () => {
   const parser = new Parser();
   const gcode = `G1 X61.769 Y90.734 E-.27245`;
   const parsed = parser.parseGCode(gcode);

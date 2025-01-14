@@ -1,7 +1,6 @@
 import { test, expect, describe } from 'vitest';
 import { Path, PathType } from '../path';
 import { ExtrusionGeometry } from '../extrusion-geometry';
-import { BufferGeometry } from 'three';
 
 test('.addPoint adds a point to the vertices', () => {
   const path = new Path(PathType.Travel, undefined, undefined, undefined);
