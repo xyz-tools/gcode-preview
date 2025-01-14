@@ -23,6 +23,7 @@ export const presets = {
       original: 'https://www.thingiverse.com/thing:387266'
     },
     extrusionWidth: 0.5,
+    lineHeight: 0.3,
     extrusionColor: ['#95dfa1'],
     travelColor: 'red',
     topLayerColor: undefined,
@@ -69,6 +70,7 @@ export const presets = {
       original: 'https://www.thingiverse.com/thing:1013494'
     },
     lineWidth: 1,
+    lineHeight: 0.3,
     renderExtrusion: true,
     renderTubes: true,
     extrusionColor: ['#919191'],
