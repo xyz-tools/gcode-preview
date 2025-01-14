@@ -9,7 +9,7 @@ export const presets = {
     buildVolume: {
       x: 10,
       y: 10,
-      z: ''
+      z: 0
     },
     initialCameraPosition: [-20, 20, 1.8]
   },
@@ -55,7 +55,7 @@ export const presets = {
     buildVolume: {
       x: 200,
       y: 200,
-      z: 180
+      z: 0
     },
     initialCameraPosition: [-404, 320, 184]
   },
@@ -79,7 +79,7 @@ export const presets = {
     buildVolume: {
       x: 200,
       y: 200,
-      z: 150
+      z: 0
     }
   },
   marlin: {
