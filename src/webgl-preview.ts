@@ -441,6 +441,15 @@ export class WebGLPreview {
     this.updateLineClipping(minZ, maxZ);
   }
 
+
+  /**
+   * Updates the clipping planes for all shader materials in the scene.
+   * This method sets the min and max Z values for the clipping planes in the shader materials.
+   *
+   * @param minZ - The minimum Z value for the clipping plane.
+   * @param maxZ - The maximum Z value for the clipping plane
+   */
+    
   private updateClippingPlanesForShaderMaterials(minZ: number, maxZ: number) {
     this.materials.forEach((material) => {
       material.uniforms.clipMinY.value = minZ;
@@ -448,7 +457,17 @@ export class WebGLPreview {
     });
   }
 
-  private applyClippingPlanes(material: Material, minZ: number, maxZ: number) {
+  /**
+   * Applies clipping planes to the specified material based on the minimum and maximum Z values.
+   *
+   * This method creates clipping planes for the top and bottom of the specified Z range,
+   * then applies them to the material's clippingPlanes property.
+   *
+   * @param material - Shader material to apply clipping planes to
+   * @param minZ - The minimum Z value for the clipping plane.
+   * @param maxZ - The maximum Z value for the clipping plane.
+   */ 
+  private applyMinMaxClippingPlanes(material: Material, minZ: number, maxZ: number) {
     material.clippingPlanes = [new Plane(new Vector3(0, 1, 0), -minZ), new Plane(new Vector3(0, -1, 0), maxZ)];
   }
 
@@ -464,7 +483,7 @@ export class WebGLPreview {
     this.scene.traverse((obj) => {
       if (obj instanceof LineSegments2) {
         const material = obj.material as LineMaterial;
-        this.applyClippingPlanes(material, minZ, maxZ);
+        this.applyMinMaxClippingPlanes(material, minZ, maxZ);
       }
     });
   }
@@ -806,7 +825,7 @@ export class WebGLPreview {
       linewidth: this.lineWidth
     });
 
-    this.applyClippingPlanes(material, minZ, maxZ);
+    this.applyMinMaxClippingPlanes(material, minZ, maxZ);
 
     const lineVertices: number[] = [];
 
