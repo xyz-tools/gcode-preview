@@ -28,7 +28,8 @@ import {
   Scene,
   ShaderMaterial,
   Vector3,
-  WebGLRenderer
+  WebGLRenderer,
+  MathUtils
 } from 'three';
 
 /**
@@ -402,7 +403,7 @@ export class WebGLPreview {
    * Gets the current start layer (1-based index)
    * @returns Start layer number
    */
-  get startLayer(): number {
+  get startLayer(): number | undefined {
     return this._startLayer;
   }
 
@@ -410,12 +411,14 @@ export class WebGLPreview {
    * Sets the start layer (1-based index)
    * @param value - Layer number to start rendering from
    */
-  set startLayer(value: number) {
-    if (this.countLayers > 1) {
-      this._startLayer = value;
-
-      this.updateClippingPlanes();
+  set startLayer(value: number | undefined) {
+    if (typeof value === 'number') {
+      this._startLayer = MathUtils.clamp(value, 1, this.countLayers);
+    } else {
+      this._startLayer = undefined;
     }
+
+    this.updateClippingPlanes();
   }
 
   /**
@@ -474,7 +477,7 @@ export class WebGLPreview {
    * Gets the current end layer (1-based index)
    * @returns End layer number
    */
-  get endLayer(): number {
+  get endLayer(): number | undefined {
     return this._endLayer;
   }
 
@@ -482,17 +485,18 @@ export class WebGLPreview {
    * Sets the end layer (1-based index)
    * @param value - Layer number to end rendering at
    */
-  set endLayer(value: number) {
-    console.log('endLayer', value);
-    if (this.countLayers > 1) {
-      this._endLayer = value;
-
-      if (this._singleLayerMode === true) {
-        this.startLayer = this._endLayer - 1;
-      }
-
-      this.updateClippingPlanes();
+  set endLayer(value: number | undefined) {
+    if (typeof value === 'number') {
+      this._endLayer = MathUtils.clamp(value, 1, this.countLayers);
+    } else {
+      this._endLayer = undefined;
     }
+
+    if (this._singleLayerMode === true) {
+      this.startLayer = this._endLayer - 1;
+    }
+
+    this.updateClippingPlanes();
   }
 
   /**
@@ -798,12 +802,9 @@ export class WebGLPreview {
    * @param color - Color to use for the lines
    */
   private renderPathsAsLines(paths: Path[], color: Color): void {
-    console.log('startlayer', this._startLayer, 'endLayerx', this._endLayer);
-    
     const minZ = this.job.layers[this._startLayer - 1]?.z ?? 0;
     const maxZ = this.job.layers[this._endLayer - 1]?.z ?? Infinity;
 
-    console.log('minZ', minZ, 'maxZ', maxZ);
     const material = new LineMaterial({
       color: Number(color.getHex()),
       linewidth: this.lineWidth
