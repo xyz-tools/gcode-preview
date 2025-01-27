@@ -81,8 +81,11 @@ export const app = (window.app = createApp({
       layerCount.value = countLayers;
       const colors = extrusionColor instanceof Array ? extrusionColor : [extrusionColor];
       const currentSettings = {
+        startLayer: 1,
+        enableStartLayer: false,
         maxLayer: countLayers,
         endLayer: countLayers,
+        enableEndLayer: false,
         singleLayerMode,
         renderTravel,
         travelColor: '#' + travelColor.getHexString(),
@@ -222,8 +225,8 @@ export const app = (window.app = createApp({
       });
 
       watchEffect(() => {
-        preview.startLayer = +settings.value.startLayer;
-        preview.endLayer = +settings.value.endLayer;
+        preview.startLayer = settings.value.enableStartLayer ? +settings.value.startLayer : undefined;
+        preview.endLayer = settings.value.enableEndLayer ? +settings.value.endLayer : undefined;
       });
 
       watchEffect(() => {
