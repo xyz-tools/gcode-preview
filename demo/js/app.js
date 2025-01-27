@@ -225,8 +225,8 @@ export const app = (window.app = createApp({
       });
 
       watchEffect(() => {
-        preview.startLayer = settings.value.enableStartLayer ? +settings.value.startLayer : 0;
-        preview.endLayer = settings.value.enableEndLayer ? +settings.value.endLayer : 0;
+        preview.startLayer = settings.value.enableStartLayer ? +settings.value.startLayer : undefined;
+        preview.endLayer = settings.value.enableEndLayer ? +settings.value.endLayer : undefined;
       });
 
       watchEffect(() => {
