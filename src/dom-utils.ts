@@ -2,7 +2,7 @@ import { WebGLPreview } from './webgl-preview';
 /**
  * Enables drag and drop handling for G-code files
  */
-export function enableDropHandler(previewInstance: WebGLPreview, element : HTMLElement): void {
+export function enableDropHandler(previewInstance: WebGLPreview, element: HTMLElement): void {
   console.warn('Drag and drop is deprecated as a library feature. See the demo how to implement your own.');
   element.addEventListener('dragover', (evt) => {
     evt.stopPropagation();
@@ -24,10 +24,10 @@ export function enableDropHandler(previewInstance: WebGLPreview, element : HTMLE
     const files: FileList | [] = evt.dataTransfer?.files ?? [];
     const file = files[0];
 
-    this.clear();
+    previewInstance.clear();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await this.readFromStream(file.stream() );
-    this.render();
+    await previewInstance.readFromStream(file.stream());
+    previewInstance.render();
   });
 }

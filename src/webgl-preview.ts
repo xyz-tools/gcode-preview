@@ -13,7 +13,7 @@ import { Interpreter } from './interpreter';
 import { Job } from './job';
 import { Path } from './path';
 import { createColorMaterial } from './helpers/colorMaterial';
-import  { enableDropHandler } from './dom-utils';
+import { enableDropHandler } from './dom-utils';
 
 import {
   BatchedMesh,
