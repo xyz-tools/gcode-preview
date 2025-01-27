@@ -2,10 +2,9 @@ import { Path, PathType } from './path';
 import { GCodeCommand } from './gcode-parser';
 import { Job } from './job';
 
-
 // eslint-disable-next-line no-unused-vars
 type Method = (...args: unknown[]) => unknown;
-type LookupTable = { [key: string]: Method | undefined };
+// type LookupTable = { [key: string]: Method | undefined };
 
 /**
  * Interprets and executes G-code commands, updating the job state accordingly
@@ -19,9 +18,21 @@ export class Interpreter {
   // eslint-disable-next-line no-unused-vars
   [key: string]: (...args: unknown[]) => unknown;
 
+  // TODO: maybe these props should move to the Job class
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
   private retractions = 0;
+
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
   private wipes = 0;
+
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
   private feedrateChanges = 0;
+
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
   private points = 0;
 
   /**
@@ -35,7 +46,6 @@ export class Interpreter {
     job.resumeLastPath();
     commands.forEach((command) => {
       if (command.gcode !== undefined) {
-        
         if (typeof this[command.gcode] !== 'function') {
           return;
         }
