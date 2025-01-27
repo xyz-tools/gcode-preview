@@ -28,7 +28,8 @@ import {
   Scene,
   ShaderMaterial,
   Vector3,
-  WebGLRenderer
+  WebGLRenderer,
+  MathUtils
 } from 'three';
 
 /**
@@ -402,7 +403,7 @@ export class WebGLPreview {
    * Gets the current start layer (1-based index)
    * @returns Start layer number
    */
-  get startLayer(): number {
+  get startLayer(): number | undefined {
     return this._startLayer;
   }
 
@@ -410,43 +411,87 @@ export class WebGLPreview {
    * Sets the start layer (1-based index)
    * @param value - Layer number to start rendering from
    */
-  set startLayer(value: number) {
-    if (this.countLayers > 1 && value > 0) {
-      this._startLayer = value;
-      if (value <= this.countLayers) {
-        const layer = this.job.layers[value - 1];
-        this.materials.forEach((material) => {
-          material.uniforms.clipMinY.value = layer.z;
-        });
-        this.updateLineClipping();
-      } else {
-        this.materials.forEach((material) => {
-          material.uniforms.clipMinY.value = -Infinity;
-        });
-        this.updateLineClipping();
-      }
+  set startLayer(value: number | undefined) {
+    if (typeof value === 'number') {
+      this._startLayer = MathUtils.clamp(value, 1, this.countLayers);
+    } else {
+      this._startLayer = undefined;
     }
+
+    this.updateClippingPlanes();
   }
 
-  private updateLineClipping() {
-    if (this._startLayer && this._endLayer) {
-      const minZ = this.job.layers[this._startLayer - 1]?.z || 0;
-      const maxZ = this.job.layers[this._endLayer - 1]?.z || 0;
+  /**
+   * Updates the clipping planes for the 3D preview based on the start and end layers.
+   *
+   * This method calculates the minimum and maximum Z values from the specified start and end layers.
+   * If the start layer is not defined, the minimum Z value defaults to 0.
+   * If the end layer is not defined, the maximum Z value defaults to Infinity.
+   *
+   * It then updates the clipping planes for shader materials and line clipping using these Z values.
+   *
+   * @private
+   */
+  private updateClippingPlanes() {
+    const minZ = !this._startLayer ? 0 : this.job.layers[this._startLayer - 1]?.z ?? 0;
 
-      this.scene.traverse((obj) => {
-        if (obj instanceof LineSegments2) {
-          const material = obj.material as LineMaterial;
-          material.clippingPlanes = [new Plane(new Vector3(0, 1, 0), -minZ), new Plane(new Vector3(0, -1, 0), maxZ)];
-        }
-      });
-    }
+    const maxZ = !this._endLayer ? Infinity : this.job.layers[this._endLayer - 1]?.z ?? Infinity;
+
+    this.updateClippingPlanesForShaderMaterials(minZ, maxZ);
+    this.updateLineClipping(minZ, maxZ);
+  }
+
+  /**
+   * Updates the clipping planes for all shader materials in the scene.
+   * This method sets the min and max Z values for the clipping planes in the shader materials.
+   *
+   * @param minZ - The minimum Z value for the clipping plane.
+   * @param maxZ - The maximum Z value for the clipping plane
+   */
+
+  private updateClippingPlanesForShaderMaterials(minZ: number, maxZ: number) {
+    this.materials.forEach((material) => {
+      material.uniforms.clipMinY.value = minZ;
+      material.uniforms.clipMaxY.value = maxZ;
+    });
+  }
+
+  /**
+   * Applies clipping planes to the specified material based on the minimum and maximum Z values.
+   *
+   * This method creates clipping planes for the top and bottom of the specified Z range,
+   * then applies them to the material's clippingPlanes property.
+   *
+   * @param material - Shader material to apply clipping planes to
+   * @param minZ - The minimum Z value for the clipping plane.
+   * @param maxZ - The maximum Z value for the clipping plane.
+   */
+  private applyMinMaxClippingPlanes(material: Material, minZ: number, maxZ: number) {
+    material.clippingPlanes = [new Plane(new Vector3(0, 1, 0), -minZ), new Plane(new Vector3(0, -1, 0), maxZ)];
+  }
+
+  /**
+   * Updates the clipping planes for all `LineSegments2` objects in the scene.
+   * This method filters the scene's children to find instances of `LineSegments2`,
+   * then applies the clipping planes to their materials.
+   *
+   * @param minZ - The minimum Z value for the clipping plane.
+   * @param maxZ - The maximum Z value for the clipping plane.
+   */
+  private updateLineClipping(minZ: number, maxZ: number) {
+    this.scene.traverse((obj) => {
+      if (obj instanceof LineSegments2) {
+        const material = obj.material as LineMaterial;
+        this.applyMinMaxClippingPlanes(material, minZ, maxZ);
+      }
+    });
   }
 
   /**
    * Gets the current end layer (1-based index)
    * @returns End layer number
    */
-  get endLayer(): number {
+  get endLayer(): number | undefined {
     return this._endLayer;
   }
 
@@ -454,25 +499,18 @@ export class WebGLPreview {
    * Sets the end layer (1-based index)
    * @param value - Layer number to end rendering at
    */
-  set endLayer(value: number) {
-    if (this.countLayers > 1 && value > 0) {
-      this._endLayer = value;
-      if (this._singleLayerMode === true) {
-        this.startLayer = this._endLayer - 1;
-      }
-      if (value <= this.countLayers) {
-        const layer = this.job.layers[value - 1];
-        this.materials.forEach((material) => {
-          material.uniforms.clipMaxY.value = layer.z;
-        });
-        this.updateLineClipping();
-      } else {
-        this.materials.forEach((material) => {
-          material.uniforms.clipMaxY.value = Infinity;
-        });
-        this.updateLineClipping();
-      }
+  set endLayer(value: number | undefined) {
+    if (typeof value === 'number') {
+      this._endLayer = MathUtils.clamp(value, 1, this.countLayers);
+    } else {
+      this._endLayer = undefined;
     }
+
+    if (this._singleLayerMode === true) {
+      this.startLayer = this._endLayer - 1;
+    }
+
+    this.updateClippingPlanes();
   }
 
   /**
@@ -778,14 +816,15 @@ export class WebGLPreview {
    * @param color - Color to use for the lines
    */
   private renderPathsAsLines(paths: Path[], color: Color): void {
+    const minZ = this.job.layers[this._startLayer - 1]?.z ?? 0;
+    const maxZ = this.job.layers[this._endLayer - 1]?.z ?? Infinity;
+
     const material = new LineMaterial({
       color: Number(color.getHex()),
-      linewidth: this.lineWidth,
-      clippingPlanes: [
-        new Plane(new Vector3(0, 1, 0), this._startLayer ? -this.job.layers[this._startLayer - 1].z : 0),
-        new Plane(new Vector3(0, -1, 0), this._endLayer ? this.job.layers[this._endLayer - 1].z : 0)
-      ]
+      linewidth: this.lineWidth
     });
+
+    this.applyMinMaxClippingPlanes(material, minZ, maxZ);
 
     const lineVertices: number[] = [];
 
@@ -819,12 +858,6 @@ export class WebGLPreview {
     const colorNumber = Number(color.getHex());
     const geometries: BufferGeometry[] = [];
 
-    // const material = new MeshLambertMaterial({
-    //   color: colorNumber,
-    //   wireframe: this._wireframe,
-    //   clippingPlanes: this.clippingPlanes
-    // });
-
     const material = createColorMaterial(colorNumber, this.ambientLight, this.directionalLight, this.brightness);
 
     this.materials.push(material);
@@ -840,7 +873,6 @@ export class WebGLPreview {
 
     const batchedMesh = this.createBatchMesh(geometries, material);
     this.disposables.push(material);
-    // this.disposables.push(batchedMesh);
 
     this.group?.add(batchedMesh);
   }

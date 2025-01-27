@@ -309,3 +309,7 @@ footer {
 .is-size-8 {
   font-size: 0.6rem !important;
 }
+
+.widget.right.bottom {
+  max-width: 25vw;
+}

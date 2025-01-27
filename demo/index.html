@@ -72,26 +72,35 @@
             <div class="panel" v-cloak v-show="activeTab == 'layers'">
               <section>
                 <div class="controls">
-                  <label :class="{'has-text-grey' : settings.singleLayerMode}" >Start layer <output id="start-layer-value" >{{settings.startLayer}}</output></label>&nbsp;
+                  <label>
+                    Start Layer
+                  <input type="checkbox" v-model="settings.enableStartLayer" />
+                  </label>
+                  <label :class="{'has-text-grey' : !settings.enableStartLayer}" ><output id="start-layer-value" >{{settings.startLayer}}</output></label>&nbsp;
                   <input 
-                    type="range"
-                    min="1"
-                    :max="settings.maxLayer"
-                    id="start-layer"
-                    v-model="settings.startLayer"
-                    :disabled="settings.singleLayerMode"
+                  type="range"
+                  min="1"
+                  :max="settings.maxLayer"
+                  id="start-layer"
+                  v-model="settings.startLayer"
+                  :disabled="!settings.enableStartLayer"
                   />
                 </div>
                 <div class="controls">
-                  <label>End layer <output id="end-layer-value" >{{settings.endLayer}}</output></label>&nbsp;
+                  <label>
+                    End Layer
+                  <input type="checkbox" v-model="settings.enableEndLayer" />
+                  </label>
+                  <label :class="{'has-text-grey' : !settings.enableEndLayer}"> <output id="end-layer-value" >{{settings.endLayer}}</output></label>&nbsp;
                   <!-- HACK: extra :value binding to ensure the value is set after the max is updated -->
                   <input
-                    v-model="settings.endLayer"
-                    type="range"
-                    min="1"
-                    :max="settings.maxLayer"
-                    id="end-layer"
-                    :value="settings.endLayer"
+                  v-model="settings.endLayer"
+                  type="range"
+                  min="1"
+                  :max="settings.maxLayer"
+                  id="end-layer"
+                  :value="settings.endLayer"
+                  :disabled="!settings.enableEndLayer"
                   /> 
                 </div>
                 <div class="controls">
