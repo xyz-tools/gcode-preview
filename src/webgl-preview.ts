@@ -411,35 +411,36 @@ export class WebGLPreview {
    * @param value - Layer number to start rendering from
    */
   set startLayer(value: number) {
-    if (this.countLayers > 1 && value > 0) {
+    if (this.countLayers > 1) {
       this._startLayer = value;
-      if (value <= this.countLayers) {
-        const layer = this.job.layers[value - 1];
-        this.materials.forEach((material) => {
-          material.uniforms.clipMinY.value = layer.z;
-        });
-        this.updateLineClipping();
-      } else {
-        this.materials.forEach((material) => {
-          material.uniforms.clipMinY.value = -Infinity;
-        });
-        this.updateLineClipping();
-      }
+
+      const layer = this.job.layers[value - 1];
+      
+      this.materials.forEach((material) => {
+        material.uniforms.clipMinY.value = value ? layer.z : 0;
+      });
+      this.updateLineClipping();
     }
   }
 
   private updateLineClipping() {
-    if (this._startLayer && this._endLayer) {
-      const minZ = this.job.layers[this._startLayer - 1]?.z || 0;
-      const maxZ = this.job.layers[this._endLayer - 1]?.z || 0;
+      console.log('updateLineClipping', this._startLayer, this._endLayer);
+      const minZ = this._startLayer?  (this.job.layers[this._startLayer - 1]?.z ?? 0)  : 0;
+      const maxZ = this._endLayer?  (this.job.layers[this._endLayer - 1]?.z ?? 30000) : 30000;
 
+      console.log('minZ', minZ, 'maxZ', maxZ);
       this.scene.traverse((obj) => {
         if (obj instanceof LineSegments2) {
           const material = obj.material as LineMaterial;
           material.clippingPlanes = [new Plane(new Vector3(0, 1, 0), -minZ), new Plane(new Vector3(0, -1, 0), maxZ)];
+          // this.clipPath(obj, minZ, maxZ);
         }
       });
-    }
+  }
+
+  private clipPath(path: LineSegments2, minZ: number, maxZ: number) {
+    const material = path.material as LineMaterial;
+    material.clippingPlanes = [new Plane(new Vector3(0, 1, 0), -minZ), new Plane(new Vector3(0, -1, 0), maxZ)];
   }
 
   /**
@@ -455,23 +456,19 @@ export class WebGLPreview {
    * @param value - Layer number to end rendering at
    */
   set endLayer(value: number) {
-    if (this.countLayers > 1 && value > 0) {
+    console.log('endLayer', value);
+    if (this.countLayers > 1) {
       this._endLayer = value;
+      
       if (this._singleLayerMode === true) {
         this.startLayer = this._endLayer - 1;
       }
-      if (value <= this.countLayers) {
-        const layer = this.job.layers[value - 1];
-        this.materials.forEach((material) => {
-          material.uniforms.clipMaxY.value = layer.z;
-        });
-        this.updateLineClipping();
-      } else {
-        this.materials.forEach((material) => {
-          material.uniforms.clipMaxY.value = Infinity;
-        });
-        this.updateLineClipping();
-      }
+
+      const topLayer = this.job.layers[value - 1];
+      this.materials.forEach((material) => {
+        material.uniforms.clipMaxY.value = value ?  topLayer.z : 30000;
+      });
+      this.updateLineClipping();
     }
   }
 
@@ -778,12 +775,15 @@ export class WebGLPreview {
    * @param color - Color to use for the lines
    */
   private renderPathsAsLines(paths: Path[], color: Color): void {
+    const minZ = this._startLayer ? this.job.layers[this._startLayer - 1].z : 0;
+    const maxZ = this._endLayer ? this.job.layers[this._endLayer - 1].z : 30000;
+
     const material = new LineMaterial({
       color: Number(color.getHex()),
       linewidth: this.lineWidth,
       clippingPlanes: [
-        new Plane(new Vector3(0, 1, 0), this._startLayer ? -this.job.layers[this._startLayer - 1].z : 0),
-        new Plane(new Vector3(0, -1, 0), this._endLayer ? this.job.layers[this._endLayer - 1].z : 0)
+        new Plane(new Vector3(0, 1, 0), minZ),
+        new Plane(new Vector3(0, -1, 0), maxZ)
       ]
     });
 
