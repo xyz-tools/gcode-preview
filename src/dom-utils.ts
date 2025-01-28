@@ -3,7 +3,6 @@ import { WebGLPreview } from './webgl-preview';
  * Enables drag and drop handling for G-code files
  */
 export function enableDropHandler(previewInstance: WebGLPreview, element: HTMLElement): void {
-  console.warn('Drag and drop is deprecated as a library feature. See the demo how to implement your own.');
   element.addEventListener('dragover', (evt) => {
     evt.stopPropagation();
     evt.preventDefault();
