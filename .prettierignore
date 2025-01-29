@@ -6,3 +6,4 @@ dist
 vue.esm-browser.js
 *.min.css
 examples/react-typescript-demo/build
+demo/lib

@@ -16,7 +16,13 @@ Join us on <a href="https://discord.gg/w2bsGRE6S4">discord</a>
 
 ## Demo 
 
-Click to see the interactive demo:
+### Minimal demo
+<img width="433" alt="image" src="https://github.com/user-attachments/assets/3b52c7a9-d1c9-41c5-9c41-570e12825aaf" />
+
+try it out: https://codepen.io/remcoder/pen/PwYVXBg
+
+### Batteries included
+Click to see the [full-fledged demo](https://gcode-preview.web.app/):
 
 [<img title="click to see the demo" width="320" alt="image" src="https://github.com/user-attachments/assets/4e663193-0a01-4fe2-864b-a8ffb18cbcd8">](https://gcode-preview.web.app/)
 
