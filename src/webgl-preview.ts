@@ -116,7 +116,7 @@ export class WebGLPreview {
   /** Width of rendered lines */
   lineWidth?: number;
   /** Height of extruded lines */
-  lineHeight?: number;
+  lineHeight = 0.2;
   /** First layer to render (1-based index) */
   _startLayer?: number;
   /** Last layer to render (1-based index) */
@@ -217,7 +217,7 @@ export class WebGLPreview {
     this.endLayer = opts.endLayer;
     this.startLayer = opts.startLayer;
     this.lineWidth = opts.lineWidth ?? 1;
-    this.lineHeight = opts.lineHeight;
+    this.lineHeight = opts.lineHeight ?? this.lineHeight;
     this.buildVolume = opts.buildVolume && new BuildVolume(opts.buildVolume.x, opts.buildVolume.y, opts.buildVolume.z);
     this.initialCameraPosition = opts.initialCameraPosition ?? this.initialCameraPosition;
     this.renderExtrusion = opts.renderExtrusion ?? this.renderExtrusion;
