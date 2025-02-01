@@ -1,7 +1,6 @@
 import { test, expect, describe } from 'vitest';
 import { Path, PathType } from '../path';
 import { ExtrusionGeometry } from '../extrusion-geometry';
-import { BufferGeometry } from 'three';
 
 test('.addPoint adds a point to the vertices', () => {
   const path = new Path(PathType.Travel, undefined, undefined, undefined);
@@ -123,13 +122,22 @@ describe('.geometry', () => {
     expect(result.parameters.lineHeight).toEqual(7);
   });
 
-  test('returns an empty BufferGeometry if there are less than 3 vertices', () => {
+  test('returns null if there are 0 vertices', () => {
     const path = new Path(PathType.Travel, undefined, undefined, undefined);
 
     const result = path.geometry();
 
-    expect(result).not.toBeNull();
-    expect(result).toBeInstanceOf(BufferGeometry);
+    expect(result).toBeNull();
+  });
+
+  test('returns null if there are less than 6 vertices', () => {
+    const path = new Path(PathType.Travel, undefined, undefined, undefined);
+
+    path.addPoint(0, 0, 0);
+
+    const result = path.geometry();
+
+    expect(result).toBeNull();
   });
 });
 

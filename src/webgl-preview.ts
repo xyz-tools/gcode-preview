@@ -867,6 +867,9 @@ export class WebGLPreview {
         extrusionWidthOverride: this.extrusionWidth,
         lineHeightOverride: this.lineHeight
       });
+
+      if (!geometry) return;
+
       this.disposables.push(geometry);
       geometries.push(geometry);
     });

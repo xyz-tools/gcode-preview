@@ -108,8 +108,23 @@ export class Path {
    * @returns BufferGeometry representing the path
    */
   geometry(opts: { extrusionWidthOverride?: number; lineHeightOverride?: number } = {}): BufferGeometry {
-    if (this._vertices.length < 3) {
-      return new BufferGeometry();
+    if (this._vertices.length < 6) {
+      // a path needs at least 2 points to be valid
+      console.warn('Path has less than 6 points, returning empty geometry');
+      return null;
+    }
+
+    // check for zero length paths
+    // do this check for each segment
+    for (let i = 0; i < this._vertices.length - 3; i += 3) {
+      const dx = this._vertices[i] - this._vertices[i + 3];
+      const dy = this._vertices[i + 1] - this._vertices[i + 4];
+      const dz = this._vertices[i + 2] - this._vertices[i + 5];
+      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (distance < 0.0001) {
+        console.warn('Path has zero length, skipping');
+        return null;
+      }
     }
 
     return new ExtrusionGeometry(

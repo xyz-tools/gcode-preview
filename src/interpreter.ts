@@ -2,6 +2,10 @@ import { Path, PathType } from './path';
 import { GCodeCommand } from './gcode-parser';
 import { Job } from './job';
 
+// eslint-disable-next-line no-unused-vars
+type Method = (...args: unknown[]) => unknown;
+// type LookupTable = { [key: string]: Method | undefined };
+
 /**
  * Interprets and executes G-code commands, updating the job state accordingly
  *
@@ -14,6 +18,23 @@ export class Interpreter {
   // eslint-disable-next-line no-unused-vars
   [key: string]: (...args: unknown[]) => unknown;
 
+  // TODO: maybe these props should move to the Job class
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  private retractions = 0;
+
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  private wipes = 0;
+
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  private feedrateChanges = 0;
+
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  private points = 0;
+
   /**
    * Executes an array of G-code commands, updating the provided job
    * @param commands - Array of GCodeCommand objects to execute
@@ -21,16 +42,26 @@ export class Interpreter {
    * @returns The updated job instance
    */
   execute(commands: GCodeCommand[], job = new Job()): Job {
+    performance.mark('start execution');
     job.resumeLastPath();
     commands.forEach((command) => {
       if (command.gcode !== undefined) {
-        if (this[command.gcode] === undefined) {
+        if (typeof this[command.gcode] !== 'function') {
           return;
         }
-        this[command.gcode](command, job);
+        const method = this[command.gcode] as Method;
+        method.bind(this)(command, job);
       }
     });
     job.finishPath();
+
+    performance.mark('end execution');
+    const measure = performance.measure('execution', 'start execution', 'end execution');
+    console.debug('Done processing gcode', measure.duration.toFixed(0) + 'ms');
+    console.debug(this.retractions, 'retractions');
+    console.debug(this.wipes, 'wipes');
+    console.debug(this.feedrateChanges, 'feedrateChanges');
+    console.debug(this.points, 'points');
 
     return job;
   }
@@ -45,9 +76,27 @@ export class Interpreter {
    * G0 is for rapid moves (non-extrusion), G1 is for linear moves (with optional extrusion).
    */
   g0(command: GCodeCommand, job: Job): void {
-    const { x, y, z, e } = command.params;
-    const { state } = job;
+    const { x, y, z, e, f } = command.params;
 
+    // discard zero length moves
+    if (x === undefined && y === undefined && z === undefined) {
+      // console.warn('Discarding zero length move');
+      if (e > 0) {
+        this.retractions++;
+      } else if (e < 0) {
+        this.wipes++;
+      }
+
+      if (f !== undefined) {
+        this.feedrateChanges++;
+      }
+
+      return;
+    }
+
+    this.points++;
+
+    const { state } = job;
     let currentPath = job.inprogressPath;
     const pathType = e > 0 ? PathType.Extrusion : PathType.Travel;
 
@@ -55,6 +104,8 @@ export class Interpreter {
       currentPath = this.breakPath(job, pathType);
     }
 
+    // e is omitted bc currently we're assuming relative extrusion distances
+    // see also https://github.com/xyz-tools/gcode-preview/issues/179
     state.x = x ?? state.x;
     state.y = y ?? state.y;
     state.z = z ?? state.z;
