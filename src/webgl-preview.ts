@@ -13,6 +13,7 @@ import { Interpreter } from './interpreter';
 import { Job } from './job';
 import { Path } from './path';
 import { createColorMaterial } from './helpers/colorMaterial';
+import { enableDropHandler } from './dom-utils';
 
 import {
   BatchedMesh,
@@ -76,10 +77,8 @@ export type GCodePreviewOptions = {
   extrusionWidth?: number;
   /** Render paths as 3D tubes instead of lines */
   renderTubes?: boolean;
-  /**
-   * @deprecated Please see the demo how to implement drag and drop.
-   */
-  allowDragNDrop?: boolean;
+  /** Enable drag and drop file handling */
+  droppable?: boolean;
   /** Enable developer mode with additional controls */
   devMode?: boolean | DevModeOptions;
 };
@@ -274,7 +273,7 @@ export class WebGLPreview {
     this.initScene();
     this.animate();
 
-    if (opts.allowDragNDrop) this._enableDropHandler();
+    if (opts.droppable) enableDropHandler(this, this.canvas);
 
     this.initStats();
   }
@@ -754,42 +753,6 @@ export class WebGLPreview {
   }
 
   /**
-   * Enables drag and drop handling for G-code files
-   * @remarks
-   * Adds event listeners for drag and drop operations on the canvas.
-   * @deprecated This feature is deprecated
-   */
-  private _enableDropHandler(): void {
-    console.warn('Drag and drop is deprecated as a library feature. See the demo how to implement your own.');
-    this.canvas.addEventListener('dragover', (evt) => {
-      evt.stopPropagation();
-      evt.preventDefault();
-      if (evt.dataTransfer) evt.dataTransfer.dropEffect = 'copy';
-      this.canvas.classList.add('dragging');
-    });
-
-    this.canvas.addEventListener('dragleave', (evt) => {
-      evt.stopPropagation();
-      evt.preventDefault();
-      this.canvas.classList.remove('dragging');
-    });
-
-    this.canvas.addEventListener('drop', async (evt) => {
-      evt.stopPropagation();
-      evt.preventDefault();
-      this.canvas.classList.remove('dragging');
-      const files: FileList | [] = evt.dataTransfer?.files ?? [];
-      const file = files[0];
-
-      this.clear();
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await this._readFromStream(file.stream() as unknown as ReadableStream<any>);
-      this.render();
-    });
-  }
-
-  /**
    * Renders paths between the current render index and specified end index
    * @param endPathNumber - End index of paths to render (default: Infinity)
    */
@@ -903,7 +866,7 @@ export class WebGLPreview {
    * @param stream - Readable stream containing G-code data
    * @returns Promise that resolves when stream processing is complete
    */
-  async _readFromStream(stream: ReadableStream): Promise<void> {
+  async readFromStream(stream: ReadableStream): Promise<void> {
     const reader = stream.getReader();
     let result;
     let tail = '';

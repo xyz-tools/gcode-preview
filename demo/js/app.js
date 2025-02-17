@@ -43,13 +43,13 @@ export const app = (window.app = createApp({
 
     const dragLeave = () => (dragging.value = false);
 
-    const drop = (event) => {
-      dragging.value = false;
-      const file = event.dataTransfer.files[0];
-      fileName.value = file.name;
-      model.value = null;
-      loadDroppedFile(file);
-    };
+    // const drop = (event) => {
+    //   dragging.value = false;
+    //   const file = event.dataTransfer.files[0];
+    //   fileName.value = file.name;
+    //   model.value = null;
+    //   loadDroppedFile(file);
+    // };
 
     // Update UI with current preview settings
     const updateUI = async () => {
@@ -164,7 +164,10 @@ export const app = (window.app = createApp({
           backgroundColor: initialBackgroundColor
         },
         defaultSettings,
-        preset
+        preset,
+        {
+          droppable: true
+        }
       );
 
       // reset previous state
@@ -255,7 +258,7 @@ export const app = (window.app = createApp({
       removeColor,
       dragOver,
       dragLeave,
-      drop,
+      // drop,
       resetUI: updateUI,
       loadGCodeFromServer,
       startLoadingProgressive,
