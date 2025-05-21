@@ -22,6 +22,8 @@ import {
   ColorRepresentation,
   Euler,
   Group,
+  LineBasicMaterial,
+  LineDashedMaterial,
   Material,
   PerspectiveCamera,
   Plane,
@@ -83,6 +85,8 @@ export type GCodePreviewOptions = {
   allowDragNDrop?: boolean;
   /** Enable developer mode with additional controls */
   devMode?: boolean | DevModeOptions;
+  /** Color for the bounding box. If undefined, the bounding box is not rendered. */
+  boundingBoxColor?: ColorRepresentation;
 };
 
 /**
@@ -147,6 +151,8 @@ export class WebGLPreview {
   parser = new Parser();
   /** Bounding box mesh */
   private boundingBoxMesh?: LineBox;
+  /** Color for the bounding box */
+  private _boundingBoxColor?: Color;
 
   // rendering
   /** Group containing all rendered paths */
@@ -230,6 +236,9 @@ export class WebGLPreview {
     this.extrusionWidth = opts.extrusionWidth;
     this.devMode = opts.devMode ?? this.devMode;
     this.stats = this.devMode ? new Stats() : undefined;
+    if (opts.boundingBoxColor !== undefined) {
+      this._boundingBoxColor = new Color(opts.boundingBoxColor);
+    }
 
     if (!opts.canvas) {
       throw Error('Set either opts.canvas or opts.targetId');
@@ -392,6 +401,23 @@ export class WebGLPreview {
    */
   set lastSegmentColor(value: ColorRepresentation | undefined) {
     this._lastSegmentColor = value !== undefined ? new Color(value) : undefined;
+  }
+
+  /**
+   * Gets the current bounding box color
+   * @returns Color representation or undefined if not set
+   */
+  get boundingBoxColor(): ColorRepresentation | undefined {
+    return this._boundingBoxColor;
+  }
+
+  /**
+   * Sets the bounding box color
+   * @param value - Color value or undefined to hide the bounding box
+   */
+  set boundingBoxColor(value: ColorRepresentation | undefined) {
+    this._boundingBoxColor = value !== undefined ? new Color(value) : undefined;
+    this.renderBoundingBox();
   }
 
   /**
@@ -704,17 +730,26 @@ export class WebGLPreview {
     this.group = this.createGroup('parts' + this.renderPathIndex);
     const endPathNumber = Math.min(this.renderPathIndex + pathCount, this.job.paths.length - 1);
     this.renderPaths(endPathNumber);
-    this.renderBoundingBox();
+    if (this._boundingBoxColor !== undefined) {
+      this.renderBoundingBox();
+    }
     this.renderPathIndex = endPathNumber;
     this.scene.add(this.group);
   }
 
   private renderBoundingBox(): void {
-    if (this.boundingBoxMesh) {
-      this.scene.remove(this.boundingBoxMesh);
-      this.boundingBoxMesh.dispose();
-      this.boundingBoxMesh = undefined;
+    if (!this.buildVolume) {
+      return;
     }
+    
+    if (this._boundingBoxColor === undefined) {
+      if (this.boundingBoxMesh) {
+        this.scene.remove(this.boundingBoxMesh);
+        this.boundingBoxMesh.dispose();
+        this.boundingBoxMesh = undefined;
+      }
+    }
+
     if (this.job && this.job.boundingBox.isValid && this.buildVolume) { // Added check for this.buildVolume
       const bb = this.job.boundingBox;
       const size = bb.size;
@@ -725,7 +760,7 @@ export class WebGLPreview {
         // LineBox's x = G-code X size
         // LineBox's y = G-code Z size (height)
         // LineBox's z = G-code Y size (depth)
-        this.boundingBoxMesh = new LineBox(size.x, size.z, size.y, 0x800080, false); // purple, not dashed
+        this.boundingBoxMesh = new LineBox(size.x, size.z, size.y, this._boundingBoxColor, false); 
 
         // Position the LineBox:
         // Three.js X position = G-code X center - (Build Volume X / 2)
@@ -776,7 +811,7 @@ export class WebGLPreview {
     this.disposables = [];
     this.controls.dispose();
     this.renderer.dispose();
-
+    
     this.cancelAnimation();
   }
 
