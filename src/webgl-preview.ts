@@ -6,6 +6,7 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
 import { BuildVolume } from './build-volume';
 import { type Disposable } from './helpers/three-utils';
+import { LineBox } from './helpers/line-box';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 
 import { DevGUI, DevModeOptions } from './dev-gui';
@@ -144,6 +145,8 @@ export class WebGLPreview {
   interpreter = new Interpreter();
   /** G-code parser */
   parser = new Parser();
+  /** Bounding box mesh */
+  private boundingBoxMesh?: LineBox;
 
   // rendering
   /** Group containing all rendered paths */
@@ -646,6 +649,7 @@ export class WebGLPreview {
     this.initScene();
 
     this.renderPaths();
+    this.renderBoundingBox();
 
     this.scene.add(this.group);
     this.renderer.render(this.scene, this.camera);
@@ -700,8 +704,42 @@ export class WebGLPreview {
     this.group = this.createGroup('parts' + this.renderPathIndex);
     const endPathNumber = Math.min(this.renderPathIndex + pathCount, this.job.paths.length - 1);
     this.renderPaths(endPathNumber);
+    this.renderBoundingBox();
     this.renderPathIndex = endPathNumber;
     this.scene.add(this.group);
+  }
+
+  private renderBoundingBox(): void {
+    if (this.boundingBoxMesh) {
+      this.scene.remove(this.boundingBoxMesh);
+      this.boundingBoxMesh.dispose();
+      this.boundingBoxMesh = undefined;
+    }
+    if (this.job && this.job.boundingBox.isValid && this.buildVolume) { // Added check for this.buildVolume
+      const bb = this.job.boundingBox;
+      const size = bb.size;
+      const center = bb.center;
+
+      if (size && center) {
+        // Create the LineBox: (width, height, depth)
+        // LineBox's x = G-code X size
+        // LineBox's y = G-code Z size (height)
+        // LineBox's z = G-code Y size (depth)
+        this.boundingBoxMesh = new LineBox(size.x, size.z, size.y, 0x800080, false); // purple, not dashed
+
+        // Position the LineBox:
+        // Three.js X position = G-code X center - (Build Volume X / 2)
+        // Three.js Y position = G-code Z center (since Three.js Y is up, and LineBox handles its own Y-offset)
+        // Three.js Z position = G-code Y center - (Build Volume Y / 2)
+        this.boundingBoxMesh.position.set(
+          center.x - (this.buildVolume.x / 2),
+          center.z, // Three.js Y (G-code Z)
+          -(center.y - (this.buildVolume.y / 2)) // Three.js Z (G-code Y)
+        );
+
+        this.scene.add(this.boundingBoxMesh);
+      }
+    }
   }
 
   // reset parser & processing state
