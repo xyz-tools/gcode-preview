@@ -4,7 +4,7 @@ import { Layer } from './layer'; // Assuming Layer is now in its own file
 /**
  * Base error class for indexer-related errors
  */
-class NonApplicableIndexer extends Error {}
+export class NonApplicableIndexer extends Error {}
 
 /**
  * Base class for path indexers

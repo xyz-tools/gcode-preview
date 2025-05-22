@@ -1,7 +1,7 @@
 import { Path, PathType } from './path';
 import { State } from './state';
 import { Layer } from './layer';
-import { TravelTypeIndexer, LayersIndexer, ToolIndexer, Indexer } from './indexers';
+import { TravelTypeIndexer, LayersIndexer, ToolIndexer, Indexer, NonPlanarPathError, NonApplicableIndexer } from './indexers';
 import { BoundingBox } from './bounding-box';
 
 /**
@@ -155,10 +155,17 @@ export class Job {
       try {
         indexer.sortIn(path);
       } catch (e) {
-        // NonApplicableIndexer and NonPlanarPathError are now handled in indexers.ts
-        // If an indexer throws an error, it will be removed from the list of indexers.
-        // If the error is a NonPlanarPathError, the layers will be cleared.
-        console.warn('Indexer error:', e);
+        if (!(e instanceof NonApplicableIndexer)) {
+          throw e; // If the error is not a NonApplicableIndexer, it will be thrown.
+        }
+        
+        if (e instanceof NonPlanarPathError) {
+            console.warn('Non-planar path detected; clearing layers');
+            this._layers = [];
+        } else {
+          console.warn('Indexer error:', e);
+        }
+
         const i = this.indexers.indexOf(indexer);
         this.indexers.splice(i, 1);
       }
