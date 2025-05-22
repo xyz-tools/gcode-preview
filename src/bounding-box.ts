@@ -45,7 +45,7 @@ export class BoundingBox {
     return {
       x: this.maxX - this.minX,
       y: this.maxY - this.minY,
-      z: this.maxZ - this.minZ,
+      z: this.maxZ - this.minZ
     };
   }
 
@@ -60,7 +60,7 @@ export class BoundingBox {
     return {
       x: this.minX + (this.maxX - this.minX) / 2,
       y: this.minY + (this.maxY - this.minY) / 2,
-      z: this.minZ + (this.maxZ - this.minZ) / 2,
+      z: this.minZ + (this.maxZ - this.minZ) / 2
     };
   }
 }

@@ -22,8 +22,6 @@ import {
   ColorRepresentation,
   Euler,
   Group,
-  LineBasicMaterial,
-  LineDashedMaterial,
   Material,
   PerspectiveCamera,
   Plane,
@@ -741,7 +739,7 @@ export class WebGLPreview {
     if (!this.buildVolume) {
       return;
     }
-    
+
     if (this._boundingBoxColor === undefined) {
       if (this.boundingBoxMesh) {
         this.scene.remove(this.boundingBoxMesh);
@@ -750,7 +748,8 @@ export class WebGLPreview {
       }
     }
 
-    if (this.job && this.job.boundingBox.isValid && this.buildVolume) { // Added check for this.buildVolume
+    if (this.job && this.job.boundingBox.isValid && this.buildVolume) {
+      // Added check for this.buildVolume
       const bb = this.job.boundingBox;
       const size = bb.size;
       const center = bb.center;
@@ -760,16 +759,16 @@ export class WebGLPreview {
         // LineBox's x = G-code X size
         // LineBox's y = G-code Z size (height)
         // LineBox's z = G-code Y size (depth)
-        this.boundingBoxMesh = new LineBox(size.x, size.z, size.y, this._boundingBoxColor, false); 
+        this.boundingBoxMesh = new LineBox(size.x, size.z, size.y, this._boundingBoxColor, false);
 
         // Position the LineBox:
         // Three.js X position = G-code X center - (Build Volume X / 2)
         // Three.js Y position = G-code Z center (since Three.js Y is up, and LineBox handles its own Y-offset)
         // Three.js Z position = G-code Y center - (Build Volume Y / 2)
         this.boundingBoxMesh.position.set(
-          center.x - (this.buildVolume.x / 2),
+          center.x - this.buildVolume.x / 2,
           center.z, // Three.js Y (G-code Z)
-          -(center.y - (this.buildVolume.y / 2)) // Three.js Z (G-code Y)
+          -(center.y - this.buildVolume.y / 2) // Three.js Z (G-code Y)
         );
 
         this.scene.add(this.boundingBoxMesh);
@@ -811,7 +810,7 @@ export class WebGLPreview {
     this.disposables = [];
     this.controls.dispose();
     this.renderer.dispose();
-    
+
     this.cancelAnimation();
   }
 

@@ -1,7 +1,14 @@
-import { Path, PathType } from './path';
+import { Path } from './path';
 import { State } from './state';
 import { Layer } from './layer';
-import { TravelTypeIndexer, LayersIndexer, ToolIndexer, Indexer, NonPlanarPathError, NonApplicableIndexer } from './indexers';
+import {
+  TravelTypeIndexer,
+  LayersIndexer,
+  ToolIndexer,
+  Indexer,
+  NonPlanarPathError,
+  NonApplicableIndexer
+} from './indexers';
 import { BoundingBox } from './bounding-box';
 
 /**
@@ -158,10 +165,10 @@ export class Job {
         if (!(e instanceof NonApplicableIndexer)) {
           throw e; // If the error is not a NonApplicableIndexer, it will be thrown.
         }
-        
+
         if (e instanceof NonPlanarPathError) {
-            console.warn('Non-planar path detected; clearing layers');
-            this._layers = [];
+          console.warn('Non-planar path detected; clearing layers');
+          this._layers = [];
         } else {
           console.warn('Indexer error:', e);
         }
@@ -172,4 +179,3 @@ export class Job {
     });
   }
 }
-

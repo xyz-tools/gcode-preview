@@ -1,4 +1,11 @@
-import { BufferGeometry, Float32BufferAttribute, Color, LineSegments, LineDashedMaterial, LineBasicMaterial } from 'three';
+import {
+  BufferGeometry,
+  Float32BufferAttribute,
+  Color,
+  LineSegments,
+  LineDashedMaterial,
+  LineBasicMaterial
+} from 'three';
 
 /**
  * A helper class that creates a 3D box outline with dashed lines using Three.js LineSegments.
