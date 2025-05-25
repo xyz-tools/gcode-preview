@@ -624,10 +624,11 @@ export class WebGLPreview {
       this.interpreter.execute(commands, this.job);
     }
 
+    console.debug(`out of ${this.interpreter.points} move commands, the following were pruned due to no actual movement:`);
     console.debug(this.interpreter.retractions, 'retractions');
     console.debug(this.interpreter.deretractions, 'deretractions');
     console.debug(this.interpreter.feedrateChanges, 'feedrateChanges');
-    console.debug(this.interpreter.points, 'points');
+    console.debug(this.interpreter.others, 'other');
 
     if (render) {
       this.renderAnimated();

@@ -33,7 +33,11 @@ export class Interpreter {
 
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  public points = 0;
+  public others = 0; 
+
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  public points = 0; // for reference, how many points were added to the job
 
   /**
    * Executes an array of G-code commands, updating the provided job
@@ -53,8 +57,6 @@ export class Interpreter {
       }
     });
     job.finishPath();
-
-    
 
     return job;
   }
@@ -79,9 +81,11 @@ export class Interpreter {
       } else if (e < 0) {
         this.deretractions++;
       }
-
-      if (f !== undefined) {
+      else if (f !== undefined) {
         this.feedrateChanges++;
+      }
+      else {
+        this.others++;
       }
 
       return;
