@@ -13,7 +13,6 @@ import { Interpreter } from './interpreter';
 import { Job } from './job';
 import { Path } from './path';
 import { createColorMaterial } from './helpers/colorMaterial';
-import { enableDropHandler } from './dom-utils';
 
 import {
   BatchedMesh,
@@ -32,6 +31,7 @@ import {
   WebGLRenderer,
   MathUtils
 } from 'three';
+import { makeDroppable } from './extra/dom-utils';
 
 /**
  * Options for configuring the G-code preview
@@ -273,7 +273,7 @@ export class WebGLPreview {
     this.initScene();
     this.animate();
 
-    if (opts.droppable) enableDropHandler(this, this.canvas);
+    if (opts.droppable) makeDroppable(this);
 
     this.initStats();
   }
@@ -863,50 +863,6 @@ export class WebGLPreview {
   }
 
   /**
-   * Reads and processes G-code from a stream
-   * @param stream - Readable stream containing G-code data
-   * @returns Promise that resolves when stream processing is complete
-   * @emits update - Custom event with file metadata when stream ends
-   */
-  async readFromStream(stream: ReadableStream): Promise<void> {
-    const reader = stream.getReader();
-    let result;
-    let tail = '';
-    let size = 0;
-    
-    do {
-      result = await reader.read();
-      const length = result.value?.length ?? 0;
-      if (length === 0) {
-        console.debug('stream ended');
-        break;
-      }
-      console.debug('reading from stream', Math.floor(length/1024), 'kB');
-      size += length;
-      const str = decode(result.value);
-      const idxNewLine = str.lastIndexOf('\n');
-      const maxFullLine = str.slice(0, idxNewLine);
-
-      // parse increments but don't render yet
-      const { commands } = this.parser.parseGCode(tail + maxFullLine);
-
-      // we'll execute the commands immediately, for now
-      this.interpreter.execute(commands, this.job);
-
-      tail = str.slice(idxNewLine);
-    } while (!result.done);
-    console.debug('total read from stream', Math.floor(size/1024), 'kB');
-
-    this.endLayer = this.job.layers.length;
-    
-     // dispatch a custom event to notify that the file has been loaded
-    const event = new CustomEvent('update');
-    this.canvas.dispatchEvent(event);
-
-    this.render();
-  }
-
-  /**
    * Initializes the developer GUI if dev mode is enabled
    */
   private initGui() {
@@ -932,6 +888,3 @@ export class WebGLPreview {
   }
 }
 
-function decode(uint8array: Uint8Array) {
-  return new TextDecoder('utf-8').decode(uint8array);
-}

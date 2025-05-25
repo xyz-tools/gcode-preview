@@ -36,7 +36,7 @@
         
         <div class="p-1" v-if="model">
           <!-- <div>{{layerCount + ' layers'}} / {{fileSize}}</div> -->
-          <div><a :href="model?.original">{{model?.name ?? fileName}}</a> <br>
+          <div><a :href="model?.original">{{model?.name}}</a> <br>
             <span v-if="model?.designer" class="is-size-8">by {{model?.designer}}</span></div>
 
           <div class="license is-size-8">{{model?.license}}</div>
@@ -244,7 +244,6 @@
     <div class="wrapper">
       <canvas class="preview" :class="{ 'dragging': settings.dragging }" 
         @update.prevent="update"
-        @drop.prevent="drop"
         ></canvas>
     </div>
   </div>

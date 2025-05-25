@@ -20,7 +20,6 @@ export const app = (window.app = createApp({
     const thumbnail = ref(null);
     const layerCount = ref(0);
     const fileSize = ref(0);
-    const fileName = ref('');
     const model = ref(null);
     const dragging = ref(false);
     const settings = ref(Object.assign({}, defaultSettings));
@@ -37,24 +36,10 @@ export const app = (window.app = createApp({
     const removeColor = () => settings.value.colors.pop();
 
     const update = async (evt) => {
-      // console.debug('updateUI');
-      updateUI();
-    };
-
-    const drop = async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      dragging.value = false;
-      const file = event.dataTransfer.files[0];
-      if (!file) {
-        console.warn('No file dropped');
-        return;
-      }
-      console.debug('File dropped:', file);
-      fileName.value = file.name;
       model.value = {
-        name: file.name
+        name: evt.detail.filename
       };
+      updateUI();
     };
 
     // Update UI with current preview settings
@@ -162,7 +147,6 @@ export const app = (window.app = createApp({
     const selectPreset = async (presetName) => {
       const canvas = document.querySelector('canvas.preview');
       const preset = presets[presetName];
-      fileName.value = preset.file.split('/').pop();
       model.value = preset.model;
       const options = Object.assign(
         {
@@ -254,7 +238,6 @@ export const app = (window.app = createApp({
       thumbnail,
       layerCount,
       fileSize,
-      fileName,
       model,
       dragging,
       settings,
@@ -262,7 +245,7 @@ export const app = (window.app = createApp({
       selectTab,
       addColor,
       removeColor,
-      drop,
+      // drop,
       update,
       resetUI: updateUI,
       loadGCodeFromServer,
