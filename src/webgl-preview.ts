@@ -865,6 +865,38 @@ export class WebGLPreview {
     return batchedMesh;
   }
 
+async readFromStream(stream: ReadableStream): Promise<void> {
+  const reader = stream.getReader();
+  let result;
+  let tail = '';
+  let size = 0;
+
+  do {
+    result = await reader.read();
+    const length = result.value?.length ?? 0;
+    if (length === 0) {
+      console.debug('stream ended');
+      break;
+    }
+    console.debug('reading from stream', Math.floor(length / 1024), 'kB');
+    size += length;
+    const str = decode(result.value);
+    const idxNewLine = str.lastIndexOf('\n');
+    const maxFullLine = str.slice(0, idxNewLine);
+
+    // parse increments but don't render yet
+    const { commands } = this.parser.parseGCode(tail + maxFullLine);
+
+    // we'll execute the commands immediately, for now
+    this.interpreter.execute(commands, this.job);
+
+    tail = str.slice(idxNewLine);
+  } while (!result.done);
+  console.debug('total read from stream', Math.floor(size / 1024), 'kB');
+
+  this.renderAnimated();
+}
+
   /**
    * Initializes the developer GUI if dev mode is enabled
    */
@@ -889,4 +921,8 @@ export class WebGLPreview {
       this.initGui();
     }
   }
+}
+
+function decode(uint8array: Uint8Array) {
+  return new TextDecoder('utf-8').decode(uint8array);
 }
