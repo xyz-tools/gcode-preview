@@ -36,20 +36,26 @@ export const app = (window.app = createApp({
 
     const removeColor = () => settings.value.colors.pop();
 
-    const dragOver = (event) => {
-      event.dataTransfer.dropEffect = 'copy';
-      dragging.value = true;
+    const update = async (evt) => {
+      // console.debug('updateUI');
+      updateUI();
     };
 
-    const dragLeave = () => (dragging.value = false);
-
-    // const drop = (event) => {
-    //   dragging.value = false;
-    //   const file = event.dataTransfer.files[0];
-    //   fileName.value = file.name;
-    //   model.value = null;
-    //   loadDroppedFile(file);
-    // };
+    const drop = async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      dragging.value = false;
+      const file = event.dataTransfer.files[0];
+      if (!file) {
+        console.warn('No file dropped');
+        return;
+      }
+      console.debug('File dropped:', file);
+      fileName.value = file.name;
+      model.value = {
+        name: file.name
+      };
+    };
 
     // Update UI with current preview settings
     const updateUI = async () => {
@@ -256,9 +262,8 @@ export const app = (window.app = createApp({
       selectTab,
       addColor,
       removeColor,
-      dragOver,
-      dragLeave,
-      // drop,
+      drop,
+      update,
       resetUI: updateUI,
       loadGCodeFromServer,
       startLoadingProgressive,

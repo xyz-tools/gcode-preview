@@ -866,6 +866,7 @@ export class WebGLPreview {
    * Reads and processes G-code from a stream
    * @param stream - Readable stream containing G-code data
    * @returns Promise that resolves when stream processing is complete
+   * @emits update - Custom event with file metadata when stream ends
    */
   async readFromStream(stream: ReadableStream): Promise<void> {
     const reader = stream.getReader();
@@ -898,6 +899,10 @@ export class WebGLPreview {
 
     this.endLayer = this.job.layers.length;
     
+     // dispatch a custom event to notify that the file has been loaded
+    const event = new CustomEvent('update');
+    this.canvas.dispatchEvent(event);
+
     this.render();
   }
 

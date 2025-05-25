@@ -4,20 +4,17 @@ import { WebGLPreview } from './webgl-preview';
  */
 export function enableDropHandler(previewInstance: WebGLPreview, element: HTMLElement): void {
   element.addEventListener('dragover', (evt) => {
-    evt.stopPropagation();
     evt.preventDefault();
     if (evt.dataTransfer) evt.dataTransfer.dropEffect = 'copy';
     element.classList.add('dragging');
   });
 
   element.addEventListener('dragleave', (evt) => {
-    evt.stopPropagation();
     evt.preventDefault();
     element.classList.remove('dragging');
   });
 
   element.addEventListener('drop', async (evt) => {
-    evt.stopPropagation();
     evt.preventDefault();
     element.classList.remove('dragging');
     const files: FileList | [] = evt.dataTransfer?.files ?? [];
