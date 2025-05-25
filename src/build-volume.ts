@@ -66,7 +66,7 @@ export class BuildVolume {
    * @returns Configured LineBox instance
    */
   createLineBox(): LineBox {
-    const lineBox = new LineBox(this.x, this.z, this.y, this.color);
+    const lineBox = new LineBox(this.x, this.z, this.y, this.color, false);
     this.disposables.push(lineBox);
     return lineBox;
   }
