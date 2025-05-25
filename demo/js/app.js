@@ -2,7 +2,7 @@ import { createApp, ref, watch, onMounted, watchEffect } from 'vue';
 import { presets } from './presets.js';
 import * as GCodePreview from 'gcode-preview';
 import { defaultSettings } from './default-settings.js';
-import { debounce, humanFileSize, readFile } from './utils.js';
+import { debounce, humanFileSize } from './utils.js';
 
 const defaultPreset = 'benchy';
 const preferDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
@@ -20,7 +20,6 @@ export const app = (window.app = createApp({
     const thumbnail = ref(null);
     const layerCount = ref(0);
     const fileSize = ref(0);
-    const fileName = ref('');
     const model = ref(null);
     const dragging = ref(false);
     const settings = ref(Object.assign({}, defaultSettings));
@@ -36,19 +35,12 @@ export const app = (window.app = createApp({
 
     const removeColor = () => settings.value.colors.pop();
 
-    const dragOver = (event) => {
-      event.dataTransfer.dropEffect = 'copy';
-      dragging.value = true;
-    };
-
-    const dragLeave = () => (dragging.value = false);
-
-    const drop = (event) => {
-      dragging.value = false;
-      const file = event.dataTransfer.files[0];
-      fileName.value = file.name;
-      model.value = null;
-      loadDroppedFile(file);
+    const update = async (evt) => {
+      model.value = {
+        name: evt.detail.filename
+      };
+      applyDevMode(enableDevMode.value); // HACK: force dev mode to update UI
+      updateUI();
     };
 
     // Update UI with current preview settings
@@ -105,6 +97,8 @@ export const app = (window.app = createApp({
 
       Object.assign(settings.value, currentSettings);
       preview.endLayer = countLayers;
+
+      applyDevMode(enableDevMode.value);
     };
 
     const loadGCodeFromServer = async (filename) => {
@@ -137,26 +131,16 @@ export const app = (window.app = createApp({
             preview.render();
             return;
           }
-          await preview.renderAnimated(preview.job.paths.length / 60);
+          await preview.renderAnimated();
         } else {
           preview.render();
         }
       });
     };
 
-    const loadDroppedFile = async (file) => {
-      fileSize.value = humanFileSize(file.size);
-      const content = await readFile(file);
-      applyDevMode(enableDevMode.value); // HACK
-      startLoadingProgressive(content);
-      applyDevMode(enableDevMode.value);
-      updateUI();
-    };
-
     const selectPreset = async (presetName) => {
       const canvas = document.querySelector('canvas.preview');
       const preset = presets[presetName];
-      fileName.value = preset.file.split('/').pop();
       model.value = preset.model;
       const options = Object.assign(
         {
@@ -164,7 +148,10 @@ export const app = (window.app = createApp({
           backgroundColor: initialBackgroundColor
         },
         defaultSettings,
-        preset
+        preset,
+        {
+          droppable: true
+        }
       );
 
       // reset previous state
@@ -182,7 +169,7 @@ export const app = (window.app = createApp({
       observer = new ResizeObserver(() => preview.resize());
       observer.observe(canvas);
 
-      applyDevMode(enableDevMode.value);
+      applyDevMode(enableDevMode.value); // HACK: force dev mode to update UI
 
       await loadGCodeFromServer(preset.file);
       applyDevMode(enableDevMode.value);
@@ -245,7 +232,6 @@ export const app = (window.app = createApp({
       thumbnail,
       layerCount,
       fileSize,
-      fileName,
       model,
       dragging,
       settings,
@@ -253,13 +239,11 @@ export const app = (window.app = createApp({
       selectTab,
       addColor,
       removeColor,
-      dragOver,
-      dragLeave,
-      drop,
+      // drop,
+      update,
       resetUI: updateUI,
       loadGCodeFromServer,
       startLoadingProgressive,
-      loadDroppedFile,
       selectPreset
     };
   }
