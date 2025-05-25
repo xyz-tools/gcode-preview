@@ -2,7 +2,6 @@ import { createApp, ref, watch, onMounted, watchEffect } from 'vue';
 import { presets } from './presets.js';
 import * as GCodePreview from 'gcode-preview';
 import { defaultSettings } from './default-settings.js';
-import { debounce, humanFileSize } from './utils.js';
 
 const defaultPreset = 'benchy';
 const preferDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
@@ -108,34 +107,26 @@ export const app = (window.app = createApp({
         return;
       }
 
-      const gcode = await response.text();
-      fileSize.value = humanFileSize(gcode.length);
-      startLoadingProgressive(gcode);
-    };
+      const gcodeStream = response.body.pipeThrough(new TextDecoderStream());
 
-    const startLoadingProgressive = async (gcode) => {
       const prevDevMode = preview.devMode;
       preview.clear();
       preview.devMode = prevDevMode;
-      const { commands } = preview.parser.parseGCode(gcode);
-      preview.interpreter.execute(commands, preview.job);
 
-      render();
+      await preview.processGCode(gcodeStream, { render: false }); // rendering will be done reactively
     };
 
     const render = async () => {
-      debounce(async () => {
-        if (loadProgressive) {
-          if (preview.job.layers === null) {
-            console.warn('Job is not planar');
-            preview.render();
-            return;
-          }
-          await preview.renderAnimated();
-        } else {
+      if (loadProgressive) {
+        if (preview.job.layers === null) {
+          console.warn('Job is not planar');
           preview.render();
+          return;
         }
-      });
+        await preview.renderAnimated();
+      } else {
+        preview.render();
+      }
     };
 
     const selectPreset = async (presetName) => {
@@ -239,11 +230,9 @@ export const app = (window.app = createApp({
       selectTab,
       addColor,
       removeColor,
-      // drop,
       update,
       resetUI: updateUI,
       loadGCodeFromServer,
-      startLoadingProgressive,
       selectPreset
     };
   }

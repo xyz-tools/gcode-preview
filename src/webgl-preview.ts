@@ -612,11 +612,21 @@ export class WebGLPreview {
   /**
    * Processes G-code and updates the visualization
    * @param gcode - G-code string or array of strings to process
+   * @param options - Options for rendering: { render: boolean }
+   * @remarks
+   * Parses the G-code, executes commands, and renders the paths if `render` is true.
    */
-  processGCode(gcode: string | string[]): void {
-    const { commands } = this.parser.parseGCode(gcode);
-    this.interpreter.execute(commands, this.job);
-    this.render();
+  async processGCode(gcode: string | string[] | ReadableStream, { render } = { render: true }): Promise<void> {
+    if (gcode instanceof ReadableStream) {
+      await this.readStream(gcode);
+    } else {
+      const { commands } = this.parser.parseGCode(gcode);
+      this.interpreter.execute(commands, this.job);
+    }
+
+    if (render) {
+      this.renderAnimated();
+    }
   }
 
   /**
@@ -935,6 +945,36 @@ export class WebGLPreview {
     });
 
     return batchedMesh;
+  }
+
+  async readStream(stream: ReadableStream): Promise<void> {
+    const reader = stream.getReader();
+    let result;
+    let tail = '';
+    let size = 0;
+
+    do {
+      result = await reader.read();
+      const length = result.value?.length ?? 0;
+      if (length === 0) {
+        break;
+      }
+      console.debug('reading from stream', Math.floor(length / 1024), 'kB');
+      size += length;
+      const str = result.value;
+      const idxNewLine = str.lastIndexOf('\n');
+      const maxFullLine = str.slice(0, idxNewLine);
+
+      // parse increments but don't render yet
+      const { commands } = this.parser.parseGCode(tail + maxFullLine);
+
+      // we'll execute the commands immediately, for now
+      this.interpreter.execute(commands, this.job);
+
+      tail = str.slice(idxNewLine);
+    } while (!result.done);
+
+    console.debug('total read from stream', Math.floor(size / 1024), 'kB');
   }
 
   /**
