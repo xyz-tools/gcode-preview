@@ -6,6 +6,7 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
 import { BuildVolume } from './build-volume';
 import { type Disposable } from './helpers/three-utils';
+import { LineBox } from './helpers/line-box';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 
 import { DevGUI, DevModeOptions } from './dev-gui';
@@ -81,6 +82,8 @@ export type GCodePreviewOptions = {
   droppable?: boolean;
   /** Enable developer mode with additional controls */
   devMode?: boolean | DevModeOptions;
+  /** Color for the bounding box. If undefined, the bounding box is not rendered. */
+  boundingBoxColor?: ColorRepresentation;
 };
 
 /**
@@ -143,6 +146,10 @@ export class WebGLPreview {
   interpreter = new Interpreter();
   /** G-code parser */
   parser = new Parser();
+  /** Bounding box mesh */
+  private boundingBoxMesh?: LineBox;
+  /** Color for the bounding box */
+  private _boundingBoxColor?: Color;
 
   // rendering
   /** Group containing all rendered paths */
@@ -226,6 +233,9 @@ export class WebGLPreview {
     this.extrusionWidth = opts.extrusionWidth;
     this.devMode = opts.devMode ?? this.devMode;
     this.stats = this.devMode ? new Stats() : undefined;
+    if (opts.boundingBoxColor !== undefined) {
+      this._boundingBoxColor = new Color(opts.boundingBoxColor);
+    }
 
     if (!opts.canvas) {
       throw Error('Set either opts.canvas or opts.targetId');
@@ -388,6 +398,23 @@ export class WebGLPreview {
    */
   set lastSegmentColor(value: ColorRepresentation | undefined) {
     this._lastSegmentColor = value !== undefined ? new Color(value) : undefined;
+  }
+
+  /**
+   * Gets the current bounding box color
+   * @returns Color representation or undefined if not set
+   */
+  get boundingBoxColor(): ColorRepresentation | undefined {
+    return this._boundingBoxColor;
+  }
+
+  /**
+   * Sets the bounding box color
+   * @param value - Color value or undefined to hide the bounding box
+   */
+  set boundingBoxColor(value: ColorRepresentation | undefined) {
+    this._boundingBoxColor = value !== undefined ? new Color(value) : undefined;
+    this.renderBoundingBox();
   }
 
   /**
@@ -585,11 +612,21 @@ export class WebGLPreview {
   /**
    * Processes G-code and updates the visualization
    * @param gcode - G-code string or array of strings to process
+   * @param options - Options for rendering: { render: boolean }
+   * @remarks
+   * Parses the G-code, executes commands, and renders the paths if `render` is true.
    */
-  processGCode(gcode: string | string[]): void {
-    const { commands } = this.parser.parseGCode(gcode);
-    this.interpreter.execute(commands, this.job);
-    this.render();
+  async processGCode(gcode: string | string[] | ReadableStream, { render } = { render: true }): Promise<void> {
+    if (gcode instanceof ReadableStream) {
+      await this.readStream(gcode);
+    } else {
+      const { commands } = this.parser.parseGCode(gcode);
+      this.interpreter.execute(commands, this.job);
+    }
+
+    if (render) {
+      this.renderAnimated();
+    }
   }
 
   /**
@@ -647,6 +684,7 @@ export class WebGLPreview {
     this.renderPathIndex = 0;
 
     this.renderPaths();
+    this.renderBoundingBox();
 
     this.scene.add(this.group);
     this.renderer.render(this.scene, this.camera);
@@ -704,8 +742,52 @@ export class WebGLPreview {
     this.group = this.createGroup('parts' + this.renderPathIndex);
     const endPathNumber = Math.min(this.renderPathIndex + pathCount, this.job.paths.length - 1);
     this.renderPaths(endPathNumber);
+    if (this._boundingBoxColor !== undefined) {
+      this.renderBoundingBox();
+    }
     this.renderPathIndex = endPathNumber;
     this.scene.add(this.group);
+  }
+
+  private renderBoundingBox(): void {
+    if (!this.buildVolume) {
+      return;
+    }
+
+    if (this._boundingBoxColor === undefined) {
+      if (this.boundingBoxMesh) {
+        this.scene.remove(this.boundingBoxMesh);
+        this.boundingBoxMesh.dispose();
+        this.boundingBoxMesh = undefined;
+      }
+    }
+
+    if (this.job && this.job.boundingBox.isValid && this.buildVolume) {
+      // Added check for this.buildVolume
+      const bb = this.job.boundingBox;
+      const size = bb.size;
+      const center = bb.center;
+
+      if (size && center) {
+        // Create the LineBox: (width, height, depth)
+        // LineBox's x = G-code X size
+        // LineBox's y = G-code Z size (height)
+        // LineBox's z = G-code Y size (depth)
+        this.boundingBoxMesh = new LineBox(size.x, size.z, size.y, this._boundingBoxColor, false);
+
+        // Position the LineBox:
+        // Three.js X position = G-code X center - (Build Volume X / 2)
+        // Three.js Y position = G-code Z center (since Three.js Y is up, and LineBox handles its own Y-offset)
+        // Three.js Z position = G-code Y center - (Build Volume Y / 2)
+        this.boundingBoxMesh.position.set(
+          center.x - this.buildVolume.x / 2,
+          center.z, // Three.js Y (G-code Z)
+          -(center.y - this.buildVolume.y / 2) // Three.js Z (G-code Y)
+        );
+
+        this.scene.add(this.boundingBoxMesh);
+      }
+    }
   }
 
   // reset parser & processing state
@@ -862,10 +944,42 @@ export class WebGLPreview {
 
     geometries.forEach((geometry) => {
       const geometryId = batchedMesh.addGeometry(geometry);
-      batchedMesh.addInstance(geometryId);
+      // NOTE: for older versions of three.js, addInstance is not available
+      // This allow webgl1 browsers to use the batched mesh
+      batchedMesh.addInstance?.(geometryId);
     });
 
     return batchedMesh;
+  }
+
+  async readStream(stream: ReadableStream): Promise<void> {
+    const reader = stream.getReader();
+    let result;
+    let tail = '';
+    let size = 0;
+
+    do {
+      result = await reader.read();
+      const length = result.value?.length ?? 0;
+      if (length === 0) {
+        break;
+      }
+      console.debug('reading from stream', Math.floor(length / 1024), 'kB');
+      size += length;
+      const str = result.value;
+      const idxNewLine = str.lastIndexOf('\n');
+      const maxFullLine = str.slice(0, idxNewLine);
+
+      // parse increments but don't render yet
+      const { commands } = this.parser.parseGCode(tail + maxFullLine);
+
+      // we'll execute the commands immediately, for now
+      this.interpreter.execute(commands, this.job);
+
+      tail = str.slice(idxNewLine);
+    } while (!result.done);
+
+    console.debug('total read from stream', Math.floor(size / 1024), 'kB');
   }
 
   /**

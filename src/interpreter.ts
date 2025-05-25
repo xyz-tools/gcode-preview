@@ -111,6 +111,9 @@ export class Interpreter {
     state.z = z ?? state.z;
 
     currentPath.addPoint(state.x, state.y, state.z);
+    if (pathType === PathType.Extrusion) {
+      job.boundingBox.update(state.x, state.y, state.z);
+    }
   }
 
   g1 = this.g0;
@@ -211,6 +214,9 @@ export class Interpreter {
       py = centerY + arcRadius * Math.sin(currentAngle);
       pz += zStep;
       currentPath.addPoint(px, py, pz);
+      if (pathType === PathType.Extrusion) {
+        job.boundingBox.update(px, py, pz);
+      }
     }
 
     state.x = x || state.x;
@@ -218,6 +224,9 @@ export class Interpreter {
     state.z = z || state.z;
 
     currentPath.addPoint(state.x, state.y, state.z);
+    if (pathType === PathType.Extrusion) {
+      job.boundingBox.update(state.x, state.y, state.z);
+    }
   }
 
   g3 = this.g2;

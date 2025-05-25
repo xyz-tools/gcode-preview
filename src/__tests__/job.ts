@@ -1,6 +1,8 @@
 import { test, expect, describe } from 'vitest';
-import { Job, State, LayersIndexer } from '../job';
+import { Job } from '../job';
 import { PathType, Path } from '../path';
+import { State } from '../state';
+import { LayersIndexer } from '../indexers';
 
 test('it has an initial state', () => {
   const job = new Job();

@@ -17,7 +17,7 @@
   "devDependencies": {
     "@rollup/plugin-node-resolve": "15",
     "@types/node": "^18.19.33",
-    "@types/three": "^0.169.0",
+    "@types/three": "0.176.0",
     "@typescript-eslint/eslint-plugin": "^7.0.1",
     "@typescript-eslint/parser": "^7.0.1",
     "concurrently": "^9.0.1",
@@ -59,7 +59,7 @@
     "check": "npm run typeCheck && npm run lint && npm run test"
   },
   "dependencies": {
-    "lil-gui": "^0.19.2",
-    "three": "0.172.0"
+    "lil-gui": "^0.20.0",
+    "three": "0.176.0"
   }
 }
