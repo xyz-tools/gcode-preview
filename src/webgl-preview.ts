@@ -624,6 +624,11 @@ export class WebGLPreview {
       this.interpreter.execute(commands, this.job);
     }
 
+    console.debug(this.interpreter.retractions, 'retractions');
+    console.debug(this.interpreter.deretractions, 'deretractions');
+    console.debug(this.interpreter.feedrateChanges, 'feedrateChanges');
+    console.debug(this.interpreter.points, 'points');
+
     if (render) {
       this.renderAnimated();
     }

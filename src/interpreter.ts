@@ -21,19 +21,19 @@ export class Interpreter {
   // TODO: maybe these props should move to the Job class
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  private retractions = 0;
+  public retractions = 0;
 
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  private deretractions = 0;
+  public deretractions = 0;
 
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  private feedrateChanges = 0;
+  public feedrateChanges = 0;
 
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  private points = 0;
+  public points = 0;
 
   /**
    * Executes an array of G-code commands, updating the provided job
@@ -42,7 +42,6 @@ export class Interpreter {
    * @returns The updated job instance
    */
   execute(commands: GCodeCommand[], job = new Job()): Job {
-    performance.mark('start execution');
     job.resumeLastPath();
     commands.forEach((command) => {
       if (command.gcode !== undefined) {
@@ -55,13 +54,7 @@ export class Interpreter {
     });
     job.finishPath();
 
-    performance.mark('end execution');
-    const measure = performance.measure('execution', 'start execution', 'end execution');
-    console.debug('Done processing gcode', measure.duration.toFixed(0) + 'ms');
-    console.debug(this.retractions, 'retractions');
-    console.debug(this.deretractions, 'deretractions');
-    console.debug(this.feedrateChanges, 'feedrateChanges');
-    console.debug(this.points, 'points');
+    
 
     return job;
   }
