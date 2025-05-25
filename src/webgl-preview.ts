@@ -891,6 +891,8 @@ export class WebGLPreview {
       tail = str.slice(idxNewLine);
     } while (!result.done);
     console.debug('read from stream', size);
+    this.endLayer = this.job.layers.length;
+    
     this.render();
   }
 
