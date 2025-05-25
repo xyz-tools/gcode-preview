@@ -860,6 +860,7 @@ export class WebGLPreview {
     geometries.forEach((geometry) => {
       const geometryId = batchedMesh.addGeometry(geometry);
       // NOTE: for older versions of three.js, addInstance is not available
+      // This allow webgl1 browsers to use the batched mesh
       batchedMesh.addInstance?.(geometryId);
     });
 
