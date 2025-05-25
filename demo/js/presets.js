@@ -1,4 +1,23 @@
 export const presets = {
+  benchy: {
+    title: '3DBenchy',
+    file: 'gcodes/3DBenchy.gcode',
+    model: {
+      name: '3DBenchy',
+      designer: 'CreativeTools',
+      license: 'CC0 - public domain',
+      original: 'https://www.thingiverse.com/thing:763622'
+    },
+    extrusionWidth: 0.45,
+    lineHeight: 0.2,
+    extrusionColor: ['#95dfa1'],
+    travelColor: 'red',
+    buildVolume: {
+      x: 180,
+      y: 180,
+      z: 0
+    }
+  },
   mach3: {
     title: 'CNC tool path',
     file: 'gcodes/mach3.gcode',
