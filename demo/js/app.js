@@ -2,7 +2,7 @@ import { createApp, ref, watch, onMounted, watchEffect } from 'vue';
 import { presets } from './presets.js';
 import * as GCodePreview from 'gcode-preview';
 import { defaultSettings } from './default-settings.js';
-import { debounce, humanFileSize, readFile } from './utils.js';
+import { debounce, humanFileSize } from './utils.js';
 
 const defaultPreset = 'benchy';
 const preferDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
@@ -39,6 +39,7 @@ export const app = (window.app = createApp({
       model.value = {
         name: evt.detail.filename
       };
+      applyDevMode(enableDevMode.value); // HACK: force dev mode to update UI
       updateUI();
     };
 
@@ -96,6 +97,8 @@ export const app = (window.app = createApp({
 
       Object.assign(settings.value, currentSettings);
       preview.endLayer = countLayers;
+
+      applyDevMode(enableDevMode.value);
     };
 
     const loadGCodeFromServer = async (filename) => {
@@ -135,15 +138,6 @@ export const app = (window.app = createApp({
       });
     };
 
-    const loadDroppedFile = async (file) => {
-      fileSize.value = humanFileSize(file.size);
-      const content = await readFile(file);
-      applyDevMode(enableDevMode.value); // HACK
-      startLoadingProgressive(content);
-      applyDevMode(enableDevMode.value);
-      updateUI();
-    };
-
     const selectPreset = async (presetName) => {
       const canvas = document.querySelector('canvas.preview');
       const preset = presets[presetName];
@@ -175,7 +169,7 @@ export const app = (window.app = createApp({
       observer = new ResizeObserver(() => preview.resize());
       observer.observe(canvas);
 
-      applyDevMode(enableDevMode.value);
+      applyDevMode(enableDevMode.value); // HACK: force dev mode to update UI
 
       await loadGCodeFromServer(preset.file);
       applyDevMode(enableDevMode.value);
@@ -250,7 +244,6 @@ export const app = (window.app = createApp({
       resetUI: updateUI,
       loadGCodeFromServer,
       startLoadingProgressive,
-      loadDroppedFile,
       selectPreset
     };
   }
