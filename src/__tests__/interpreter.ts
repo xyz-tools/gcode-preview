@@ -144,7 +144,7 @@ describe('.g0', () => {
     expect(job.inprogressPath?.travelType).toEqual('Extrusion');
   });
 
-  test('assigns the travel type if the extrusion is a retraction', () => {
+  test('will not result in a path when there is no movement (retraction)', () => {
     const command = new GCodeCommand('G0 E-2', 'g0', { e: -2 });
     const interpreter = new Interpreter();
     const job = new Job();
@@ -152,18 +152,16 @@ describe('.g0', () => {
     interpreter.g0(command, job);
 
     expect(job.paths.length).toEqual(0);
-    expect(job.inprogressPath?.travelType).toEqual('Travel');
   });
 
-  test('assigns the travel type if the extrusion is a retraction', () => {
-    const command = new GCodeCommand('G0 E-2', 'g0', { e: -2 });
+  test('will not result in a path when there is no movement (deretraction)', () => {
+    const command = new GCodeCommand('G0 E4', 'g0', { e: 4 });
     const interpreter = new Interpreter();
     const job = new Job();
 
     interpreter.g0(command, job);
 
     expect(job.paths.length).toEqual(0);
-    expect(job.inprogressPath?.travelType).toEqual('Travel');
   });
 
   test('starts a new path if the travel type changes from Travel to Extrusion', () => {
@@ -176,7 +174,7 @@ describe('.g0', () => {
     interpreter.g0(command2, job);
 
     expect(job.paths.length).toEqual(1);
-    expect(job.inprogressPath?.travelType).toEqual('Extrusion');
+    expect(job.inprogressPath?.travelType).toEqual(PathType.Extrusion);
   });
 
   test('starts a new path if the travel type changes from Extrusion to Travel', () => {
@@ -189,7 +187,7 @@ describe('.g0', () => {
     interpreter.g0(command2, job);
 
     expect(job.paths.length).toEqual(1);
-    expect(job.inprogressPath?.travelType).toEqual('Travel');
+    expect(job.inprogressPath?.travelType).toEqual(PathType.Travel);
   });
 
   test('.G1 is an alias to .G0', () => {
