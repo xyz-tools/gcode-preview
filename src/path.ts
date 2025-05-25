@@ -114,19 +114,6 @@ export class Path {
       return null;
     }
 
-    // check for zero length paths
-    // do this check for each segment
-    for (let i = 0; i < this._vertices.length - 3; i += 3) {
-      const dx = this._vertices[i] - this._vertices[i + 3];
-      const dy = this._vertices[i + 1] - this._vertices[i + 4];
-      const dz = this._vertices[i + 2] - this._vertices[i + 5];
-      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      if (distance < 0.0001) {
-        console.warn('Path has zero length, skipping');
-        return null;
-      }
-    }
-
     return new ExtrusionGeometry(
       this.path(),
       opts.extrusionWidthOverride ?? this.extrusionWidth,
