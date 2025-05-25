@@ -27,6 +27,5 @@ export function enableDropHandler(previewInstance: WebGLPreview, element: HTMLEl
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await previewInstance.readFromStream(file.stream());
-    previewInstance.render();
   });
 }
