@@ -108,34 +108,27 @@ export const app = (window.app = createApp({
         return;
       }
 
-      const gcode = await response.text();
-      fileSize.value = humanFileSize(gcode.length);
-      startLoadingProgressive(gcode);
-    };
+      const gcodeStream = response.body.pipeThrough(new TextDecoderStream());
 
-    const startLoadingProgressive = async (gcode) => {
       const prevDevMode = preview.devMode;
       preview.clear();
       preview.devMode = prevDevMode;
-      const { commands } = preview.parser.parseGCode(gcode);
-      preview.interpreter.execute(commands, preview.job);
 
-      render();
+      console.log('processGcode:', filename);
+      await preview.processGCode(gcodeStream, { render: false }); // rendering will be done reactively
     };
 
     const render = async () => {
-      debounce(async () => {
-        if (loadProgressive) {
-          if (preview.job.layers === null) {
-            console.warn('Job is not planar');
-            preview.render();
-            return;
-          }
-          await preview.renderAnimated();
-        } else {
+      if (loadProgressive) {
+        if (preview.job.layers === null) {
+          console.warn('Job is not planar');
           preview.render();
+          return;
         }
-      });
+        await preview.renderAnimated();
+      } else {
+        preview.render();
+      }
     };
 
     const selectPreset = async (presetName) => {
@@ -184,7 +177,10 @@ export const app = (window.app = createApp({
     watch(enableDevMode, applyDevMode);
 
     onMounted(async () => {
+      console.log('App mounted');
       await selectPreset(defaultPreset);
+
+      console.log('preset selected. watcheffects', preview);
 
       watchEffect(() => {
         preview.backgroundColor = settings.value.backgroundColor;
@@ -239,11 +235,9 @@ export const app = (window.app = createApp({
       selectTab,
       addColor,
       removeColor,
-      // drop,
       update,
       resetUI: updateUI,
       loadGCodeFromServer,
-      startLoadingProgressive,
       selectPreset
     };
   }

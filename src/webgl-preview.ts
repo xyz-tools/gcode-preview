@@ -585,11 +585,22 @@ export class WebGLPreview {
   /**
    * Processes G-code and updates the visualization
    * @param gcode - G-code string or array of strings to process
+   * @param options - Options for rendering: { render: boolean }
+   * @remarks
+   * Parses the G-code, executes commands, and renders the paths if `render` is true.
    */
-  processGCode(gcode: string | string[]): void {
-    const { commands } = this.parser.parseGCode(gcode);
-    this.interpreter.execute(commands, this.job);
-    this.render();
+  async processGCode(gcode: string | string[] | ReadableStream, { render } = { render: true }): Promise<void> {
+
+    if (gcode instanceof ReadableStream) {
+      await this.readStream(gcode);
+    } else {
+      const { commands } = this.parser.parseGCode(gcode);
+      this.interpreter.execute(commands, this.job);
+    }
+
+    if (render) {
+      this.renderAnimated();
+    }
   }
 
   /**
@@ -865,7 +876,7 @@ export class WebGLPreview {
     return batchedMesh;
   }
 
-async readFromStream(stream: ReadableStream): Promise<void> {
+async readStream(stream: ReadableStream): Promise<void> {
   const reader = stream.getReader();
   let result;
   let tail = '';
@@ -880,7 +891,7 @@ async readFromStream(stream: ReadableStream): Promise<void> {
     }
     console.debug('reading from stream', Math.floor(length / 1024), 'kB');
     size += length;
-    const str = decode(result.value);
+    const str = result.value;
     const idxNewLine = str.lastIndexOf('\n');
     const maxFullLine = str.slice(0, idxNewLine);
 
@@ -892,9 +903,8 @@ async readFromStream(stream: ReadableStream): Promise<void> {
 
     tail = str.slice(idxNewLine);
   } while (!result.done);
+  
   console.debug('total read from stream', Math.floor(size / 1024), 'kB');
-
-  this.renderAnimated();
 }
 
   /**
@@ -921,8 +931,4 @@ async readFromStream(stream: ReadableStream): Promise<void> {
       this.initGui();
     }
   }
-}
-
-function decode(uint8array: Uint8Array) {
-  return new TextDecoder('utf-8').decode(uint8array);
 }

@@ -25,7 +25,7 @@ export function makeDroppable(previewInstance: WebGLPreview): void {
 
     previewInstance.clear(); // TODO: remove?
 
-    await readFromFile(previewInstance, file);
+    await readFile(previewInstance, file);
   });
 }
 
@@ -35,9 +35,10 @@ export function makeDroppable(previewInstance: WebGLPreview): void {
  * @returns Promise that resolves when file processing is complete
  * @emits update - Custom event with file metadata when file ends
  */
-async function readFromFile(preview: WebGLPreview, file: File): Promise<void> {
-  await preview.readFromStream( file.stream());
+async function readFile(preview: WebGLPreview, file: File): Promise<void> {
   
+  await preview.processGCode( file.stream().pipeThrough(new TextDecoderStream()) );
+  // preview.processGCode ( await file.text() )
   preview.endLayer = preview.job.layers.length;
 
   // dispatch a custom event to notify that the file has been loaded
