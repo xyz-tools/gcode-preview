@@ -176,7 +176,7 @@ describe('.g0', () => {
     interpreter.g0(command2, job);
 
     expect(job.paths.length).toEqual(1);
-    expect(job.inprogressPath?.travelType).toEqual('Extrusion');
+    expect(job.inprogressPath?.travelType).toEqual(PathType.Extrusion);
   });
 
   test('starts a new path if the travel type changes from Extrusion to Travel', () => {
@@ -189,7 +189,7 @@ describe('.g0', () => {
     interpreter.g0(command2, job);
 
     expect(job.paths.length).toEqual(1);
-    expect(job.inprogressPath?.travelType).toEqual('Travel');
+    expect(job.inprogressPath?.travelType).toEqual(PathType.Travel);
   });
 
   test('.G1 is an alias to .G0', () => {
