@@ -33,7 +33,7 @@ export class Interpreter {
 
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  public others = 0; 
+  public others = 0;
 
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
@@ -80,11 +80,9 @@ export class Interpreter {
         this.retractions++;
       } else if (e < 0) {
         this.deretractions++;
-      }
-      else if (f !== undefined) {
+      } else if (f !== undefined) {
         this.feedrateChanges++;
-      }
-      else {
+      } else {
         this.others++;
       }
 
