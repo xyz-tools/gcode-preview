@@ -128,7 +128,7 @@ export const app = (window.app = createApp({
             preview.render();
             return;
           }
-          await preview.renderAnimated(preview.job.paths.length / 60);
+          await preview.renderAnimated();
         } else {
           preview.render();
         }

@@ -659,7 +659,10 @@ export class WebGLPreview {
    * @param pathCount - Number of paths to render per frame
    * @returns Promise that resolves when rendering is complete
    */
-  async renderAnimated(pathCount = 1): Promise<void> {
+  async renderAnimated(pathCount : number | undefined): Promise<void> {
+    // sensible default for pathCount
+    pathCount = pathCount ?? this.job.paths.length / 60;
+    
     this.initScene();
 
     this.renderPathIndex = 0;
