@@ -62,7 +62,7 @@ export const presets = {
       original: 'https://www.thingiverse.com/thing:18672'
     },
     file: 'gcodes/vase.gcode',
-    lineWidth: 0,
+    lineWidth: 0.5,
     lineHeight: 0.4,
     minLayerThreshold: 0.6,
     renderExtrusion: true,
