@@ -25,7 +25,7 @@ export function makeDroppable(previewInstance: WebGLPreview): void {
 
     previewInstance.clear(); // TODO: remove?
 
-    await readFromFile(previewInstance, file);
+    await readFile(previewInstance, file);
   });
 }
 
@@ -35,52 +35,19 @@ export function makeDroppable(previewInstance: WebGLPreview): void {
  * @returns Promise that resolves when file processing is complete
  * @emits update - Custom event with file metadata when file ends
  */
-async function readFromFile(preview: WebGLPreview, file: File): Promise<void> {
-  const stream = file.stream();
-  const reader = stream.getReader();
-  let result;
-  let tail = '';
-  let size = 0;
-
-  do {
-    result = await reader.read();
-    const length = result.value?.length ?? 0;
-    if (length === 0) {
-      console.debug('stream ended');
-      break;
-    }
-    console.debug('reading from stream', Math.floor(length / 1024), 'kB');
-    size += length;
-    const str = decode(result.value);
-    const idxNewLine = str.lastIndexOf('\n');
-    const maxFullLine = str.slice(0, idxNewLine);
-
-    // parse increments but don't render yet
-    const { commands } = preview.parser.parseGCode(tail + maxFullLine);
-
-    // we'll execute the commands immediately, for now
-    preview.interpreter.execute(commands, preview.job);
-
-    tail = str.slice(idxNewLine);
-  } while (!result.done);
-  console.debug('total read from stream', Math.floor(size / 1024), 'kB');
-
+async function readFile(preview: WebGLPreview, file: File): Promise<void> {
+  await preview.processGCode(file.stream().pipeThrough(new TextDecoderStream()));
+  // preview.processGCode ( await file.text() )
   preview.endLayer = preview.job.layers.length;
 
   // dispatch a custom event to notify that the file has been loaded
   const event = new CustomEvent('update', {
     detail: {
       filename: file.name,
-      size: size,
+      size: file.size,
       layers: preview.job.layers.length,
       paths: preview.job.paths.length
     }
   });
   preview.canvas.dispatchEvent(event);
-
-  preview.renderAnimated();
-}
-
-function decode(uint8array: Uint8Array) {
-  return new TextDecoder('utf-8').decode(uint8array);
 }

@@ -1,4 +1,11 @@
-import { BufferGeometry, Float32BufferAttribute, Color, LineSegments, LineDashedMaterial } from 'three';
+import {
+  BufferGeometry,
+  Float32BufferAttribute,
+  Color,
+  LineSegments,
+  LineDashedMaterial,
+  LineBasicMaterial
+} from 'three';
 
 /**
  * A helper class that creates a 3D box outline with dashed lines using Three.js LineSegments.
@@ -12,19 +19,23 @@ class LineBox extends LineSegments {
    * @param z - Depth of the box along the Z axis
    * @param color - Color of the box lines (can be Color, hex number, or CSS color string)
    */
-  constructor(x: number, y: number, z: number, color: Color | number | string) {
+  constructor(x: number, y: number, z: number, color: Color | number | string, dashed = true) {
     // Create geometry for the box
     const geometryBox = LineBox.createBoxGeometry(x, y, z);
 
     // Create material for the lines with dashed effect
-    const material = new LineDashedMaterial({ color: new Color(color), dashSize: 3, gapSize: 1 });
+    const material = dashed
+      ? new LineDashedMaterial({ color: new Color(color), dashSize: 3, gapSize: 1 })
+      : new LineBasicMaterial({ color: new Color(color) });
 
     // Initialize the LineSegments with the geometry and material
     super(geometryBox, material);
 
     // Compute line distances for the dashed effect
-    this.computeLineDistances();
 
+    if (dashed) {
+      this.computeLineDistances();
+    }
     // Align the bottom of the box to Y position
     this.position.setY(y / 2);
   }

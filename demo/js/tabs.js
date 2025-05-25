@@ -8,7 +8,6 @@ export function tabs() {
 
     document.querySelectorAll('.panel').forEach((panel) => {
       if (panel.dataset.panel == target.dataset.tab) {
-        console.log('show', panel);
         panel.classList.remove('is-hidden');
         document.querySelectorAll('.bulma-is-active').forEach((el) => {
           el.classList.remove('bulma-is-active');
@@ -16,7 +15,6 @@ export function tabs() {
         target.parentElement.classList.add('bulma-is-active');
         return;
       }
-      console.log('hide', panel);
       panel.classList.add('is-hidden');
     });
   });

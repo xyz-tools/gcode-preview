@@ -122,5 +122,27 @@ export const presets = {
       y: 250,
       z: 0
     }
+  },
+  calicat: {
+    title: 'Bounding box',
+    file: 'gcodes/calicat.gcode',
+    model: {
+      name: 'Calicat - the calibration cat',
+      designer: 'Dezign',
+      license: 'CC BY-NC-SA 3.0',
+      original: 'https://www.thingiverse.com/thing:1545913'
+    },
+    extrusionWidth: 0.45,
+    lineHeight: 0.2,
+    extrusionColor: ['pink'],
+    travelColor: 'red',
+    topLayerColor: undefined,
+    lastSegmentColor: undefined,
+    buildVolume: {
+      x: 180,
+      y: 180,
+      z: 0
+    },
+    boundingBoxColor: 'pink'
   }
 };
