@@ -864,7 +864,6 @@ export class WebGLPreview {
 
   /**
    * Reads and processes G-code from a stream
-   * @experimental
    * @param stream - Readable stream containing G-code data
    * @returns Promise that resolves when stream processing is complete
    */
@@ -875,9 +874,14 @@ export class WebGLPreview {
     let size = 0;
     
     do {
-      console.debug('reading from stream');
       result = await reader.read();
-      size += result.value?.length ?? 0;
+      const length = result.value?.length ?? 0;
+      if (length === 0) {
+        console.debug('stream ended');
+        break;
+      }
+      console.debug('reading from stream', Math.floor(length/1024), 'kB');
+      size += length;
       const str = decode(result.value);
       const idxNewLine = str.lastIndexOf('\n');
       const maxFullLine = str.slice(0, idxNewLine);
@@ -890,7 +894,8 @@ export class WebGLPreview {
 
       tail = str.slice(idxNewLine);
     } while (!result.done);
-    console.debug('read from stream', size);
+    console.debug('total read from stream', Math.floor(size/1024), 'kB');
+
     this.endLayer = this.job.layers.length;
     
     this.render();
