@@ -25,7 +25,7 @@ export class Interpreter {
 
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  private wipes = 0;
+  private deretractions = 0;
 
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
@@ -59,7 +59,7 @@ export class Interpreter {
     const measure = performance.measure('execution', 'start execution', 'end execution');
     console.debug('Done processing gcode', measure.duration.toFixed(0) + 'ms');
     console.debug(this.retractions, 'retractions');
-    console.debug(this.wipes, 'wipes');
+    console.debug(this.deretractions, 'deretractions');
     console.debug(this.feedrateChanges, 'feedrateChanges');
     console.debug(this.points, 'points');
 
@@ -84,7 +84,7 @@ export class Interpreter {
       if (e > 0) {
         this.retractions++;
       } else if (e < 0) {
-        this.wipes++;
+        this.deretractions++;
       }
 
       if (f !== undefined) {
