@@ -204,6 +204,7 @@ export class Job {
       } catch (e) {
         if (e instanceof NonApplicableIndexer) {
           if (e instanceof NonPlanarPathError) {
+            console.warn('Non-planar path detected; clearing layers');
             this._layers = [];
           }
           const i = this.indexers.indexOf(indexer);
