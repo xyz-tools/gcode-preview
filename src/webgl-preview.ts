@@ -590,7 +590,6 @@ export class WebGLPreview {
    * Parses the G-code, executes commands, and renders the paths if `render` is true.
    */
   async processGCode(gcode: string | string[] | ReadableStream, { render } = { render: true }): Promise<void> {
-
     if (gcode instanceof ReadableStream) {
       await this.readStream(gcode);
     } else {
@@ -876,36 +875,36 @@ export class WebGLPreview {
     return batchedMesh;
   }
 
-async readStream(stream: ReadableStream): Promise<void> {
-  const reader = stream.getReader();
-  let result;
-  let tail = '';
-  let size = 0;
+  async readStream(stream: ReadableStream): Promise<void> {
+    const reader = stream.getReader();
+    let result;
+    let tail = '';
+    let size = 0;
 
-  do {
-    result = await reader.read();
-    const length = result.value?.length ?? 0;
-    if (length === 0) {
-      console.debug('stream ended');
-      break;
-    }
-    console.debug('reading from stream', Math.floor(length / 1024), 'kB');
-    size += length;
-    const str = result.value;
-    const idxNewLine = str.lastIndexOf('\n');
-    const maxFullLine = str.slice(0, idxNewLine);
+    do {
+      result = await reader.read();
+      const length = result.value?.length ?? 0;
+      if (length === 0) {
+        console.debug('stream ended');
+        break;
+      }
+      console.debug('reading from stream', Math.floor(length / 1024), 'kB');
+      size += length;
+      const str = result.value;
+      const idxNewLine = str.lastIndexOf('\n');
+      const maxFullLine = str.slice(0, idxNewLine);
 
-    // parse increments but don't render yet
-    const { commands } = this.parser.parseGCode(tail + maxFullLine);
+      // parse increments but don't render yet
+      const { commands } = this.parser.parseGCode(tail + maxFullLine);
 
-    // we'll execute the commands immediately, for now
-    this.interpreter.execute(commands, this.job);
+      // we'll execute the commands immediately, for now
+      this.interpreter.execute(commands, this.job);
 
-    tail = str.slice(idxNewLine);
-  } while (!result.done);
-  
-  console.debug('total read from stream', Math.floor(size / 1024), 'kB');
-}
+      tail = str.slice(idxNewLine);
+    } while (!result.done);
+
+    console.debug('total read from stream', Math.floor(size / 1024), 'kB');
+  }
 
   /**
    * Initializes the developer GUI if dev mode is enabled

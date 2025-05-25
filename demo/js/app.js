@@ -2,7 +2,6 @@ import { createApp, ref, watch, onMounted, watchEffect } from 'vue';
 import { presets } from './presets.js';
 import * as GCodePreview from 'gcode-preview';
 import { defaultSettings } from './default-settings.js';
-import { debounce, humanFileSize } from './utils.js';
 
 const defaultPreset = 'benchy';
 const preferDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
