@@ -644,6 +644,8 @@ export class WebGLPreview {
     this.group = this.createGroup('allLayers');
     this.initScene();
 
+    this.renderPathIndex = 0;
+
     this.renderPaths();
 
     this.scene.add(this.group);
@@ -871,6 +873,7 @@ export class WebGLPreview {
     let result;
     let tail = '';
     let size = 0;
+    
     do {
       console.debug('reading from stream');
       result = await reader.read();
