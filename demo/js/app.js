@@ -113,7 +113,6 @@ export const app = (window.app = createApp({
       preview.clear();
       preview.devMode = prevDevMode;
 
-      console.log('processGcode:', filename);
       await preview.processGCode(gcodeStream, { render: false }); // rendering will be done reactively
     };
 
@@ -176,10 +175,7 @@ export const app = (window.app = createApp({
     watch(enableDevMode, applyDevMode);
 
     onMounted(async () => {
-      console.log('App mounted');
       await selectPreset(defaultPreset);
-
-      console.log('preset selected. watcheffects', preview);
 
       watchEffect(() => {
         preview.backgroundColor = settings.value.backgroundColor;

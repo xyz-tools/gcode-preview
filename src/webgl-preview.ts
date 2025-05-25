@@ -885,7 +885,6 @@ export class WebGLPreview {
       result = await reader.read();
       const length = result.value?.length ?? 0;
       if (length === 0) {
-        console.debug('stream ended');
         break;
       }
       console.debug('reading from stream', Math.floor(length / 1024), 'kB');
