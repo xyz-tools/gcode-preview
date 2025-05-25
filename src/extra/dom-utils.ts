@@ -43,7 +43,6 @@ export function makeDroppable(previewInstance: WebGLPreview): void {
   let tail = '';
   let size = 0;
   
-  
   do {
     result = await reader.read();
     const length = result.value?.length ?? 0;
@@ -80,7 +79,7 @@ export function makeDroppable(previewInstance: WebGLPreview): void {
   });
   preview.canvas.dispatchEvent(event);
 
-  preview.render();
+  preview.renderAnimated();
 }
 
 function decode(uint8array: Uint8Array) {
