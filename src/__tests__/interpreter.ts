@@ -142,7 +142,7 @@ describe('.g0', () => {
 
     expect(job.paths.length).toEqual(0);
     expect(job.inprogressPath?.travelType).toEqual('Extrusion');
-  }); 
+  });
 
   test('will not result in a path when there is no movement (retraction)', () => {
     const command = new GCodeCommand('G0 E-2', 'g0', { e: -2 });
