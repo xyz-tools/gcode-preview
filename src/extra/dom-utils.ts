@@ -26,7 +26,6 @@ export function makeDroppable(previewInstance: WebGLPreview): void {
     previewInstance.clear(); // TODO: remove?
 
     await readFromFile(previewInstance, file);
-
   });
 }
 
@@ -36,13 +35,13 @@ export function makeDroppable(previewInstance: WebGLPreview): void {
  * @returns Promise that resolves when file processing is complete
  * @emits update - Custom event with file metadata when file ends
  */
-  async function readFromFile(preview: WebGLPreview, file: File): Promise<void> {
+async function readFromFile(preview: WebGLPreview, file: File): Promise<void> {
   const stream = file.stream();
   const reader = stream.getReader();
   let result;
   let tail = '';
   let size = 0;
-  
+
   do {
     result = await reader.read();
     const length = result.value?.length ?? 0;
@@ -50,7 +49,7 @@ export function makeDroppable(previewInstance: WebGLPreview): void {
       console.debug('stream ended');
       break;
     }
-    console.debug('reading from stream', Math.floor(length/1024), 'kB');
+    console.debug('reading from stream', Math.floor(length / 1024), 'kB');
     size += length;
     const str = decode(result.value);
     const idxNewLine = str.lastIndexOf('\n');
@@ -64,11 +63,11 @@ export function makeDroppable(previewInstance: WebGLPreview): void {
 
     tail = str.slice(idxNewLine);
   } while (!result.done);
-  console.debug('total read from stream', Math.floor(size/1024), 'kB');
+  console.debug('total read from stream', Math.floor(size / 1024), 'kB');
 
   preview.endLayer = preview.job.layers.length;
-  
-    // dispatch a custom event to notify that the file has been loaded
+
+  // dispatch a custom event to notify that the file has been loaded
   const event = new CustomEvent('update', {
     detail: {
       filename: file.name,
