@@ -31,6 +31,7 @@ import {
   WebGLRenderer,
   MathUtils
 } from 'three';
+import { makeDroppable } from './extra/dom-utils';
 
 /**
  * Options for configuring the G-code preview
@@ -76,10 +77,8 @@ export type GCodePreviewOptions = {
   extrusionWidth?: number;
   /** Render paths as 3D tubes instead of lines */
   renderTubes?: boolean;
-  /**
-   * @deprecated Please see the demo how to implement drag and drop.
-   */
-  allowDragNDrop?: boolean;
+  /** Enable drag and drop file handling */
+  droppable?: boolean;
   /** Enable developer mode with additional controls */
   devMode?: boolean | DevModeOptions;
 };
@@ -116,7 +115,7 @@ export class WebGLPreview {
   /** Width of rendered lines */
   lineWidth?: number;
   /** Height of extruded lines */
-  lineHeight?: number;
+  lineHeight = 0.2;
   /** First layer to render (1-based index) */
   _startLayer?: number;
   /** Last layer to render (1-based index) */
@@ -217,7 +216,7 @@ export class WebGLPreview {
     this.endLayer = opts.endLayer;
     this.startLayer = opts.startLayer;
     this.lineWidth = opts.lineWidth ?? 1;
-    this.lineHeight = opts.lineHeight;
+    this.lineHeight = opts.lineHeight ?? this.lineHeight;
     this.buildVolume = opts.buildVolume && new BuildVolume(opts.buildVolume.x, opts.buildVolume.y, opts.buildVolume.z);
     this.initialCameraPosition = opts.initialCameraPosition ?? this.initialCameraPosition;
     this.renderExtrusion = opts.renderExtrusion ?? this.renderExtrusion;
@@ -274,7 +273,7 @@ export class WebGLPreview {
     this.initScene();
     this.animate();
 
-    if (opts.allowDragNDrop) this._enableDropHandler();
+    if (opts.droppable) makeDroppable(this);
 
     this.initStats();
   }
@@ -645,6 +644,8 @@ export class WebGLPreview {
     this.group = this.createGroup('allLayers');
     this.initScene();
 
+    this.renderPathIndex = 0;
+
     this.renderPaths();
 
     this.scene.add(this.group);
@@ -658,7 +659,10 @@ export class WebGLPreview {
    * @param pathCount - Number of paths to render per frame
    * @returns Promise that resolves when rendering is complete
    */
-  async renderAnimated(pathCount = 1): Promise<void> {
+  async renderAnimated(pathCount: number | undefined = undefined): Promise<void> {
+    // sensible default for pathCount
+    pathCount = pathCount ?? this.job.paths.length / 60;
+
     this.initScene();
 
     this.renderPathIndex = 0;
@@ -751,42 +755,6 @@ export class WebGLPreview {
   private cancelAnimation(): void {
     if (this.animationFrameId !== undefined) cancelAnimationFrame(this.animationFrameId);
     this.animationFrameId = undefined;
-  }
-
-  /**
-   * Enables drag and drop handling for G-code files
-   * @remarks
-   * Adds event listeners for drag and drop operations on the canvas.
-   * @deprecated This feature is deprecated
-   */
-  private _enableDropHandler(): void {
-    console.warn('Drag and drop is deprecated as a library feature. See the demo how to implement your own.');
-    this.canvas.addEventListener('dragover', (evt) => {
-      evt.stopPropagation();
-      evt.preventDefault();
-      if (evt.dataTransfer) evt.dataTransfer.dropEffect = 'copy';
-      this.canvas.classList.add('dragging');
-    });
-
-    this.canvas.addEventListener('dragleave', (evt) => {
-      evt.stopPropagation();
-      evt.preventDefault();
-      this.canvas.classList.remove('dragging');
-    });
-
-    this.canvas.addEventListener('drop', async (evt) => {
-      evt.stopPropagation();
-      evt.preventDefault();
-      this.canvas.classList.remove('dragging');
-      const files: FileList | [] = evt.dataTransfer?.files ?? [];
-      const file = files[0];
-
-      this.clear();
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await this._readFromStream(file.stream() as unknown as ReadableStream<any>);
-      this.render();
-    });
   }
 
   /**
@@ -901,37 +869,6 @@ export class WebGLPreview {
   }
 
   /**
-   * Reads and processes G-code from a stream
-   * @experimental
-   * @param stream - Readable stream containing G-code data
-   * @returns Promise that resolves when stream processing is complete
-   */
-  async _readFromStream(stream: ReadableStream): Promise<void> {
-    const reader = stream.getReader();
-    let result;
-    let tail = '';
-    let size = 0;
-    do {
-      console.debug('reading from stream');
-      result = await reader.read();
-      size += result.value?.length ?? 0;
-      const str = decode(result.value);
-      const idxNewLine = str.lastIndexOf('\n');
-      const maxFullLine = str.slice(0, idxNewLine);
-
-      // parse increments but don't render yet
-      const { commands } = this.parser.parseGCode(tail + maxFullLine);
-
-      // we'll execute the commands immediately, for now
-      this.interpreter.execute(commands, this.job);
-
-      tail = str.slice(idxNewLine);
-    } while (!result.done);
-    console.debug('read from stream', size);
-    this.render();
-  }
-
-  /**
    * Initializes the developer GUI if dev mode is enabled
    */
   private initGui() {
@@ -955,8 +892,4 @@ export class WebGLPreview {
       this.initGui();
     }
   }
-}
-
-function decode(uint8array: Uint8Array) {
-  return new TextDecoder('utf-8').decode(uint8array);
 }
