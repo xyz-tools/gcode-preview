@@ -836,6 +836,13 @@ export class WebGLPreview {
     this.renderer.dispose();
 
     this.cancelAnimation();
+
+    this.devGui?.destroy();
+    this.devGui = undefined;
+
+    this.stats?.end();
+    this.stats?.dom?.remove();
+    this.stats = undefined;
   }
 
   /**
