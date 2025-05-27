@@ -834,14 +834,14 @@ export class WebGLPreview {
     this.disposables = [];
     this.controls.dispose();
     this.renderer.dispose();
-    
+
     this.cancelAnimation();
 
     this.devGui?.destroy();
     this.devGui = undefined;
 
-    this.stats.end();
-    this.stats.dom?.remove();
+    this.stats?.end();
+    this.stats?.dom?.remove();
     this.stats = undefined;
   }
 
