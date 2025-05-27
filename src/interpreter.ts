@@ -39,6 +39,10 @@ export class Interpreter {
   // @ts-ignore
   public points = 0; // for reference, how many points were added to the job
 
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  public extrusionDistance = 0;
+
   /**
    * Executes an array of G-code commands, updating the provided job
    * @param commands - Array of GCodeCommand objects to execute
@@ -99,6 +103,10 @@ export class Interpreter {
       currentPath = this.breakPath(job, pathType);
     }
 
+    if (e > 0) {
+      this.extrusionDistance += e;
+    }
+
     // e is omitted bc currently we're assuming relative extrusion distances
     // see also https://github.com/xyz-tools/gcode-preview/issues/179
     state.x = x ?? state.x;
@@ -134,6 +142,10 @@ export class Interpreter {
 
     if (currentPath === undefined || currentPath.travelType !== pathType) {
       currentPath = this.breakPath(job, pathType);
+    }
+
+    if (e > 0) {
+      this.extrusionDistance += e;
     }
 
     if (r) {

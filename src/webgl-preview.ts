@@ -632,6 +632,8 @@ export class WebGLPreview {
     console.debug(this.interpreter.feedrateChanges, 'feedrateChanges');
     console.debug(this.interpreter.others, 'other');
 
+    console.debug(Math.round(this.interpreter.extrusionDistance), 'total extrusion distance (mm)');
+
     if (render) {
       this.renderAnimated();
     }
