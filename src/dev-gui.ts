@@ -227,12 +227,12 @@ class DevGUI {
     devHelpers.onOpenClose(() => {
       this.saveOpenFolders();
     });
-    devHelpers
-      .add(this.webglPreview, '_wireframe')
-      .listen()
-      .onChange(() => {
-        this.webglPreview.render();
-      });
+    // devHelpers
+    //   .add(this.webglPreview, '_wireframe')
+    //   .listen()
+    //   .onChange(() => {
+    //     this.webglPreview.render();
+    //   });
     devHelpers.add(this.webglPreview, 'render').listen();
     devHelpers.add(this.webglPreview, 'clear').listen();
   }
