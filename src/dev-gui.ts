@@ -69,6 +69,10 @@ class DevGUI {
     }
   }
 
+  destroy(): void {
+    this.gui.destroy();
+  }
+
   /**
    * Resets the GUI by destroying and recreating it
    */
