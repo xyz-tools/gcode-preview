@@ -3,7 +3,8 @@ export const defaultSettings = {
   buildVolume: {
     x: 180,
     y: 180,
-    z: 180
+    z: 180,
+    smallGrid: false
   },
   initialCameraPosition: [-200, 232, 200], // resembles the angle of thumbnail
   lineHeight: 0.2,

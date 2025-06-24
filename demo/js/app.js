@@ -179,14 +179,27 @@ export const app = (window.app = createApp({
 
       watchEffect(() => {
         preview.backgroundColor = settings.value.backgroundColor;
+        if (!preview.buildVolume && settings.value.drawBuildVolume) {
+          preview.buildVolume = {
+            x: +settings.value.buildVolume.x,
+            y: +settings.value.buildVolume.y,
+            z: +settings.value.buildVolume.z,
+            smallGrid: settings.value.buildVolume.smallGrid
+          };
+          render();
+        } else if (preview.buildVolume && !settings.value.drawBuildVolume) {
+          preview.buildVolume = undefined;
+          render();
+        } else if (preview.buildVolume) {
+          preview.buildVolume.smallGrid = settings.value.buildVolume.smallGrid;
+          console.log('Build volume small grid:', settings.value.buildVolume.smallGrid);
+          preview.buildVolume.x = +settings.value.buildVolume.x;
+          preview.buildVolume.y = +settings.value.buildVolume.y;
+          preview.buildVolume.z = +settings.value.buildVolume.z;
+        }
       });
 
       watchEffect(() => {
-        preview.buildVolume = settings.value.drawBuildVolume ? settings.value.buildVolume : undefined;
-        preview.buildVolume.x = +settings.value.buildVolume.x;
-        preview.buildVolume.y = +settings.value.buildVolume.y;
-        preview.buildVolume.z = +settings.value.buildVolume.z;
-
         preview.renderTravel = settings.value.renderTravel;
         preview.travelColor = settings.value.travelColor;
         preview.lineWidth = +settings.value.lineWidth;

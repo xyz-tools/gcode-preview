@@ -215,6 +215,10 @@
                     <label for="buildVolumeZ">Build volume (z)&nbsp;</label>
                     <input type="number" v-model="settings.buildVolume.z" step=10 :disabled="!settings.drawBuildVolume" />
                   </div>
+                  <div class="controls">
+                    <label for="smallGrid">Small grid</label>
+                    <input type="checkbox" v-model="settings.buildVolume.smallGrid" :disabled="!settings.drawBuildVolume" />
+                  </div>
                 </div>
                 <div class="controls">
                   <label for="background-color">Background color</label>
