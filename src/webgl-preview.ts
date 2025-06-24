@@ -203,7 +203,7 @@ export class WebGLPreview {
   private devGui?: DevGUI;
   /** Whether to preserve drawing buffer */
   private preserveDrawingBuffer = false;
-  private currentChunk: any;
+  private currentChunk: Group;
 
   /**
    * Creates a new WebGLPreview instance
@@ -317,13 +317,7 @@ export class WebGLPreview {
       return;
     }
 
-    this._buildVolume = new BuildVolume(
-      value.x,
-      value.y,
-      value.z,
-      value.smallGrid,
-      this.scene
-    );
+    this._buildVolume = new BuildVolume(value.x, value.y, value.z, value.smallGrid, this.scene);
 
     if (this._buildVolume) {
       this.disposables.push(this._buildVolume);
@@ -694,12 +688,12 @@ export class WebGLPreview {
     // Recursively remove all children from the main group and their descendants from the scene
     const removeRecursively = (object: Group) => {
       while (object.children.length > 0) {
-      const child = object.children[0];
-      if ((child as Group).children && (child as Group).children.length > 0) {
-        removeRecursively(child as Group);
-      }
-      object.remove(child);
-      this.scene.remove(child);
+        const child = object.children[0];
+        if ((child as Group).children && (child as Group).children.length > 0) {
+          removeRecursively(child as Group);
+        }
+        object.remove(child);
+        this.scene.remove(child);
       }
     };
     if (this.group) {
@@ -725,7 +719,7 @@ export class WebGLPreview {
    * Sets up the group's orientation and position based on build volume dimensions.
    * If no build volume is defined, uses a default position.
    */
-  private createGroup(name: string) : Group {
+  private createGroup(name: string): Group {
     const group = new Group();
     group.name = name;
     group.quaternion.setFromEuler(new Euler(-Math.PI / 2, 0, 0));
