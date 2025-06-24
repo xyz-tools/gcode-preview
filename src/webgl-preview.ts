@@ -686,7 +686,7 @@ export class WebGLPreview {
     group.name = name;
     group.quaternion.setFromEuler(new Euler(-Math.PI / 2, 0, 0));
     if (this.buildVolume) {
-      group.position.set(-this.buildVolume.x / 2, 0, this.buildVolume.y / 2);
+      // group.position.set(-this.buildVolume.x / 2, 0, this.buildVolume.y / 2);
     } else {
       // FIXME: this is just a very crude approximation for centering
       group.position.set(-100, 0, 100);
