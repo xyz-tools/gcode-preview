@@ -709,7 +709,7 @@ export class WebGLPreview {
    */
   async renderAnimated(pathCount: number | undefined = undefined): Promise<void> {
     // sensible default for pathCount
-    pathCount = pathCount ?? this.job.paths.length / 60;
+    pathCount = pathCount ?? Math.floor(this.job.paths.length / 60);
 
     this.initScene();
 
