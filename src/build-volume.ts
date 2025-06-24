@@ -1,8 +1,7 @@
 import { Grid } from './helpers/grid';
-import { AxesHelper, Color, Group, Vector3, Scene, Object3D, GridHelper } from 'three';
+import { AxesHelper, Color, Group, Vector3, Scene } from 'three';
 import { LineBox } from './helpers/line-box';
 import { type Disposable } from './helpers/three-utils';
-import { WebGLPreview } from './webgl-preview';
 
 /**
  * Represents the build volume of a 3D printer.
@@ -29,7 +28,13 @@ export class BuildVolume {
    * @param smallGrid - Whether to show a small grid
    * @param scene - The Three.js scene to add the build volume to
    */
-  constructor(x: number, y: number, z: number, private _smallGrid: boolean | undefined, private scene: Scene, private sceneManager?: WebGLPreview ) {
+  constructor(
+    x: number,
+    y: number,
+    z: number,
+    public smallGrid: boolean | undefined,
+    private scene: Scene
+  ) {
     this.x = x;
     this.y = y;
     this.z = z;
@@ -63,16 +68,15 @@ export class BuildVolume {
       throw new Error('Height (z) must be equal to or greater than 0');
     }
     this._z = value;
-    // this.update(); // Update the build volume when z changes  
+    // this.update(); // Update the build volume when z changes
   }
-  
 
   /**
    * Updates the build volume visualization in the scene.
    * If the group doesn't exist, it creates and adds it to the scene.
    */
   update(): void {
-    console.debug('BuildVolume.update', this.x, this.y, this.z, this._smallGrid);
+    console.debug('BuildVolume.update', this.x, this.y, this.z, this.smallGrid);
     if (this._group) {
       this.scene.remove(this._group);
       // It's important to dispose of the old group's children properly
@@ -87,7 +91,7 @@ export class BuildVolume {
     this._group = this.createGroup();
     this.scene.add(this._group);
 
-    // this.sceneManager.resize(); // Ensure the scene is resized to fit the new build volume  
+    // this.sceneManager.resize(); // Ensure the scene is resized to fit the new build volume
   }
 
   /**
@@ -161,4 +165,3 @@ export class BuildVolume {
     }
   }
 }
-

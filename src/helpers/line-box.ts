@@ -1,4 +1,11 @@
-import { BufferGeometry, Color, Float32BufferAttribute, LineBasicMaterial, LineDashedMaterial, LineSegments } from "three";
+import {
+  BufferGeometry,
+  Color,
+  Float32BufferAttribute,
+  LineBasicMaterial,
+  LineDashedMaterial,
+  LineSegments
+} from 'three';
 
 class LineBox extends LineSegments {
   constructor(x: number, y: number, z: number, color: Color | number | string, dashed = true) {
@@ -19,6 +26,8 @@ class LineBox extends LineSegments {
     const position: number[] = [];
 
     // Define edges from (0, 0, 0) to (x, y, z)
+    // prevent eslint from spreading the code over multiple lines
+    // prettier-ignore
     position.push(
       0, 0, 0, 0, y, 0,
       0, y, 0, x, y, 0,
@@ -37,7 +46,7 @@ class LineBox extends LineSegments {
     );
 
     geometry.setAttribute('position', new Float32BufferAttribute(position, 3));
-    
+
     return geometry;
   }
 

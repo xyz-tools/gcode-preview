@@ -224,7 +224,15 @@ export class WebGLPreview {
     this.startLayer = opts.startLayer;
     this.lineWidth = opts.lineWidth ?? 1;
     this.lineHeight = opts.lineHeight ?? this.lineHeight;
-    this.buildVolume = opts.buildVolume && new BuildVolume(opts.buildVolume.x, opts.buildVolume.y, opts.buildVolume.z);
+    this.buildVolume =
+      opts.buildVolume &&
+      new BuildVolume(
+        opts.buildVolume.x,
+        opts.buildVolume.y,
+        opts.buildVolume.z,
+        opts.buildVolume.smallGrid,
+        this.scene
+      );
     this.initialCameraPosition = opts.initialCameraPosition ?? this.initialCameraPosition;
     this.renderExtrusion = opts.renderExtrusion ?? this.renderExtrusion;
     this.renderTravel = opts.renderTravel ?? this.renderTravel;
@@ -282,7 +290,7 @@ export class WebGLPreview {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
 
     this.loadCamera();
-    
+
     this.initScene();
     this.animate();
 
@@ -1027,14 +1035,14 @@ export class WebGLPreview {
     }
   }
 
-  saveCamera()  {
-      localStorage.setItem('cameraPosition', JSON.stringify(this.camera.position));
-      localStorage.setItem('cameraRotation', JSON.stringify(this.camera.rotation));
-      localStorage.setItem('cameraZoom', JSON.stringify(this.camera.zoom));
-      localStorage.setItem('cameraTarget', JSON.stringify(this.controls.target));
-    }
+  saveCamera() {
+    localStorage.setItem('cameraPosition', JSON.stringify(this.camera.position));
+    localStorage.setItem('cameraRotation', JSON.stringify(this.camera.rotation));
+    localStorage.setItem('cameraZoom', JSON.stringify(this.camera.zoom));
+    localStorage.setItem('cameraTarget', JSON.stringify(this.controls.target));
+  }
   loadCamera() {
-    const position =  JSON.parse(localStorage.getItem('cameraPosition'));
+    const position = JSON.parse(localStorage.getItem('cameraPosition'));
     const rotation = JSON.parse(localStorage.getItem('cameraRotation'));
     const zoom = JSON.parse(localStorage.getItem('cameraZoom'));
     const target = JSON.parse(localStorage.getItem('cameraTarget'));

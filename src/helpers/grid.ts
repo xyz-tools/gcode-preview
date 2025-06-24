@@ -1,23 +1,8 @@
-import {
-  BufferGeometry,
-  Color,
-  Float32BufferAttribute,
-  LineBasicMaterial,
-  LineSegments
-} from 'three';
+import { BufferGeometry, Color, Float32BufferAttribute, LineBasicMaterial, LineSegments } from 'three';
 
 class Grid extends LineSegments {
-  constructor(
-    sizeX: number,
-    stepX: number,
-    sizeZ: number,
-    stepZ: number,
-    color: Color | string | number = 0x888888
-  ) {
+  constructor(sizeX: number, stepX: number, sizeZ: number, stepZ: number, color: Color | string | number = 0x888888) {
     color = new Color(color);
-
-    const xSteps = Math.round(sizeX / stepX);
-    const zSteps = Math.round(sizeZ / stepZ);
 
     const vertices: number[] = [];
     const colors: number[] = [];
@@ -25,22 +10,20 @@ class Grid extends LineSegments {
 
     // Lines parallel to X-axis (move along Z)
     for (let z = 0; z <= sizeZ; z += stepZ) {
-      vertices.push(
-        0, 0, z,
-        sizeX, 0, z
-      );
-      color.toArray(colors, j); j += 3;
-      color.toArray(colors, j); j += 3;
+      vertices.push(0, 0, z, sizeX, 0, z);
+      color.toArray(colors, j);
+      j += 3;
+      color.toArray(colors, j);
+      j += 3;
     }
 
     // Lines parallel to Z-axis (move along X)
     for (let x = 0; x <= sizeX; x += stepX) {
-      vertices.push(
-        x, 0, 0,
-        x, 0, sizeZ
-      );
-      color.toArray(colors, j); j += 3;
-      color.toArray(colors, j); j += 3;
+      vertices.push(x, 0, 0, x, 0, sizeZ);
+      color.toArray(colors, j);
+      j += 3;
+      color.toArray(colors, j);
+      j += 3;
     }
 
     const geometry = new BufferGeometry();
@@ -57,7 +40,7 @@ class Grid extends LineSegments {
   dispose() {
     this.geometry.dispose();
     if (Array.isArray(this.material)) {
-      this.material.forEach(m => m.dispose());
+      this.material.forEach((m) => m.dispose());
     } else {
       this.material.dispose();
     }
