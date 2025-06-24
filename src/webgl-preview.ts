@@ -34,12 +34,13 @@ import {
 } from 'three';
 import { makeDroppable } from './extra/dom-utils';
 
+export type BuildVolumeDef = Pick<BuildVolume, 'x' | 'y' | 'z' | 'smallGrid'>;
 /**
  * Options for configuring the G-code preview
  */
 export type GCodePreviewOptions = {
   /** Build volume dimensions */
-  buildVolume?: BuildVolume;
+  buildVolume?: BuildVolumeDef;
   /** Background color of the preview */
   backgroundColor?: ColorRepresentation;
   /** Canvas element to render into */
@@ -126,7 +127,7 @@ export class WebGLPreview {
   /** Whether single layer mode is enabled */
   _singleLayerMode = false;
   /** Build volume dimensions */
-  buildVolume?: BuildVolume;
+  private _buildVolume?: BuildVolume;
   /** Initial camera position [x, y, z] */
   initialCameraPosition = [-100, 400, 450];
   /** Whether to use inches instead of millimeters */
@@ -221,15 +222,16 @@ export class WebGLPreview {
     this.startLayer = opts.startLayer;
     this.lineWidth = opts.lineWidth ?? 1;
     this.lineHeight = opts.lineHeight ?? this.lineHeight;
-    this.buildVolume =
-      opts.buildVolume &&
-      new BuildVolume(
+    if (opts.buildVolume) {
+      this._buildVolume = new BuildVolume(
         opts.buildVolume.x,
         opts.buildVolume.y,
         opts.buildVolume.z,
         opts.buildVolume.smallGrid,
         this.scene
       );
+      this.disposables.push(this._buildVolume);
+    }
     this.initialCameraPosition = opts.initialCameraPosition ?? this.initialCameraPosition;
     this.renderExtrusion = opts.renderExtrusion ?? this.renderExtrusion;
     this.renderTravel = opts.renderTravel ?? this.renderTravel;
@@ -285,7 +287,7 @@ export class WebGLPreview {
     this.resize();
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.target.set(this.buildVolume.x / 2, 0, -this.buildVolume.y / 2);
+    this.controls.target.set(this._buildVolume.x / 2, 0, -this._buildVolume.y / 2);
     this.loadCamera();
 
     this.initScene();
@@ -294,6 +296,39 @@ export class WebGLPreview {
     if (opts.droppable) makeDroppable(this);
 
     this.initStats();
+  }
+
+  /**
+   * Gets the current build volume
+   * @returns Current build volume or undefined if not set
+   */
+  get buildVolume(): BuildVolume | undefined {
+    return this._buildVolume;
+  }
+
+  /**
+   * Sets the build volume dimensions
+   * @param value - Partial build volume properties (x, y, z, smallGrid)
+   */
+  set buildVolume(value: BuildVolumeDef | undefined) {
+    if (!value) {
+      this._buildVolume?.dispose();
+      this._buildVolume = undefined;
+      return;
+    }
+
+    this._buildVolume = new BuildVolume(
+      value.x,
+      value.y,
+      value.z,
+      value.smallGrid,
+      this.scene
+    );
+
+    if (this._buildVolume) {
+      this.disposables.push(this._buildVolume);
+      this._buildVolume.update();
+    }
   }
 
   /**
@@ -665,9 +700,9 @@ export class WebGLPreview {
     //   if (disposable) disposable.dispose();
     // }
 
-    if (this.buildVolume) {
-      this.disposables.push(this.buildVolume);
-      this.buildVolume.update();
+    if (this._buildVolume) {
+      this.disposables.push(this._buildVolume);
+      this._buildVolume.update();
     }
   }
 
@@ -683,8 +718,8 @@ export class WebGLPreview {
     const group = new Group();
     group.name = name;
     group.quaternion.setFromEuler(new Euler(-Math.PI / 2, 0, 0));
-    if (this.buildVolume) {
-      // group.position.set(-this.buildVolume.x / 2, 0, this.buildVolume.y / 2);
+    if (this._buildVolume) {
+      // group.position.set(-this._buildVolume.x / 2, 0, this._buildVolume.y / 2);
     } else {
       // FIXME: this is just a very crude approximation for centering
       group.position.set(-100, 0, 100);
@@ -787,8 +822,8 @@ export class WebGLPreview {
       }
     }
 
-    if (this.job && this.job.boundingBox.isValid && this.buildVolume) {
-      // Added check for this.buildVolume
+    if (this.job && this.job.boundingBox.isValid && this._buildVolume) {
+      // Added check for this._buildVolume
       const bb = this.job.boundingBox;
       const size = bb.size;
       const center = bb.center;
@@ -805,9 +840,9 @@ export class WebGLPreview {
         // Three.js Y position = G-code Z center (since Three.js Y is up, and LineBox handles its own Y-offset)
         // Three.js Z position = G-code Y center - (Build Volume Y / 2)
         this.boundingBoxMesh.position.set(
-          center.x - this.buildVolume.x / 2,
+          center.x - this._buildVolume.x / 2,
           center.z, // Three.js Y (G-code Z)
-          -(center.y - this.buildVolume.y / 2) // Three.js Z (G-code Y)
+          -(center.y - this._buildVolume.y / 2) // Three.js Z (G-code Y)
         );
 
         this.scene.add(this.boundingBoxMesh);

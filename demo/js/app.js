@@ -117,12 +117,8 @@ export const app = (window.app = createApp({
     };
 
     const render = async () => {
-      if (loadProgressive) {
-        if (preview.job.layers === null) {
-          console.warn('Job is not planar');
-          preview.render();
-          return;
-        }
+      console.log('Rendering...');
+      if (loadProgressive && preview.job.layers !== null) {
         await preview.renderAnimated();
       } else {
         preview.render();
@@ -178,7 +174,16 @@ export const app = (window.app = createApp({
       await selectPreset(defaultPreset);
 
       watchEffect(() => {
+        console.log('Settings changed:', settings.value);
         preview.backgroundColor = settings.value.backgroundColor;
+        if (preview.buildVolume && settings.value.drawBuildVolume) {
+          preview.buildVolume.smallGrid = settings.value.buildVolume.smallGrid;
+          console.log('Build volume small grid:', settings.value.buildVolume.smallGrid);
+          preview.buildVolume.x = +settings.value.buildVolume.x;
+          preview.buildVolume.y = +settings.value.buildVolume.y;
+          preview.buildVolume.z = +settings.value.buildVolume.z;
+        }
+
         if (!preview.buildVolume && settings.value.drawBuildVolume) {
           preview.buildVolume = {
             x: +settings.value.buildVolume.x,
@@ -186,16 +191,8 @@ export const app = (window.app = createApp({
             z: +settings.value.buildVolume.z,
             smallGrid: settings.value.buildVolume.smallGrid
           };
-          render();
         } else if (preview.buildVolume && !settings.value.drawBuildVolume) {
           preview.buildVolume = undefined;
-          render();
-        } else if (preview.buildVolume) {
-          preview.buildVolume.smallGrid = settings.value.buildVolume.smallGrid;
-          console.log('Build volume small grid:', settings.value.buildVolume.smallGrid);
-          preview.buildVolume.x = +settings.value.buildVolume.x;
-          preview.buildVolume.y = +settings.value.buildVolume.y;
-          preview.buildVolume.z = +settings.value.buildVolume.z;
         }
       });
 
