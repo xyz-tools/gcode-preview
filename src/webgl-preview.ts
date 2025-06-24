@@ -288,7 +288,7 @@ export class WebGLPreview {
     this.resize();
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-
+    this.controls.target.set(this.buildVolume.x / 2, 0, -this.buildVolume.y / 2);
     this.loadCamera();
 
     this.initScene();
@@ -669,7 +669,7 @@ export class WebGLPreview {
 
     if (this.buildVolume) {
       this.disposables.push(this.buildVolume);
-      this.scene.add(this.buildVolume.createGroup());
+      this.buildVolume.update();
     }
   }
 

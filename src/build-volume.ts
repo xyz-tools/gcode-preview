@@ -48,7 +48,7 @@ export class BuildVolume {
       throw new Error('Width (x) must be greater than 0');
     }
     this._x = value;
-    // this.update(); // Update the build volume when x changes
+    this.update(); // Update the build volume when x changes
   }
   get y(): number {
     return this._y;
@@ -58,7 +58,7 @@ export class BuildVolume {
       throw new Error('Depth (y) must be greater than 0');
     }
     this._y = value;
-    // this.update(); // Update the build volume when y changes
+    this.update(); // Update the build volume when y changes
   }
   get z(): number {
     return this._z;
@@ -68,7 +68,7 @@ export class BuildVolume {
       throw new Error('Height (z) must be equal to or greater than 0');
     }
     this._z = value;
-    // this.update(); // Update the build volume when z changes
+    this.update(); // Update the build volume when z changes
   }
 
   /**
@@ -90,8 +90,6 @@ export class BuildVolume {
     }
     this._group = this.createGroup();
     this.scene.add(this._group);
-
-    // this.sceneManager.resize(); // Ensure the scene is resized to fit the new build volume
   }
 
   /**
@@ -105,8 +103,6 @@ export class BuildVolume {
     scale.z *= -1;
 
     axes.scale.multiply(scale);
-    // axes.position.setZ(this.y / 2);
-    // axes.position.setX(-this.x / 2);
 
     return axes;
   }
