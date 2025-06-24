@@ -32,7 +32,7 @@ export class BuildVolume {
     x: number,
     y: number,
     z: number,
-    public smallGrid: boolean | undefined,
+    private _smallGrid: boolean | undefined,
     private scene: Scene
   ) {
     this.x = x;
@@ -69,6 +69,15 @@ export class BuildVolume {
     }
     this._z = value;
     this.update(); // Update the build volume when z changes
+  }
+  get smallGrid(): boolean | undefined {
+    return this._smallGrid;
+  }
+  set smallGrid(value: boolean | undefined) {
+    if (this._smallGrid !== value) {
+      this._smallGrid = value;
+      this.update(); // Update the build volume when smallGrid changes
+    }
   }
 
   /**
