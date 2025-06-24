@@ -153,7 +153,7 @@ export const app = (window.app = createApp({
       if (defaultSettings.devMode) defaultSettings.devMode.statsContainer = statsContainer();
       preview?.dispose();
 
-      preview = new GCodePreview.init(options);
+      window['_preview'] = preview = new GCodePreview.init(options);
 
       // resize preview on canvas resize (TODO: move to GCodePreview)
       if (observer) observer.disconnect();

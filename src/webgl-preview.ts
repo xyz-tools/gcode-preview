@@ -274,7 +274,7 @@ export class WebGLPreview {
     });
 
     this.renderer.localClippingEnabled = true;
-    this.camera = new PerspectiveCamera(25, this.canvas.offsetWidth / this.canvas.offsetHeight, 10, 5000);
+    this.camera = new PerspectiveCamera(25, this.canvas.offsetWidth / this.canvas.offsetHeight, 1, 5000);
     this.camera.position.fromArray(this.initialCameraPosition);
 
     this.resize();
