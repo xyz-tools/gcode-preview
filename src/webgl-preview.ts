@@ -691,8 +691,19 @@ export class WebGLPreview {
   private initScene(): void {
     this.materials = [];
 
-    while (this.group?.children.length > 0) {
-      this.scene.remove(this.group.children[0]);
+    // Recursively remove all children from the main group and their descendants from the scene
+    const removeRecursively = (object: Group) => {
+      while (object.children.length > 0) {
+      const child = object.children[0];
+      if ((child as Group).children && (child as Group).children.length > 0) {
+        removeRecursively(child as Group);
+      }
+      object.remove(child);
+      this.scene.remove(child);
+      }
+    };
+    if (this.group) {
+      removeRecursively(this.group);
     }
 
     // while (this.disposables.length > 0) {
