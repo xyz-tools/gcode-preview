@@ -235,6 +235,10 @@ class DevGUI {
     //   });
     devHelpers.add(this.webglPreview, 'render').listen();
     devHelpers.add(this.webglPreview, 'clear').listen();
+
+    
+    devHelpers.add(this.webglPreview, 'saveCamera').listen();
+    devHelpers.add(this.webglPreview, 'loadCamera').listen();
   }
 }
 
