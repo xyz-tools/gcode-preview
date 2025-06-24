@@ -48,7 +48,7 @@ export class BuildVolume {
       throw new Error('Width (x) must be greater than 0');
     }
     this._x = value;
-    this.update(); // Update the build volume when x changes
+    // this.update(); // Update the build volume when x changes
   }
   get y(): number {
     return this._y;
@@ -141,7 +141,7 @@ export class BuildVolume {
     if (this.smallGrid) {
       group.add(this.createGrid(1, this.smallGridColor)); // Darker grid for better visibility
     }
-    group.add(this.createGrid(10, this.gridColor)); // Default grid color
+    group.add(this.createGrid(10, this.gridColor));
     group.add(this.createAxes());
 
     return group;

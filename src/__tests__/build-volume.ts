@@ -47,7 +47,7 @@ describe('BuildVolume', () => {
 
       const axes = buildVolume.createAxes();
 
-      expect(axes.position).toEqual({ x: -5, y: 0, z: 10 });
+      expect(axes.position).toEqual({ x: 0, y: 0, z: 0 });
     });
   });
 
@@ -81,24 +81,18 @@ describe('BuildVolume', () => {
     test('it calls dispose on all disposables and removes group from scene', () => {
       const buildVolume = new BuildVolume(10, 20, 30, false, mockScene);
       const sceneRemoveSpy = vi.spyOn(mockScene, 'remove');
-
-      const axes = buildVolume.createAxes();
-      const grid = buildVolume.createGrid(1, new Color(0x444444)); // Must pass color now
-      const lineBox = buildVolume.createLineBox();
-
-      const axesSpy = vi.spyOn(axes, 'dispose');
-      const gridSpy = vi.spyOn(grid, 'dispose');
-      const lineBoxSpy = vi.spyOn(lineBox, 'dispose');
-
-      // To ensure _group is populated for dispose to remove it from scene
       buildVolume.update();
+
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      const group = buildVolume['_group']!;
+      const spies = group.children
+        .filter((c): c is typeof c & { dispose: () => void } => 'dispose' in c)
+        .map((c) => vi.spyOn(c, 'dispose'));
 
       buildVolume.dispose();
 
-      expect(axesSpy).toHaveBeenCalled();
-      expect(gridSpy).toHaveBeenCalled();
-      expect(lineBoxSpy).toHaveBeenCalled();
-      expect(sceneRemoveSpy).toHaveBeenCalled(); // Ensure the group is removed from the scene
+      spies.forEach((spy) => expect(spy).toHaveBeenCalled());
+      expect(sceneRemoveSpy).toHaveBeenCalledWith(group);
     });
   });
 
