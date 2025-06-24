@@ -202,6 +202,7 @@ export class WebGLPreview {
   private devGui?: DevGUI;
   /** Whether to preserve drawing buffer */
   private preserveDrawingBuffer = false;
+  private currentChunk: any;
 
   /**
    * Creates a new WebGLPreview instance
@@ -763,7 +764,7 @@ export class WebGLPreview {
     }
     const chunk = new Group();
     chunk.name = 'chunk' + this.renderPathIndex;
-
+    this.currentChunk = chunk;
     const endPathNumber = Math.min(this.renderPathIndex + pathCount, this.job.paths.length - 1);
     this.renderPaths(endPathNumber);
     if (this._boundingBoxColor !== undefined) {
@@ -958,7 +959,7 @@ export class WebGLPreview {
     const batchedMesh = this.createBatchMesh(geometries, material);
     this.disposables.push(material);
 
-    this.group?.add(batchedMesh);
+    this.currentChunk?.add(batchedMesh);
   }
 
   /**
