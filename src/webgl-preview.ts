@@ -827,7 +827,6 @@ export class WebGLPreview {
     }
 
     if (this.job && this.job.boundingBox.isValid && this._buildVolume) {
-      // Added check for this._buildVolume
       const bb = this.job.boundingBox;
       const size = bb.size;
       const center = bb.center;
@@ -843,10 +842,11 @@ export class WebGLPreview {
         // Three.js X position = G-code X center - (Build Volume X / 2)
         // Three.js Y position = G-code Z center (since Three.js Y is up, and LineBox handles its own Y-offset)
         // Three.js Z position = G-code Y center - (Build Volume Y / 2)
+        const pos = bb.corners.min;
         this.boundingBoxMesh.position.set(
-          center.x - this._buildVolume.x / 2,
-          center.z, // Three.js Y (G-code Z)
-          -(center.y - this._buildVolume.y / 2) // Three.js Z (G-code Y)
+          pos.x,
+          0,
+          -pos.y
         );
 
         this.scene.add(this.boundingBoxMesh);

@@ -63,4 +63,14 @@ export class BoundingBox {
       z: this.minZ + (this.maxZ - this.minZ) / 2
     };
   }
+
+  public get corners(): { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } } {
+    if (!this.isValid) {
+      return null;
+    }
+    return {
+      min: { x: this.minX, y: this.minY, z: this.minZ },
+      max: { x: this.maxX, y: this.maxY, z: this.maxZ }
+    };
+  }
 }
