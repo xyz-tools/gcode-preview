@@ -1104,4 +1104,11 @@ export class WebGLPreview {
       this.controls.update();
     }
   }
+
+  clearCamera() {
+    localStorage.removeItem('cameraPosition');
+    localStorage.removeItem('cameraRotation');
+    localStorage.removeItem('cameraZoom');
+    localStorage.removeItem('cameraTarget');
+  }
 }
