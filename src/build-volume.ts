@@ -83,11 +83,10 @@ export class BuildVolume {
   /**
    * Updates the build volume visualization in the scene.
    * If the group doesn't exist, it creates and adds it to the scene.
-   * 
+   *
    * TODO: move this to a more appropriate place, like a scene manager
    */
   update(): void {
-    console.debug('BuildVolume.update', this.x, this.y, this.z, this.smallGrid);
     if (this._group) {
       this.scene.remove(this._group);
       // It's important to dispose of the old group's children properly

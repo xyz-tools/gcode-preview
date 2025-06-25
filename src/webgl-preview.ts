@@ -283,7 +283,6 @@ export class WebGLPreview {
     this.renderer.localClippingEnabled = true;
     this.camera = new PerspectiveCamera(25, this.canvas.offsetWidth / this.canvas.offsetHeight, 1, 5000);
     this.camera.position.fromArray(this.initialCameraPosition);
-    // this.camera.lookAt(this.buildVolume.x/2, this.buildVolume.y/2, this.buildVolume.z/2);
     this.resize();
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
