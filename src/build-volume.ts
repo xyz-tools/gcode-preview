@@ -35,9 +35,9 @@ export class BuildVolume {
     private _smallGrid: boolean | undefined,
     private scene: Scene
   ) {
-    this.x = x;
-    this.y = y;
-    this.z = z;
+    this._x = x;
+    this._y = y;
+    this._z = z;
   }
 
   get x(): number {
@@ -83,6 +83,8 @@ export class BuildVolume {
   /**
    * Updates the build volume visualization in the scene.
    * If the group doesn't exist, it creates and adds it to the scene.
+   * 
+   * TODO: move this to a more appropriate place, like a scene manager
    */
   update(): void {
     console.debug('BuildVolume.update', this.x, this.y, this.z, this.smallGrid);

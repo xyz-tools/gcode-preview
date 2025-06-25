@@ -101,6 +101,7 @@ describe('BuildVolume', () => {
       const sceneAddSpy = vi.spyOn(mockScene, 'add');
       const buildVolume = new BuildVolume(10, 20, 30, false, mockScene);
 
+      expect(sceneAddSpy).toHaveBeenCalledTimes(0);
       buildVolume.update();
 
       expect(sceneAddSpy).toHaveBeenCalledTimes(1);
