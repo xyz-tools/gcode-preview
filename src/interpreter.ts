@@ -1,6 +1,7 @@
 import { Path, PathType } from './path';
 import { GCodeCommand } from './gcode-parser';
 import { Job } from './job';
+import { GCodeVector3 } from './types';
 
 // eslint-disable-next-line no-unused-vars
 type Method = (...args: unknown[]) => unknown;
@@ -113,9 +114,9 @@ export class Interpreter {
     state.y = y ?? state.y;
     state.z = z ?? state.z;
 
-    currentPath.addPoint(state.x, state.y, state.z);
+    currentPath.addPoint(state.toGCodeVector3());
     if (pathType === PathType.Extrusion) {
-      job.boundingBox.update(state.x, state.y, state.z);
+      job.boundingBox.update(state.toGCodeVector3());
     }
   }
 
@@ -220,9 +221,9 @@ export class Interpreter {
       px = centerX + arcRadius * Math.cos(currentAngle);
       py = centerY + arcRadius * Math.sin(currentAngle);
       pz += zStep;
-      currentPath.addPoint(px, py, pz);
+      currentPath.addPoint(new GCodeVector3(px, py, pz));
       if (pathType === PathType.Extrusion) {
-        job.boundingBox.update(px, py, pz);
+        job.boundingBox.update(new GCodeVector3(px, py, pz));
       }
     }
 
@@ -230,9 +231,9 @@ export class Interpreter {
     state.y = y || state.y;
     state.z = z || state.z;
 
-    currentPath.addPoint(state.x, state.y, state.z);
+    currentPath.addPoint(state.toGCodeVector3());
     if (pathType === PathType.Extrusion) {
-      job.boundingBox.update(state.x, state.y, state.z);
+      job.boundingBox.update(state.toGCodeVector3());
     }
   }
 
@@ -371,7 +372,7 @@ export class Interpreter {
   private breakPath(job: Job, newType: PathType): Path {
     job.finishPath();
     const currentPath = new Path(newType, 0.6, 0.2, job.state.tool);
-    currentPath.addPoint(job.state.x, job.state.y, job.state.z);
+    currentPath.addPoint(job.state.toGCodeVector3());
     job.inprogressPath = currentPath;
     return currentPath;
   }

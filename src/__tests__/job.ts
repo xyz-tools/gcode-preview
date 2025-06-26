@@ -3,6 +3,7 @@ import { Job } from '../job';
 import { PathType, Path } from '../path';
 import { State } from '../state';
 import { LayersIndexer } from '../indexers';
+import { GCodeVector3 } from '../types';
 
 test('it has an initial state', () => {
   const job = new Job();
@@ -367,7 +368,7 @@ describe('.finishPath', () => {
     const job = new Job();
     const path = new Path(PathType.Extrusion, 0.6, 0.2, 0);
 
-    path.addPoint(0, 0, 0);
+    path.addPoint(new GCodeVector3(0, 0, 0));
 
     job.inprogressPath = path;
     job.finishPath();
@@ -389,7 +390,7 @@ describe('.finishPath', () => {
     const job = new Job();
     const path = new Path(PathType.Extrusion, 0.6, 0.2, 0);
 
-    path.addPoint(0, 0, 0);
+    path.addPoint(new GCodeVector3(0, 0, 0));
 
     job.inprogressPath = path;
     job.finishPath();
@@ -431,7 +432,7 @@ describe('.resumeLastPath', () => {
 
 function append_path(job: Job, travelType, points: [number, number, number][], tool: number = 0): Path {
   const path = new Path(travelType, 0.6, 0.2, tool || job.state.tool);
-  points.forEach((point: [number, number, number]) => path.addPoint(...point));
+  points.forEach((point: [number, number, number]) => path.addPoint(new GCodeVector3(point[0], point[1], point[2])));
   job.addPath(path);
   return path;
 }

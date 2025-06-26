@@ -1,3 +1,5 @@
+import { GCodeVector3 } from './types';
+
 /**
  * Represents the current state of the print job
  * @remarks
@@ -25,5 +27,9 @@ export class State {
     const state = new State();
     Object.assign(state, { x: 0, y: 0, z: 0, e: 0, tool: 0, units: 'mm' });
     return state;
+  }
+
+  public toGCodeVector3(): GCodeVector3 {
+    return new GCodeVector3(this.x, this.y, this.z);
   }
 }

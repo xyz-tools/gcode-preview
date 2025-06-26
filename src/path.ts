@@ -2,6 +2,7 @@
 import { BufferGeometry, Vector3 } from 'three';
 import { ExtrusionGeometry } from './extrusion-geometry';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
+import { GCodeVector3 } from './types';
 
 /**
  * Type of path movement
@@ -64,8 +65,8 @@ export class Path {
    * @param y - Y coordinate
    * @param z - Z coordinate
    */
-  addPoint(x: number, y: number, z: number): void {
-    this._vertices.push(x, y, z);
+  addPoint(point: GCodeVector3): void {
+    this._vertices.push(point.x, point.y, point.z);
   }
 
   /**
@@ -75,7 +76,7 @@ export class Path {
    * @param z - Z coordinate to check
    * @returns True if the point matches the last point in the path
    */
-  checkLineContinuity(x: number, y: number, z: number): boolean {
+  checkLineContinuity(point: GCodeVector3): boolean {
     if (this._vertices.length < 3) {
       return false;
     }
@@ -84,7 +85,7 @@ export class Path {
     const lastY = this._vertices[this._vertices.length - 2];
     const lastZ = this._vertices[this._vertices.length - 1];
 
-    return x === lastX && y === lastY && z === lastZ;
+    return point.x === lastX && point.y === lastY && point.z === lastZ;
   }
 
   /**

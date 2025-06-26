@@ -9,9 +9,9 @@ export class BoundingBox {
    * @param y - The Y coordinate.
    * @param z - The Z coordinate.
    */
-  public update(x: number, y: number, z: number): void {
-    this.min.min(new GCodeVector3(x, y, z));
-    this.max.max(new GCodeVector3(x, y, z));
+  public update(point: GCodeVector3): void {
+    this.min.min(point);
+    this.max.max(point);
   }
 
   /**
