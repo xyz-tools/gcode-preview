@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { BoundingBox } from '../bounding-box';
-import { GCodeVector3 } from '../GCodeVector3';
+import { GCodeVector3 } from '../gcode-vector3';
 
 describe('BoundingBox', () => {
   it('should return null for center if bounding box is not valid', () => {

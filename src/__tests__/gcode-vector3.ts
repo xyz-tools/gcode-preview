@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Vector3 } from 'three';
-import { GCodeVector3 } from '../GCodeVector3';
+import { GCodeVector3 } from '../gcode-vector3';
 
 describe('GCodeVector3', () => {
   it('should be the identity when converting to Vector3 and back', () => {
