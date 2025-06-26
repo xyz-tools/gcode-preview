@@ -194,6 +194,7 @@ class DevGUI {
       .add(this.webglPreview.buildVolume, 'x')
       .min(0)
       .max(600)
+      .step(10)
       .listen()
       .onChange(() => {
       });
@@ -201,6 +202,7 @@ class DevGUI {
       .add(this.webglPreview.buildVolume, 'y')
       .min(0)
       .max(600)
+      .step(10)
       .listen()
       .onChange(() => {
       });
@@ -208,6 +210,7 @@ class DevGUI {
       .add(this.webglPreview.buildVolume, 'z')
       .min(0)
       .max(600)
+      .step(10)
       .listen()
       .onChange(() => {
       });
