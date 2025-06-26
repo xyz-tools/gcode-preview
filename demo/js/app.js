@@ -23,6 +23,7 @@ export const app = (window.app = createApp({
     const dragging = ref(false);
     const settings = ref(Object.assign({}, defaultSettings));
     const enableDevMode = ref(false);
+    const drawBoundingBox = ref(false);
 
     watch(selectedPreset, (preset) => {
       selectPreset(preset);
@@ -58,7 +59,8 @@ export const app = (window.app = createApp({
         renderExtrusion,
         lineWidth,
         renderTubes,
-        extrusionWidth
+        extrusionWidth,
+        boundingBoxColor
       } = preview;
       const { thumbnails } = parser.metadata;
 
@@ -91,9 +93,10 @@ export const app = (window.app = createApp({
         highlightLastSegment: !!lastSegmentColor,
         buildVolume: buildVolume,
         drawBuildVolume: !!buildVolume,
-        backgroundColor: '#' + backgroundColor.getHexString()
+        backgroundColor: '#' + backgroundColor.getHexString(),
+        boundingBoxColor
       };
-
+      console.debug('Current settings:', currentSettings);
       Object.assign(settings.value, currentSettings);
       preview.endLayer = countLayers;
 
@@ -128,17 +131,15 @@ export const app = (window.app = createApp({
       const canvas = document.querySelector('canvas.preview');
       const preset = presets[presetName];
       model.value = preset.model;
-      const options = Object.assign(
-        {
-          canvas,
-          backgroundColor: initialBackgroundColor
-        },
-        defaultSettings,
-        preset,
-        {
-          droppable: true
-        }
-      );
+
+      // cascade settings: first defaults, then apply the preset, finally some overrides
+      const options = {
+        ...defaultSettings,
+        ...preset,
+        canvas,
+        droppable: true,
+        backgroundColor: initialBackgroundColor
+      };
 
       // reset previous state
       const lilGuiElement = document.querySelector('.lil-gui');
@@ -173,7 +174,9 @@ export const app = (window.app = createApp({
       await selectPreset(defaultPreset);
 
       watchEffect(() => {
+        console.debug('Applying settings #2');
         preview.backgroundColor = settings.value.backgroundColor;
+
         if (preview.buildVolume && settings.value.drawBuildVolume) {
           preview.buildVolume.smallGrid = settings.value.buildVolume.smallGrid;
           preview.buildVolume.x = +settings.value.buildVolume.x;
@@ -191,9 +194,11 @@ export const app = (window.app = createApp({
         } else if (preview.buildVolume && !settings.value.drawBuildVolume) {
           preview.buildVolume = undefined;
         }
+        preview.boundingBoxColor = drawBoundingBox.value ? settings.value.boundingBoxColor ?? 'cyan' : undefined;
       });
 
       watchEffect(() => {
+        console.debug('Applying settings #1');
         preview.renderTravel = settings.value.renderTravel;
         preview.travelColor = settings.value.travelColor;
         preview.lineWidth = +settings.value.lineWidth;
@@ -202,10 +207,11 @@ export const app = (window.app = createApp({
         preview.renderTubes = settings.value.renderTubes;
         preview.extrusionWidth = +settings.value.extrusionWidth;
 
-        // TODO: should be a quick update:
         preview.topLayerColor = settings.value.highlightTopLayer ? settings.value.topLayerColor : undefined;
         preview.lastSegmentColor = settings.value.highlightLastSegment ? settings.value.lastSegmentColor : undefined;
 
+        // run render after settings have been applied
+        // this is needed to prevent reactivity attaching the render function
         setTimeout(() => {
           render();
         }, 0);
@@ -237,6 +243,7 @@ export const app = (window.app = createApp({
       settings,
       loadProgressive,
       enableDevMode,
+      drawBoundingBox,
       selectTab,
       addColor,
       removeColor,

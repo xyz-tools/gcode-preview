@@ -30,7 +30,7 @@ import {
   ShaderMaterial,
   Vector3,
   WebGLRenderer,
-  MathUtils
+  MathUtils,
 } from 'three';
 import { makeDroppable } from './extra/dom-utils';
 
@@ -449,7 +449,9 @@ export class WebGLPreview {
    * @param value - Color value or undefined to hide the bounding box
    */
   set boundingBoxColor(value: ColorRepresentation | undefined) {
+    console.debug('Setting bounding box color', value);
     this._boundingBoxColor = value !== undefined ? new Color(value) : undefined;
+
     this.renderBoundingBox();
   }
 
@@ -747,7 +749,10 @@ export class WebGLPreview {
     this.renderPathIndex = 0;
 
     this.renderPaths();
-    this.renderBoundingBox();
+    if (this.boundingBoxColor !== undefined) {
+      console.debug('render Rendering bounding box', this.boundingBoxColor);
+      this.renderBoundingBox();
+    }
 
     this.scene.add(this.group);
     this.renderer.render(this.scene, this.camera);
@@ -819,16 +824,21 @@ export class WebGLPreview {
   }
 
   private renderBoundingBox(): void {
+    console.debug('Rendering bounding box', this._boundingBoxColor);
     if (!this.buildVolume) {
       return;
     }
 
+    console.debug('No bounding box color set, removing existing bounding box mesh', this.boundingBoxMesh);
+    if (this.boundingBoxMesh) {
+      this.scene.remove(this.boundingBoxMesh);
+      this.boundingBoxMesh.dispose();
+      this.boundingBoxMesh = undefined;
+    }
+
     if (this._boundingBoxColor === undefined) {
-      if (this.boundingBoxMesh) {
-        this.scene.remove(this.boundingBoxMesh);
-        this.boundingBoxMesh.dispose();
-        this.boundingBoxMesh = undefined;
-      }
+      console.debug('No bounding box color set, skipping rendering');
+      return;
     }
 
     if (this.job && this.job.boundingBox.isValid && this._buildVolume) {
