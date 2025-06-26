@@ -196,7 +196,6 @@ class DevGUI {
       .max(600)
       .listen()
       .onChange(() => {
-        this.webglPreview.render();
       });
     buildVolume
       .add(this.webglPreview.buildVolume, 'y')
@@ -204,7 +203,6 @@ class DevGUI {
       .max(600)
       .listen()
       .onChange(() => {
-        this.webglPreview.render();
       });
     buildVolume
       .add(this.webglPreview.buildVolume, 'z')
@@ -212,7 +210,6 @@ class DevGUI {
       .max(600)
       .listen()
       .onChange(() => {
-        this.webglPreview.render();
       });
   }
 
