@@ -8,7 +8,7 @@ const preferDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
 const initialBackgroundColor = preferDarkMode.matches ? '#141414' : '#eee';
 const statsContainer = () => document.querySelector('.sidebar');
 
-const loadProgressive = ref(false);
+const loadProgressive = ref(true);
 let observer = null;
 let preview = null;
 
@@ -194,7 +194,7 @@ export const app = (window.app = createApp({
         } else if (preview.buildVolume && !settings.value.drawBuildVolume) {
           preview.buildVolume = undefined;
         }
-        preview.boundingBoxColor = drawBoundingBox.value ? settings.value.boundingBoxColor ?? 'cyan' : undefined;
+        preview.boundingBoxColor = drawBoundingBox.value ? settings.value.boundingBoxColor ?? 'magenta' : undefined;
       });
 
       watchEffect(() => {
