@@ -1,11 +1,12 @@
 import { test, expect, describe } from 'vitest';
 import { Path, PathType } from '../path';
 import { ExtrusionGeometry } from '../extrusion-geometry';
+import { GCodeVector3 } from '../types';
 
 test('.addPoint adds a point to the vertices', () => {
   const path = new Path(PathType.Travel, undefined, undefined, undefined);
 
-  path.addPoint(1, 2, 3);
+  path.addPoint(new GCodeVector3(1, 2, 3));
 
   expect(path.vertices).not.toBeNull();
   expect(path.vertices.length).toEqual(3);
@@ -14,9 +15,9 @@ test('.addPoint adds a point to the vertices', () => {
 test('.addPoint adds points at the end of vertices', () => {
   const path = new Path(PathType.Travel, undefined, undefined, undefined);
 
-  path.addPoint(0, 0, 0);
-  path.addPoint(1, 2, 3);
-  path.addPoint(5, 6, 7);
+  path.addPoint(new GCodeVector3(0, 0, 0));
+  path.addPoint(new GCodeVector3(1, 2, 3));
+  path.addPoint(new GCodeVector3(5, 6, 7));
 
   expect(path.vertices).not.toBeNull();
   expect(path.vertices.length).toEqual(9);
@@ -28,32 +29,32 @@ test('.addPoint adds points at the end of vertices', () => {
 test('.checkLineContinuity returns false if there are less than 3 vertices', () => {
   const path = new Path(PathType.Travel, undefined, undefined, undefined);
 
-  expect(path.checkLineContinuity(0, 0, 0)).toBeFalsy();
+  expect(path.checkLineContinuity(new GCodeVector3(0, 0, 0))).toBeFalsy();
 });
 
 test('.checkLineContinuity returns false if the last point is different', () => {
   const path = new Path(PathType.Travel, undefined, undefined, undefined);
 
-  path.addPoint(0, 0, 0);
-  path.addPoint(1, 2, 3);
+  path.addPoint(new GCodeVector3(0, 0, 0));
+  path.addPoint(new GCodeVector3(1, 2, 3));
 
-  expect(path.checkLineContinuity(1, 2, 4)).toBeFalsy();
+  expect(path.checkLineContinuity(new GCodeVector3(1, 2, 4))).toBeFalsy();
 });
 
 test('.checkLineContinuity returns true if the last point is the same', () => {
   const path = new Path(PathType.Travel, undefined, undefined, undefined);
 
-  path.addPoint(0, 0, 0);
-  path.addPoint(1, 2, 3);
+  path.addPoint(new GCodeVector3(0, 0, 0));
+  path.addPoint(new GCodeVector3(1, 2, 3));
 
-  expect(path.checkLineContinuity(1, 2, 3)).toBeTruthy();
+  expect(path.checkLineContinuity(new GCodeVector3(1, 2, 3))).toBeTruthy();
 });
 
 test('.path returns an array of Vector3', () => {
   const path = new Path(PathType.Travel, undefined, undefined, undefined);
 
-  path.addPoint(0, 0, 0);
-  path.addPoint(1, 2, 3);
+  path.addPoint(new GCodeVector3(0, 0, 0));
+  path.addPoint(new GCodeVector3(1, 2, 3));
 
   const result = path.path();
 
@@ -67,8 +68,8 @@ describe('.geometry', () => {
   test('returns an ExtrusionGeometry from the path', () => {
     const path = new Path(PathType.Travel, undefined, undefined, undefined);
 
-    path.addPoint(0, 0, 0);
-    path.addPoint(1, 2, 3);
+    path.addPoint(new GCodeVector3(0, 0, 0));
+    path.addPoint(new GCodeVector3(1, 2, 3));
 
     const result = path.geometry() as ExtrusionGeometry;
 
@@ -81,8 +82,8 @@ describe('.geometry', () => {
   test('returns an ExtrusionGeometry with the path extrusion width', () => {
     const path = new Path(PathType.Travel, 9, undefined, undefined);
 
-    path.addPoint(0, 0, 0);
-    path.addPoint(1, 2, 3);
+    path.addPoint(new GCodeVector3(0, 0, 0));
+    path.addPoint(new GCodeVector3(1, 2, 3));
 
     const result = path.geometry() as ExtrusionGeometry;
 
@@ -92,8 +93,8 @@ describe('.geometry', () => {
   test('returns an ExtrusionGeometry with the path line height', () => {
     const path = new Path(PathType.Travel, undefined, 5, undefined);
 
-    path.addPoint(0, 0, 0);
-    path.addPoint(1, 2, 3);
+    path.addPoint(new GCodeVector3(0, 0, 0));
+    path.addPoint(new GCodeVector3(1, 2, 3));
 
     const result = path.geometry() as ExtrusionGeometry;
 
@@ -103,8 +104,8 @@ describe('.geometry', () => {
   test('returns an ExtrusionGeometry with the extrusionWidthOverride when passed', () => {
     const path = new Path(PathType.Travel, 9, undefined, undefined);
 
-    path.addPoint(0, 0, 0);
-    path.addPoint(1, 2, 3);
+    path.addPoint(new GCodeVector3(0, 0, 0));
+    path.addPoint(new GCodeVector3(1, 2, 3));
 
     const result = path.geometry({ extrusionWidthOverride: 2 }) as ExtrusionGeometry;
 
@@ -114,8 +115,8 @@ describe('.geometry', () => {
   test('returns an ExtrusionGeometry with the lineHeightOverride when passed', () => {
     const path = new Path(PathType.Travel, undefined, 5, undefined);
 
-    path.addPoint(0, 0, 0);
-    path.addPoint(1, 2, 3);
+    path.addPoint(new GCodeVector3(0, 0, 0));
+    path.addPoint(new GCodeVector3(1, 2, 3));
 
     const result = path.geometry({ lineHeightOverride: 7 }) as ExtrusionGeometry;
 
@@ -133,7 +134,7 @@ describe('.geometry', () => {
   test('returns null if there are less than 6 vertices', () => {
     const path = new Path(PathType.Travel, undefined, undefined, undefined);
 
-    path.addPoint(0, 0, 0);
+    path.addPoint(new GCodeVector3(0, 0, 0));
 
     const result = path.geometry();
 
@@ -145,8 +146,8 @@ describe('.line', () => {
   test('returns a BufferGeometry from the path', () => {
     const path = new Path(PathType.Travel, undefined, undefined, undefined);
 
-    path.addPoint(0, 0, 0);
-    path.addPoint(1, 2, 3);
+    path.addPoint(new GCodeVector3(0, 0, 0));
+    path.addPoint(new GCodeVector3(1, 2, 3));
 
     const result = path.line();
 

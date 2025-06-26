@@ -1,14 +1,7 @@
+import { GCodeVector3 } from './types';
 export class BoundingBox {
-  private minX: number = Infinity;
-  private maxX: number = -Infinity;
-  private minY: number = Infinity;
-  private maxY: number = -Infinity;
-  private minZ: number = Infinity;
-  private maxZ: number = -Infinity;
-
-  constructor() {
-    // console.log('BoundingBox initialized');
-  }
+  private min: GCodeVector3 = new GCodeVector3(Infinity, Infinity, Infinity);
+  private max: GCodeVector3 = new GCodeVector3(-Infinity, -Infinity, -Infinity);
 
   /**
    * Updates the bounding box with the given coordinates.
@@ -17,13 +10,8 @@ export class BoundingBox {
    * @param z - The Z coordinate.
    */
   public update(x: number, y: number, z: number): void {
-    this.minX = Math.min(this.minX, x);
-    this.maxX = Math.max(this.maxX, x);
-    this.minY = Math.min(this.minY, y);
-    this.maxY = Math.max(this.maxY, y);
-    this.minZ = Math.min(this.minZ, z);
-    this.maxZ = Math.max(this.maxZ, z);
-    // console.log(`Updated bounding box: minX=${this.minX}, maxX=${this.maxX}, minY=${this.minY}, maxY=${this.maxY}, minZ=${this.minZ}, maxZ=${this.maxZ}`);
+    this.min.min(new GCodeVector3(x, y, z));
+    this.max.max(new GCodeVector3(x, y, z));
   }
 
   /**
@@ -31,46 +19,38 @@ export class BoundingBox {
    * @returns True if at least one point has been added, false otherwise.
    */
   public get isValid(): boolean {
-    return this.minX !== Infinity;
+    return this.min.x !== Infinity;
   }
 
   /**
    * Gets the size of the bounding box.
    * @returns An object with x, y, and z dimensions, or null if the bounding box is not valid.
    */
-  public get size(): { x: number; y: number; z: number } | null {
+  public get size(): GCodeVector3 | null {
     if (!this.isValid) {
       return null;
     }
-    return {
-      x: this.maxX - this.minX,
-      y: this.maxY - this.minY,
-      z: this.maxZ - this.minZ
-    };
+    return this.max.clone().sub(this.min);
   }
 
   /**
    * Gets the center coordinates of the bounding box.
    * @returns An object with x, y, and z center coordinates, or null if the bounding box is not valid.
    */
-  public get center(): { x: number; y: number; z: number } | null {
+  public get center(): GCodeVector3 | null {
     if (!this.isValid) {
       return null;
     }
-    return {
-      x: this.minX + (this.maxX - this.minX) / 2,
-      y: this.minY + (this.maxY - this.minY) / 2,
-      z: this.minZ + (this.maxZ - this.minZ) / 2
-    };
+    return this.min.clone().add(this.max).multiplyScalar(0.5);
   }
 
-  public get corners(): { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } } {
+  public get corners(): { min: GCodeVector3; max: GCodeVector3 } | null {
     if (!this.isValid) {
       return null;
     }
     return {
-      min: { x: this.minX, y: this.minY, z: this.minZ },
-      max: { x: this.maxX, y: this.maxY, z: this.maxZ }
+      min: this.min.clone(),
+      max: this.max.clone()
     };
   }
 }
