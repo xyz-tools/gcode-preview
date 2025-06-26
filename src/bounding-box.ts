@@ -1,4 +1,4 @@
-import { GCodeVector3 } from './GCodeVector3';
+import { GCodeVector3 } from './gcode-vector3';
 export class BoundingBox {
   private min: GCodeVector3 = new GCodeVector3(Infinity, Infinity, Infinity);
   private max: GCodeVector3 = new GCodeVector3(-Infinity, -Infinity, -Infinity);
