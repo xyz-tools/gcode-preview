@@ -841,7 +841,7 @@ export class WebGLPreview {
     }
     
     this.boundingBoxMesh.visible = this._boundingBoxColor !== undefined;
-    this.boundingBoxMesh.material.color = this._boundingBoxColor;
+    (this.boundingBoxMesh.material as LineBasicMaterial).color = this._boundingBoxColor;
   }
 
   createBoundingBox(): LineBox {
