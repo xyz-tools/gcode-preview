@@ -842,8 +842,8 @@ export class WebGLPreview {
         // Three.js X position = G-code X center - (Build Volume X / 2)
         // Three.js Y position = G-code Z center (since Three.js Y is up, and LineBox handles its own Y-offset)
         // Three.js Z position = G-code Y center - (Build Volume Y / 2)
-        const pos = bb.corners.min;
-        this.boundingBoxMesh.position.set(pos.x, 0, -pos.y);
+        const pos = bb.corners.min.toVector3();
+        this.boundingBoxMesh.position.set(pos.x, pos.y, pos.z);
 
         this.scene.add(this.boundingBoxMesh);
       }
