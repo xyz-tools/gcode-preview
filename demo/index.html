@@ -106,6 +106,10 @@
                   <label for="single-layer-mode">Single layer mode</label>
                   <input type="checkbox" id="single-layer-mode" v-model="settings.singleLayerMode" />
                 </div>
+                <div class="controls">
+                  <label for="single-layer-mode">Animate layers</label>
+                  <input type="checkbox" id="single-layer-mode" v-model="loadProgressive" />
+                </div>
               </section>
             </div>
             <div class="panel" v-cloak v-show="activeTab == 'travel'">
@@ -249,9 +253,9 @@
   <script type="importmap">
     {
         "imports": {
-            "three": "./lib/three/build/three.module.js",
+            "three": "./lib/three/build/three.module.min.js",
             "lil-gui": "./lib/lil-gui/dist/lil-gui.esm.min.js",
-            "vue": "./js/vue.esm-browser.js",
+            "vue": "./js/vue.esm-browser.prod.js",
             "gcode-preview": "./dist/gcode-preview.es.js"
         }
     }

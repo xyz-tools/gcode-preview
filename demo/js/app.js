@@ -8,7 +8,7 @@ const preferDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
 const initialBackgroundColor = preferDarkMode.matches ? '#141414' : '#eee';
 const statsContainer = () => document.querySelector('.sidebar');
 
-const loadProgressive = true;
+const loadProgressive = ref(true);
 let observer = null;
 let preview = null;
 
@@ -117,12 +117,7 @@ export const app = (window.app = createApp({
     };
 
     const render = async () => {
-      if (loadProgressive) {
-        if (preview.job.layers === null) {
-          console.warn('Job is not planar');
-          preview.render();
-          return;
-        }
+      if (loadProgressive.value && preview.job.layers !== null) {
         await preview.renderAnimated();
       } else {
         preview.render();
@@ -201,7 +196,9 @@ export const app = (window.app = createApp({
         preview.topLayerColor = settings.value.highlightTopLayer ? settings.value.topLayerColor : undefined;
         preview.lastSegmentColor = settings.value.highlightLastSegment ? settings.value.lastSegmentColor : undefined;
 
-        render();
+        setTimeout(() => {
+          render();
+        }, 0);
       });
 
       watchEffect(() => {
@@ -228,6 +225,7 @@ export const app = (window.app = createApp({
       model,
       dragging,
       settings,
+      loadProgressive,
       enableDevMode,
       selectTab,
       addColor,

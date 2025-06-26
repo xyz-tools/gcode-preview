@@ -637,6 +637,10 @@ export class WebGLPreview {
 
     console.debug(Math.round(this.interpreter.extrusionDistance), 'total extrusion distance (mm)');
 
+    if (this.job.layers.length === 0) {
+      console.warn('Job is non-planar');
+    }
+
     if (render) {
       this.renderAnimated();
     }
