@@ -190,30 +190,9 @@ class DevGUI {
     buildVolume.onOpenClose(() => {
       this.saveOpenFolders();
     });
-    buildVolume
-      .add(this.webglPreview.buildVolume, 'x')
-      .min(0)
-      .max(600)
-      .listen()
-      .onChange(() => {
-        this.webglPreview.render();
-      });
-    buildVolume
-      .add(this.webglPreview.buildVolume, 'y')
-      .min(0)
-      .max(600)
-      .listen()
-      .onChange(() => {
-        this.webglPreview.render();
-      });
-    buildVolume
-      .add(this.webglPreview.buildVolume, 'z')
-      .min(0)
-      .max(600)
-      .listen()
-      .onChange(() => {
-        this.webglPreview.render();
-      });
+    buildVolume.add(this.webglPreview.buildVolume, 'x').min(0).max(600).step(10).listen();
+    buildVolume.add(this.webglPreview.buildVolume, 'y').min(0).max(600).step(10).listen();
+    buildVolume.add(this.webglPreview.buildVolume, 'z').min(0).max(600).step(10).listen();
   }
 
   /**

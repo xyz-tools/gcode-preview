@@ -50,7 +50,8 @@ export const presets = {
     buildVolume: {
       x: 130,
       y: 150,
-      z: 0
+      z: 0,
+      smallGrid: true
     }
   },
   'vase-mode': {
