@@ -31,7 +31,7 @@ import {
   Vector3,
   WebGLRenderer,
   MathUtils,
-  LineBasicMaterial,
+  LineBasicMaterial
 } from 'three';
 import { makeDroppable } from './extra/dom-utils';
 
@@ -832,10 +832,10 @@ export class WebGLPreview {
     if (!this.boundingBoxMesh) {
       this.boundingBoxMesh = this.createBoundingBox();
       this.boundingBoxMesh.name = 'bounding-box';
-      
+
       this.scene.add(this.boundingBoxMesh);
     }
-    
+
     this.boundingBoxMesh.visible = this._boundingBoxColor !== undefined;
     (this.boundingBoxMesh.material as LineBasicMaterial).color = this._boundingBoxColor;
   }
