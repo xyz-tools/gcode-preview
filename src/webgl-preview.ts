@@ -31,6 +31,7 @@ import {
   Vector3,
   WebGLRenderer,
   MathUtils,
+  LineBasicMaterial,
 } from 'three';
 import { makeDroppable } from './extra/dom-utils';
 
@@ -449,9 +450,7 @@ export class WebGLPreview {
    * @param value - Color value or undefined to hide the bounding box
    */
   set boundingBoxColor(value: ColorRepresentation | undefined) {
-    console.debug('Setting bounding box color', value);
     this._boundingBoxColor = value !== undefined ? new Color(value) : undefined;
-    console.debug('Rendering bounding box', this._boundingBoxColor);
 
     this.renderBoundingBox();
   }
@@ -751,7 +750,6 @@ export class WebGLPreview {
 
     this.renderPaths();
     if (this.boundingBoxColor !== undefined) {
-      console.debug('render Rendering bounding box', this.boundingBoxColor);
       this.renderBoundingBox();
     }
 
@@ -825,10 +823,8 @@ export class WebGLPreview {
   }
 
   private renderBoundingBox(): void {
-    console.debug('Rendering bounding box method', this._boundingBoxColor);
-
     if (!this.job || !this.job.boundingBox.isValid) {
-      console.debug('Invalid bounding box, skipping rendering');
+      console.error('Invalid bounding box, skipping rendering');
       return;
     }
 
@@ -852,7 +848,6 @@ export class WebGLPreview {
     mesh.position.set(pos.x, pos.y, pos.z);
     return mesh;
   }
-
 
   // reset parser & processing state
   clear(): void {
