@@ -183,9 +183,11 @@ export const app = (window.app = createApp({
 
       watchEffect(() => {
         preview.buildVolume = settings.value.drawBuildVolume ? settings.value.buildVolume : undefined;
-        preview.buildVolume.x = +settings.value.buildVolume.x;
-        preview.buildVolume.y = +settings.value.buildVolume.y;
-        preview.buildVolume.z = +settings.value.buildVolume.z;
+        if (preview.buildVolume) {
+          preview.buildVolume.x = +settings.value.buildVolume.x;
+          preview.buildVolume.y = +settings.value.buildVolume.y;
+          preview.buildVolume.z = +settings.value.buildVolume.z;
+        }
 
         preview.renderTravel = settings.value.renderTravel;
         preview.travelColor = settings.value.travelColor;
