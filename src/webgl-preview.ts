@@ -736,7 +736,8 @@ export class WebGLPreview {
    */
   render(): void {
     const startRender = performance.now();
-    this.group = this.createGroup('allLayers');
+    this.group = this.group ?? this.createGroup('allLayers');
+    this.currentChunk = this.group;
     this.initScene();
 
     this.renderPathIndex = 0;
@@ -963,7 +964,7 @@ export class WebGLPreview {
 
     this.disposables.push(material);
     this.disposables.push(geometry);
-    this.group?.add(line);
+    this.currentChunk?.add(line);
   }
 
   /**
