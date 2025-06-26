@@ -107,6 +107,10 @@
                   <label for="single-layer-mode">Single layer mode</label>
                   <input type="checkbox" id="single-layer-mode" v-model="settings.singleLayerMode" />
                 </div>
+                <div class="controls">
+                  <label for="single-layer-mode">Animate layers</label>
+                  <input type="checkbox" id="single-layer-mode" v-model="loadProgressive" />
+                </div>
               </section>
             </div>
             <div class="panel" v-cloak v-show="activeTab == 'travel'">
