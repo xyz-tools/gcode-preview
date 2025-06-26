@@ -196,24 +196,18 @@ class DevGUI {
       .max(600)
       .step(10)
       .listen()
-      .onChange(() => {
-      });
     buildVolume
       .add(this.webglPreview.buildVolume, 'y')
       .min(0)
       .max(600)
       .step(10)
       .listen()
-      .onChange(() => {
-      });
     buildVolume
       .add(this.webglPreview.buildVolume, 'z')
       .min(0)
       .max(600)
       .step(10)
       .listen()
-      .onChange(() => {
-      });
   }
 
   /**
