@@ -451,6 +451,7 @@ export class WebGLPreview {
   set boundingBoxColor(value: ColorRepresentation | undefined) {
     console.debug('Setting bounding box color', value);
     this._boundingBoxColor = value !== undefined ? new Color(value) : undefined;
+    console.debug('Rendering bounding box', this._boundingBoxColor);
 
     this.renderBoundingBox();
   }
@@ -824,46 +825,34 @@ export class WebGLPreview {
   }
 
   private renderBoundingBox(): void {
-    console.debug('Rendering bounding box', this._boundingBoxColor);
-    if (!this.buildVolume) {
+    console.debug('Rendering bounding box method', this._boundingBoxColor);
+
+    if (!this.job || !this.job.boundingBox.isValid) {
+      console.debug('Invalid bounding box, skipping rendering');
       return;
     }
 
-    console.debug('No bounding box color set, removing existing bounding box mesh', this.boundingBoxMesh);
-    if (this.boundingBoxMesh) {
-      this.scene.remove(this.boundingBoxMesh);
-      this.boundingBoxMesh.dispose();
-      this.boundingBoxMesh = undefined;
+    // create the bounding box mesh if it doesn't exist
+    if (!this.boundingBoxMesh) {
+      this.boundingBoxMesh = this.createBoundingBox();
+      this.boundingBoxMesh.name = 'bounding-box';
+      
+      this.scene.add(this.boundingBoxMesh);
     }
-
-    if (this._boundingBoxColor === undefined) {
-      console.debug('No bounding box color set, skipping rendering');
-      return;
-    }
-
-    if (this.job && this.job.boundingBox.isValid && this._buildVolume) {
-      const bb = this.job.boundingBox;
-      const size = bb.size;
-      const center = bb.center;
-
-      if (size && center) {
-        // Create the LineBox: (width, height, depth)
-        // LineBox's x = G-code X size
-        // LineBox's y = G-code Z size (height)
-        // LineBox's z = G-code Y size (depth)
-        this.boundingBoxMesh = new LineBox(size.x, size.z, size.y, this._boundingBoxColor, false);
-
-        // Position the LineBox:
-        // Three.js X position = G-code X center - (Build Volume X / 2)
-        // Three.js Y position = G-code Z center (since Three.js Y is up, and LineBox handles its own Y-offset)
-        // Three.js Z position = G-code Y center - (Build Volume Y / 2)
-        const pos = bb.corners.min.toVector3();
-        this.boundingBoxMesh.position.set(pos.x, pos.y, pos.z);
-
-        this.scene.add(this.boundingBoxMesh);
-      }
-    }
+    
+    this.boundingBoxMesh.visible = this._boundingBoxColor !== undefined;
+    this.boundingBoxMesh.material.color = this._boundingBoxColor;
   }
+
+  createBoundingBox(): LineBox {
+    const bb = this.job.boundingBox;
+    const size = bb.size;
+    const mesh = new LineBox(size.x, size.z, size.y, this._boundingBoxColor, false);
+    const pos = bb.corners.min.toVector3();
+    mesh.position.set(pos.x, pos.y, pos.z);
+    return mesh;
+  }
+
 
   // reset parser & processing state
   clear(): void {
