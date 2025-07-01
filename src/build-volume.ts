@@ -44,20 +44,20 @@ export class BuildVolume {
     return this._x;
   }
   set x(value: number) {
-    if (value <= 0) {
-      throw new Error('Width (x) must be greater than 0');
-    }
     this._x = value;
+    if (this._x < 0) {
+      this._x = 0;  
+    }
     this.update(); // Update the build volume when x changes
   }
   get y(): number {
     return this._y;
   }
   set y(value: number) {
-    if (value <= 0) {
-      throw new Error('Depth (y) must be greater than 0');
-    }
     this._y = value;
+    if (this._y <= 0) {
+      this._y = 0;
+    }
     this.update(); // Update the build volume when y changes
   }
   get z(): number {
@@ -98,6 +98,10 @@ export class BuildVolume {
       });
       this._group.clear();
     }
+
+    if (this.x <= 0 || this.y <= 0 )
+      return; // No need to create a build volume if dimensions are invalid
+    
     this._group = this.createGroup();
     this.scene.add(this._group);
   }
