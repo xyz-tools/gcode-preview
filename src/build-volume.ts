@@ -46,7 +46,7 @@ export class BuildVolume {
   set x(value: number) {
     this._x = value;
     if (this._x < 0) {
-      this._x = 0;  
+      this._x = 0;
     }
     this.update(); // Update the build volume when x changes
   }
@@ -99,9 +99,8 @@ export class BuildVolume {
       this._group.clear();
     }
 
-    if (this.x <= 0 || this.y <= 0 )
-      return; // No need to create a build volume if dimensions are invalid
-    
+    if (this.x <= 0 || this.y <= 0) return; // No need to create a build volume if dimensions are invalid
+
     this._group = this.createGroup();
     this.scene.add(this._group);
   }
