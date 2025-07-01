@@ -174,7 +174,6 @@ export const app = (window.app = createApp({
       await selectPreset(defaultPreset);
 
       watchEffect(() => {
-        console.debug('Applying settings #2');
         preview.backgroundColor = settings.value.backgroundColor;
 
         if (preview.buildVolume && settings.value.drawBuildVolume) {
@@ -198,7 +197,6 @@ export const app = (window.app = createApp({
       });
 
       watchEffect(() => {
-        console.debug('Applying settings #1');
         preview.renderTravel = settings.value.renderTravel;
         preview.travelColor = settings.value.travelColor;
         preview.lineWidth = +settings.value.lineWidth;
