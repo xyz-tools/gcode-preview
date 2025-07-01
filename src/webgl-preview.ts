@@ -30,16 +30,18 @@ import {
   ShaderMaterial,
   Vector3,
   WebGLRenderer,
-  MathUtils
+  MathUtils,
+  LineBasicMaterial
 } from 'three';
 import { makeDroppable } from './extra/dom-utils';
 
+export type BuildVolumeDef = Pick<BuildVolume, 'x' | 'y' | 'z' | 'smallGrid'>;
 /**
  * Options for configuring the G-code preview
  */
 export type GCodePreviewOptions = {
   /** Build volume dimensions */
-  buildVolume?: BuildVolume;
+  buildVolume?: BuildVolumeDef;
   /** Background color of the preview */
   backgroundColor?: ColorRepresentation;
   /** Canvas element to render into */
@@ -126,11 +128,7 @@ export class WebGLPreview {
   /** Whether single layer mode is enabled */
   _singleLayerMode = false;
   /** Build volume dimensions */
-  buildVolume?: BuildVolume & {
-    x: number;
-    y: number;
-    z: number;
-  };
+  private _buildVolume?: BuildVolume;
   /** Initial camera position [x, y, z] */
   initialCameraPosition = [-100, 400, 450];
   /** Whether to use inches instead of millimeters */
@@ -206,6 +204,7 @@ export class WebGLPreview {
   private devGui?: DevGUI;
   /** Whether to preserve drawing buffer */
   private preserveDrawingBuffer = false;
+  private currentChunk: Group;
 
   /**
    * Creates a new WebGLPreview instance
@@ -224,7 +223,16 @@ export class WebGLPreview {
     this.startLayer = opts.startLayer;
     this.lineWidth = opts.lineWidth ?? 1;
     this.lineHeight = opts.lineHeight ?? this.lineHeight;
-    this.buildVolume = opts.buildVolume && new BuildVolume(opts.buildVolume.x, opts.buildVolume.y, opts.buildVolume.z);
+    if (opts.buildVolume) {
+      this._buildVolume = new BuildVolume(
+        opts.buildVolume.x,
+        opts.buildVolume.y,
+        opts.buildVolume.z,
+        opts.buildVolume.smallGrid,
+        this.scene
+      );
+      this.disposables.push(this._buildVolume);
+    }
     this.initialCameraPosition = opts.initialCameraPosition ?? this.initialCameraPosition;
     this.renderExtrusion = opts.renderExtrusion ?? this.renderExtrusion;
     this.renderTravel = opts.renderTravel ?? this.renderTravel;
@@ -276,11 +284,10 @@ export class WebGLPreview {
     this.renderer.localClippingEnabled = true;
     this.camera = new PerspectiveCamera(25, this.canvas.offsetWidth / this.canvas.offsetHeight, 1, 5000);
     this.camera.position.fromArray(this.initialCameraPosition);
-
     this.resize();
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-
+    this.controls.target.set(this._buildVolume.x / 2, 0, -this._buildVolume.y / 2);
     this.loadCamera();
 
     this.initScene();
@@ -289,6 +296,33 @@ export class WebGLPreview {
     if (opts.droppable) makeDroppable(this);
 
     this.initStats();
+  }
+
+  /**
+   * Gets the current build volume
+   * @returns Current build volume or undefined if not set
+   */
+  get buildVolume(): BuildVolume | undefined {
+    return this._buildVolume;
+  }
+
+  /**
+   * Sets the build volume dimensions
+   * @param value - Partial build volume properties (x, y, z, smallGrid)
+   */
+  set buildVolume(value: BuildVolumeDef | undefined) {
+    if (!value) {
+      this._buildVolume?.dispose();
+      this._buildVolume = undefined;
+      return;
+    }
+
+    this._buildVolume = new BuildVolume(value.x, value.y, value.z, value.smallGrid, this.scene);
+
+    if (this._buildVolume) {
+      this.disposables.push(this._buildVolume);
+      this._buildVolume.update();
+    }
   }
 
   /**
@@ -417,6 +451,7 @@ export class WebGLPreview {
    */
   set boundingBoxColor(value: ColorRepresentation | undefined) {
     this._boundingBoxColor = value !== undefined ? new Color(value) : undefined;
+
     this.renderBoundingBox();
   }
 
@@ -647,25 +682,37 @@ export class WebGLPreview {
   }
 
   /**
-   * Initializes the Three.js scene by clearing existing elements and setting up lights
+   * Initializes the Three.js scene by clearing the existing model
    * @remarks
    * Clears all existing scene objects and disposables, then adds build volume visualization
    * and lighting if 3D tube rendering is enabled.
    */
   private initScene(): void {
     this.materials = [];
-    while (this.scene.children.length > 0) {
-      this.scene.remove(this.scene.children[0]);
+
+    // Recursively remove all children from the main group and their descendants from the scene
+    const removeRecursively = (object: Group) => {
+      while (object.children.length > 0) {
+        const child = object.children[0];
+        if ((child as Group).children && (child as Group).children.length > 0) {
+          removeRecursively(child as Group);
+        }
+        object.remove(child);
+        this.scene.remove(child);
+      }
+    };
+    if (this.group) {
+      removeRecursively(this.group);
     }
 
-    while (this.disposables.length > 0) {
-      const disposable = this.disposables.pop();
-      if (disposable) disposable.dispose();
-    }
+    // while (this.disposables.length > 0) {
+    //   const disposable = this.disposables.pop();
+    //   if (disposable) disposable.dispose();
+    // }
 
-    if (this.buildVolume) {
-      this.disposables.push(this.buildVolume);
-      this.scene.add(this.buildVolume.createGroup());
+    if (this._buildVolume) {
+      this.disposables.push(this._buildVolume);
+      this._buildVolume.update();
     }
   }
 
@@ -681,8 +728,8 @@ export class WebGLPreview {
     const group = new Group();
     group.name = name;
     group.quaternion.setFromEuler(new Euler(-Math.PI / 2, 0, 0));
-    if (this.buildVolume) {
-      group.position.set(-this.buildVolume.x / 2, 0, this.buildVolume.y / 2);
+    if (this._buildVolume) {
+      // group.position.set(-this._buildVolume.x / 2, 0, this._buildVolume.y / 2);
     } else {
       // FIXME: this is just a very crude approximation for centering
       group.position.set(-100, 0, 100);
@@ -695,13 +742,16 @@ export class WebGLPreview {
    */
   render(): void {
     const startRender = performance.now();
-    this.group = this.createGroup('allLayers');
+    this.group = this.group ?? this.createGroup('allLayers');
+    this.currentChunk = this.group;
     this.initScene();
 
     this.renderPathIndex = 0;
 
     this.renderPaths();
-    this.renderBoundingBox();
+    if (this.boundingBoxColor !== undefined) {
+      this.renderBoundingBox();
+    }
 
     this.scene.add(this.group);
     this.renderer.render(this.scene, this.camera);
@@ -756,55 +806,47 @@ export class WebGLPreview {
    * Updates the renderPathIndex to track progress through the job's paths.
    */
   private renderFrame(pathCount: number): void {
-    this.group = this.createGroup('parts' + this.renderPathIndex);
+    if (!this.group) {
+      this.group = this.createGroup('allLayers');
+      this.scene.add(this.group);
+    }
+    const chunk = new Group();
+    chunk.name = 'chunk' + this.renderPathIndex;
+    this.currentChunk = chunk;
     const endPathNumber = Math.min(this.renderPathIndex + pathCount, this.job.paths.length - 1);
     this.renderPaths(endPathNumber);
     if (this._boundingBoxColor !== undefined) {
       this.renderBoundingBox();
     }
     this.renderPathIndex = endPathNumber;
-    this.scene.add(this.group);
+    this.group?.add(chunk);
   }
 
   private renderBoundingBox(): void {
-    if (!this.buildVolume) {
+    if (!this.job || !this.job.boundingBox.isValid) {
+      console.error('Invalid bounding box, skipping rendering');
       return;
     }
 
-    if (this._boundingBoxColor === undefined) {
-      if (this.boundingBoxMesh) {
-        this.scene.remove(this.boundingBoxMesh);
-        this.boundingBoxMesh.dispose();
-        this.boundingBoxMesh = undefined;
-      }
+    // create the bounding box mesh if it doesn't exist
+    if (!this.boundingBoxMesh) {
+      this.boundingBoxMesh = this.createBoundingBox();
+      this.boundingBoxMesh.name = 'bounding-box';
+
+      this.scene.add(this.boundingBoxMesh);
     }
 
-    if (this.job && this.job.boundingBox.isValid && this.buildVolume) {
-      // Added check for this.buildVolume
-      const bb = this.job.boundingBox;
-      const size = bb.size;
-      const center = bb.center;
+    this.boundingBoxMesh.visible = this._boundingBoxColor !== undefined;
+    (this.boundingBoxMesh.material as LineBasicMaterial).color = this._boundingBoxColor;
+  }
 
-      if (size && center) {
-        // Create the LineBox: (width, height, depth)
-        // LineBox's x = G-code X size
-        // LineBox's y = G-code Z size (height)
-        // LineBox's z = G-code Y size (depth)
-        this.boundingBoxMesh = new LineBox(size.x, size.z, size.y, this._boundingBoxColor, false);
-
-        // Position the LineBox:
-        // Three.js X position = G-code X center - (Build Volume X / 2)
-        // Three.js Y position = G-code Z center (since Three.js Y is up, and LineBox handles its own Y-offset)
-        // Three.js Z position = G-code Y center - (Build Volume Y / 2)
-        this.boundingBoxMesh.position.set(
-          center.x - this.buildVolume.x / 2,
-          center.z, // Three.js Y (G-code Z)
-          -(center.y - this.buildVolume.y / 2) // Three.js Z (G-code Y)
-        );
-
-        this.scene.add(this.boundingBoxMesh);
-      }
-    }
+  createBoundingBox(): LineBox {
+    const bb = this.job.boundingBox;
+    const size = bb.size;
+    const mesh = new LineBox(size.x, size.z, size.y, this._boundingBoxColor, false);
+    const pos = bb.corners.min.toVector3();
+    mesh.position.set(pos.x, pos.y, pos.z);
+    return mesh;
   }
 
   // reset parser & processing state
@@ -920,7 +962,7 @@ export class WebGLPreview {
 
     this.disposables.push(material);
     this.disposables.push(geometry);
-    this.group?.add(line);
+    this.currentChunk?.add(line);
   }
 
   /**
@@ -951,7 +993,7 @@ export class WebGLPreview {
     const batchedMesh = this.createBatchMesh(geometries, material);
     this.disposables.push(material);
 
-    this.group?.add(batchedMesh);
+    this.currentChunk?.add(batchedMesh);
   }
 
   /**
