@@ -94,7 +94,7 @@ export class GCodeCommand {
    * @param comment - Optional comment from the G-code line
    */
   constructor(
-    public src: string,
+    public src:  string,
     public gcode: string,
     public params: GCodeParameters,
     public comment?: string

@@ -2,8 +2,9 @@ import { createApp, ref, watch, onMounted, watchEffect } from 'vue';
 import { presets } from './presets.js';
 import * as GCodePreview from 'gcode-preview';
 import { defaultSettings } from './default-settings.js';
+import { parseIntOrDefault } from './utils.js';
 
-const defaultPreset = 'benchy';
+const defaultPreset = 'easel'; // default preset to load
 const preferDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
 const initialBackgroundColor = preferDarkMode.matches ? '#141414' : '#eee';
 const statsContainer = () => document.querySelector('.sidebar');
@@ -76,7 +77,7 @@ export const app = (window.app = createApp({
       const currentSettings = {
         startLayer: 1,
         enableStartLayer: false,
-        maxLayer: countLayers,
+        maxLayer: countLayers || 1000,
         endLayer: countLayers,
         enableEndLayer: false,
         singleLayerMode,
@@ -96,7 +97,7 @@ export const app = (window.app = createApp({
         backgroundColor: '#' + backgroundColor.getHexString(),
         boundingBoxColor
       };
-      console.debug('Current settings:', currentSettings);
+      // console.debug('Current settings:', currentSettings);
       Object.assign(settings.value, currentSettings);
       preview.endLayer = countLayers;
 
@@ -113,7 +114,7 @@ export const app = (window.app = createApp({
       const gcodeStream = response.body.pipeThrough(new TextDecoderStream());
 
       const prevDevMode = preview.devMode;
-      preview.clear();
+      // preview.clear();
       preview.devMode = prevDevMode;
 
       await preview.processGCode(gcodeStream, { render: false }); // rendering will be done reactively
@@ -216,8 +217,12 @@ export const app = (window.app = createApp({
       });
 
       watchEffect(() => {
-        preview.startLayer = settings.value.enableStartLayer ? +settings.value.startLayer : undefined;
-        preview.endLayer = settings.value.enableEndLayer ? +settings.value.endLayer : undefined;
+        const startLayer = parseIntOrDefault(settings.value.startLayer, undefined);
+        const endLayer = parseIntOrDefault(settings.value.endLayer, undefined);
+        console.debug('watchEffect: startLayer', startLayer);
+
+        preview.startLayer = settings.value.enableStartLayer ? startLayer : undefined;
+        preview.endLayer = settings.value.enableEndLayer ? endLayer : undefined;
       });
 
       watchEffect(() => {

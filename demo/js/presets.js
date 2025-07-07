@@ -18,20 +18,7 @@ export const presets = {
       z: 0
     }
   },
-  mach3: {
-    title: 'CNC tool path',
-    file: 'gcodes/mach3.gcode',
-    lineWidth: 2,
-    renderExtrusion: false,
-    renderTravel: true,
-    travelColor: '#00FF00',
-    buildVolume: {
-      x: 10,
-      y: 10,
-      z: 0
-    },
-    initialCameraPosition: [-20, 20, 1.8]
-  },
+
   arcs: {
     title: 'Arcs with G2/G3',
     file: 'gcodes/screw.gcode',
@@ -145,5 +132,39 @@ export const presets = {
       z: 0
     },
     boundingBoxColor: 'pink'
+  },
+  easel: {
+    title: 'Easel tool path (cnc)',
+    file: 'gcodes/easel.gcode',
+    lineWidth: 1,
+    renderExtrusion: false,
+    renderTravel: true,
+    travelColor: '#00FFFF',
+    buildVolume: {
+      x: 300,
+      y: 180,
+      z: 0
+    },
+    initialCameraPosition: [-20, 20, 1.8],
+    model: {
+      name: 'Easel tool path',
+      designer: 'Remco',
+      license: 'CC0 - public domain',
+      original: 'https://easel.com/projects/jfs2zG8VQ0vNTOqbscKNPA'
+    }
+  },
+  mach3: {
+    title: 'Mach3 tool path (cnc)',
+    file: 'gcodes/mach3.gcode',
+    lineWidth: 2,
+    renderExtrusion: false,
+    renderTravel: true,
+    travelColor: '#00FF00',
+    buildVolume: {
+      x: 10,
+      y: 10,
+      z: 0
+    },
+    initialCameraPosition: [-20, 20, 1.8]
   }
 };
