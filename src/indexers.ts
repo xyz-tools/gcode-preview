@@ -11,7 +11,7 @@ export class NonApplicableIndexer extends Error {}
  * @remarks
  * Indexers organize paths into different structures (layers, tools, etc.)
  */
-export class Indexer {
+export abstract class Indexer {
   /** The indexes being managed by this indexer */
   protected indexes: unknown;
 
@@ -28,10 +28,7 @@ export class Indexer {
    * @param path - Path to sort
    * @throws Error if not implemented in subclass
    */
-  sortIn(path: Path): void {
-    path;
-    throw new Error('Method not implemented.');
-  }
+  abstract sortIn(path: Path): void;
 }
 
 /**
@@ -39,7 +36,7 @@ export class Indexer {
  */
 export class TravelTypeIndexer extends Indexer {
   /** Indexes containing arrays of paths for each travel type */
-  protected declare indexes: Record<string, Path[]>;
+  declare protected indexes: Record<string, Path[]>;
 
   /**
    * Creates a new TravelTypeIndexer
@@ -79,7 +76,7 @@ export class LayersIndexer extends Indexer {
   static readonly DEFAULT_TOLERANCE = 0.05;
 
   /** Array of layers being managed */
-  protected declare indexes: Layer[];
+  declare protected indexes: Layer[];
 
   /** Tolerance for layer height differences */
   private tolerance: number;
@@ -146,7 +143,7 @@ export class LayersIndexer extends Indexer {
  */
 export class ToolIndexer extends Indexer {
   /** 2D array of paths indexed by tool number */
-  protected declare indexes: Path[][];
+  declare protected indexes: Path[][];
 
   /**
    * Creates a new ToolIndexer
@@ -162,7 +159,6 @@ export class ToolIndexer extends Indexer {
    */
   sortIn(path: Path): void {
     if (path.travelType === PathType.Extrusion) {
-      this.indexes;
       this.indexes[path.tool] = this.indexes[path.tool] || [];
       if (this.indexes[path.tool] === undefined) {
         this.indexes[path.tool] = [];
