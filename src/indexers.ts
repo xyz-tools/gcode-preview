@@ -39,7 +39,7 @@ export class Indexer {
  */
 export class TravelTypeIndexer extends Indexer {
   /** Indexes containing arrays of paths for each travel type */
-  protected declare indexes: Record<string, Path[]>;
+  declare protected indexes: Record<string, Path[]>;
 
   /**
    * Creates a new TravelTypeIndexer
@@ -79,7 +79,7 @@ export class LayersIndexer extends Indexer {
   static readonly DEFAULT_TOLERANCE = 0.05;
 
   /** Array of layers being managed */
-  protected declare indexes: Layer[];
+  declare protected indexes: Layer[];
 
   /** Tolerance for layer height differences */
   private tolerance: number;
@@ -146,7 +146,7 @@ export class LayersIndexer extends Indexer {
  */
 export class ToolIndexer extends Indexer {
   /** 2D array of paths indexed by tool number */
-  protected declare indexes: Path[][];
+  declare protected indexes: Path[][];
 
   /**
    * Creates a new ToolIndexer
