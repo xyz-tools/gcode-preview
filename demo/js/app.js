@@ -142,6 +142,9 @@ export const app = (window.app = createApp({
         backgroundColor: initialBackgroundColor
       };
 
+      // update UI state
+      drawBoundingBox.value = options.boundingBoxColor !== undefined;
+
       // reset previous state
       const lilGuiElement = document.querySelector('.lil-gui');
       if (lilGuiElement) document.body.removeChild(lilGuiElement);
