@@ -7,7 +7,7 @@ import {
   ToolIndexer,
   Indexer,
   NonApplicableIndexer,
-  NonPlanarPathError
+  NonPlanarExtrusionError
 } from './indexers';
 import { BoundingBox } from './bounding-box';
 
@@ -166,7 +166,7 @@ export class Job {
           throw e; // If the error is not a NonApplicableIndexer, it will be thrown.
         }
 
-        if (e instanceof NonPlanarPathError) {
+        if (e instanceof NonPlanarExtrusionError) {
           console.warn('Non-planar path detected; clearing layer index');
           this._layers = [];
         }

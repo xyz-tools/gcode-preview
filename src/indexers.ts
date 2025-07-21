@@ -62,9 +62,9 @@ export class TravelTypeIndexer extends Indexer {
 /**
  * Error thrown when attempting to index a non-planar path
  */
-export class NonPlanarPathError extends NonApplicableIndexer {
+export class NonPlanarExtrusionError extends NonApplicableIndexer {
   constructor() {
-    super("Non-planar paths can't be indexed by layer");
+    super("Non-planar extrusions cannot be indexed by layer");
   }
 }
 
@@ -101,7 +101,7 @@ export class LayersIndexer extends Indexer {
       path.travelType === PathType.Extrusion &&
       path.vertices.some((_, i, arr) => i > 3 && i % 3 === 2 && Math.abs(arr[i] - arr[i - 3]) > this.tolerance)
     ) {
-      throw new NonPlanarPathError();
+      throw new NonPlanarExtrusionError();
     }
 
     // new layers are only created when extruding
