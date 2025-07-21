@@ -71,7 +71,7 @@ export function createColorMaterial(
   if (cachedMaterials[color]) {
     return cachedMaterials[color];
   }
-  console.debug('createColorMaterial. not cached', color);
+  // console.debug('createColorMaterial. not cached', color);
 
   const material = new ShaderMaterial({
     vertexShader,

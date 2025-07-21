@@ -16,7 +16,6 @@ export class BoundingBox {
     this.max.y = Math.max(this.max.y, y);
     this.min.z = Math.min(this.min.z, z);
     this.max.z = Math.max(this.max.z, z);
-    // console.log(`Updated bounding box: minX=${this.minX}, maxX=${this.maxX}, minY=${this.minY}, maxY=${this.maxY}, minZ=${this.minZ}, maxZ=${this.maxZ}`);
   }
 
   /**

@@ -105,7 +105,8 @@ export class LayersIndexer extends Indexer {
     }
 
     if (this.indexes[this.indexes.length - 1] === undefined) {
-      this.createLayer(path.vertices[2]);
+      // Create the first layer at the current Z height (which is always 0 bc the gcode origin is at 0,0,0)
+      this.createLayer(0);
     }
 
     if (
