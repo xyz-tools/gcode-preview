@@ -1,6 +1,5 @@
 import { Path, PathType } from './path';
 import { Layer } from './layer'; // Assuming Layer is now in its own file
-import { escape } from 'querystring';
 
 /**
  * Base error class for indexer-related errors
