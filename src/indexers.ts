@@ -64,7 +64,7 @@ export class TravelTypeIndexer extends Indexer {
  */
 export class NonPlanarExtrusionError extends NonApplicableIndexer {
   constructor() {
-    super("Non-planar extrusions cannot be indexed by layer");
+    super('Non-planar extrusions cannot be indexed by layer');
   }
 }
 

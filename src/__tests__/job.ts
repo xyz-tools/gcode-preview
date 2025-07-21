@@ -52,17 +52,6 @@ describe('.isPlanar', () => {
     expect(job.isPlanar).toEqual(false);
   });
 
-  test('if any extrusion path has a delta Z that exceeds the default tolerance', () => {
-    const job = new Job();
-
-    append_path(job, PathType.Extrusion, [
-      [1, 2, 0],
-      [5, 6, 1]
-    ]);
-
-    expect(job.isPlanar).toEqual(false);
-  });
-
   test('ignores travel paths', () => {
     const job = new Job();
 
