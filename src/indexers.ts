@@ -105,12 +105,11 @@ export class LayersIndexer extends Indexer {
     }
 
     // new layers are only created when extruding
-    if (path.travelType === PathType.Extrusion)
-    {
+    if (path.travelType === PathType.Extrusion) {
       const newZ = path.vertices[2];
       const lastZ = this.lastLayer?.z;
 
-      // either this is the first extrusion path 
+      // either this is the first extrusion path
       // or this is an extrusion path that is higher than the last layer
       if (!this.lastLayer || newZ - lastZ > this.tolerance) {
         this.createLayerAt(newZ);

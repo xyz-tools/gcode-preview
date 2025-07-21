@@ -8,7 +8,7 @@ import { Path } from './path';
 export class Layer {
   /** Array of paths in this layer */
   paths: Path[] = [];
-  
+
   /**
    * Creates a new Layer instance
    * @param height - Layer height (default: 0)
@@ -16,6 +16,6 @@ export class Layer {
    */
   constructor(
     public z: number,
-    public height: number = 0,
+    public height: number = 0
   ) {}
 }

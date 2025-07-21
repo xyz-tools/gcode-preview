@@ -85,7 +85,6 @@ describe('.isPlanar', () => {
 });
 
 describe('.layers', () => {
-
   test('returns empty list if no paths are present', () => {
     const job = new Job();
 
@@ -101,7 +100,7 @@ describe('.layers', () => {
     ]);
 
     expect(job.layers).toEqual([]);
-  });  
+  });
 
   test('returns empty list if the job is not planar', () => {
     const job = new Job();
@@ -334,7 +333,7 @@ describe('.layers', () => {
     expect(layers[0].z).toEqual(2);
   });
 
-   test('layer z must equal extrusion path z', () => {
+  test('layer z must equal extrusion path z', () => {
     const job = new Job();
 
     append_path(job, PathType.Extrusion, [
@@ -353,7 +352,6 @@ describe('.layers', () => {
     expect(layers.length).toEqual(1);
     expect(layers[0].z).toEqual(2);
   });
-
 
   test('layer z must equal path z, for second layer', () => {
     const job = new Job();

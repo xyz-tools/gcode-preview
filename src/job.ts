@@ -1,7 +1,14 @@
 import { Path } from './path';
 import { State } from './state';
 import { Layer } from './layer';
-import { TravelTypeIndexer, LayersIndexer, ToolIndexer, Indexer, NonApplicableIndexer, NonPlanarPathError } from './indexers';
+import {
+  TravelTypeIndexer,
+  LayersIndexer,
+  ToolIndexer,
+  Indexer,
+  NonApplicableIndexer,
+  NonPlanarPathError
+} from './indexers';
 import { BoundingBox } from './bounding-box';
 
 /**
