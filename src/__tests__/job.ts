@@ -85,6 +85,24 @@ describe('.isPlanar', () => {
 });
 
 describe('.layers', () => {
+
+  test('returns empty list if no paths are present', () => {
+    const job = new Job();
+
+    expect(job.layers).toEqual([]);
+  });
+
+  test('returns empty list if no extrusion is present', () => {
+    const job = new Job();
+
+    append_path(job, PathType.Travel, [
+      [0, 0, 0],
+      [1, 2, 0]
+    ]);
+
+    expect(job.layers).toEqual([]);
+  });  
+
   test('returns empty list if the job is not planar', () => {
     const job = new Job();
 
@@ -274,7 +292,7 @@ describe('.layers', () => {
     expect(layers[1].paths.length).toEqual(1);
   });
 
-  test('initial travels are on the same layer as the first extrusion, regardless of Z height', () => {
+  test('travel paths before the first extrusion are not indexed', () => {
     const job = new Job();
 
     append_path(job, PathType.Travel, [
@@ -298,7 +316,7 @@ describe('.layers', () => {
 
     expect(layers).not.toBeNull();
     expect(layers.length).toEqual(1);
-    expect(layers[0].paths.length).toEqual(4);
+    expect(layers[0].paths.length).toEqual(1);
   });
 
   test('layer z must equal path z', () => {

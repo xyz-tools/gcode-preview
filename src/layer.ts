@@ -6,16 +6,16 @@ import { Path } from './path';
  * Contains information about the layer number, paths, height, and Z position
  */
 export class Layer {
+  /** Array of paths in this layer */
+  paths: Path[] = [];
+  
   /**
    * Creates a new Layer instance
-   * @param paths - Array of paths in this layer
    * @param height - Layer height (default: 0)
    * @param z - Z position (default: 0)
    */
   constructor(
-    public paths: Path[],
+    public z: number,
     public height: number = 0,
-    public z: number = 0,
-    public layer: number = 0
   ) {}
 }
