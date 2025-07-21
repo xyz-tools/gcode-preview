@@ -104,6 +104,7 @@ describe('.layers', () => {
     ]);
 
     expect(job.layers).toEqual([]);
+    expect(job.isPlanar).toEqual(false);
   });
 
   test('extrusions with same Z value are on the same layer', () => {
