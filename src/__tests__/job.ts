@@ -174,7 +174,7 @@ describe('.layers', () => {
       [0, 0, 0],
       [1, 2, 0]
     ]);
-    append_path(job, PathType.Travel, [
+    append_path(job, PathType.Extrusion, [
       [5, 6, 0],
       [5, 6, 0.09]
     ]);
