@@ -62,9 +62,9 @@ export class TravelTypeIndexer extends Indexer {
 /**
  * Error thrown when attempting to index a non-planar path
  */
-export class NonPlanarPathError extends NonApplicableIndexer {
+export class NonPlanarExtrusionError extends NonApplicableIndexer {
   constructor() {
-    super("Non-planar paths can't be indexed by layer");
+    super('Non-planar extrusions cannot be indexed by layer');
   }
 }
 
@@ -101,30 +101,29 @@ export class LayersIndexer extends Indexer {
       path.travelType === PathType.Extrusion &&
       path.vertices.some((_, i, arr) => i > 3 && i % 3 === 2 && Math.abs(arr[i] - arr[i - 3]) > this.tolerance)
     ) {
-      throw new NonPlanarPathError();
+      throw new NonPlanarExtrusionError();
     }
 
-    if (this.indexes[this.indexes.length - 1] === undefined) {
-      // Create the first layer at the current Z height (which is always 0 bc the gcode origin is at 0,0,0)
-      this.createLayer(0);
-    }
+    // new layers are only created when extruding
+    if (path.travelType === PathType.Extrusion) {
+      const newZ = path.vertices[2];
+      const lastZ = this.lastLayer?.z;
 
-    if (
-      path.travelType === PathType.Extrusion &&
-      this.lastLayer().paths.some((p) => p.travelType === PathType.Extrusion)
-    ) {
-      if (path.vertices[2] - (this.lastLayer().z || 0) > this.tolerance) {
-        this.createLayer(path.vertices[2]);
+      // either this is the first extrusion path
+      // or this is an extrusion path that is higher than the last layer
+      if (!this.lastLayer || newZ - lastZ > this.tolerance) {
+        this.createLayerAt(newZ);
       }
     }
-    this.lastLayer().paths.push(path);
+
+    this.lastLayer?.paths.push(path);
   }
 
   /**
    * Gets the last layer in the indexes
    * @returns The most recent layer
    */
-  private lastLayer(): Layer {
+  private get lastLayer(): Layer {
     return this.indexes[this.indexes.length - 1];
   }
 
@@ -132,10 +131,10 @@ export class LayersIndexer extends Indexer {
    * Creates a new layer at the specified Z height
    * @param z - Z height for the new layer
    */
-  private createLayer(z: number): void {
-    const layerNumber = this.indexes.length;
-    const height = z - (this.lastLayer()?.z || 0);
-    this.indexes.push(new Layer(this.indexes.length, [], layerNumber, height, z));
+  private createLayerAt(z: number): void {
+    const lastZ = this.lastLayer?.z || 0;
+    const height = z - lastZ;
+    this.indexes.push(new Layer(z, height));
   }
 }
 

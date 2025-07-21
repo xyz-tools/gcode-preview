@@ -11,7 +11,7 @@ test('it has an initial state', () => {
 });
 
 describe('.isPlanar', () => {
-  test('returns true if all extrusions are on the same plane', () => {
+  test('if all extrusions are on the same plane (Z=0)', () => {
     const job = new Job();
 
     append_path(job, PathType.Extrusion, [
@@ -23,22 +23,33 @@ describe('.isPlanar', () => {
       [5, 6, 0]
     ]);
 
-    expect(job.isPlanar()).toEqual(true);
+    expect(job.isPlanar).toEqual(true);
   });
 
-  test('returns false if any extrusions are on a different plane', () => {
+  test('if all extrusions are on the same plane (Z=1)', () => {
     const job = new Job();
 
     append_path(job, PathType.Extrusion, [
-      [0, 0, 0],
-      [1, 2, 0]
+      [0, 0, 1],
+      [1, 2, 1]
     ]);
+    append_path(job, PathType.Extrusion, [
+      [1, 2, 1],
+      [5, 6, 1]
+    ]);
+
+    expect(job.isPlanar).toEqual(true);
+  });
+
+  test('if any extrusion path has a Z value that exceeds the default tolerance', () => {
+    const job = new Job();
+
     append_path(job, PathType.Extrusion, [
       [1, 2, 0],
       [5, 6, 1]
     ]);
 
-    expect(job.isPlanar()).toEqual(false);
+    expect(job.isPlanar).toEqual(false);
   });
 
   test('ignores travel paths', () => {
@@ -58,12 +69,29 @@ describe('.isPlanar', () => {
       [5, 6, 0]
     ]);
 
-    expect(job.isPlanar()).toEqual(true);
+    expect(job.isPlanar).toEqual(true);
   });
 });
 
 describe('.layers', () => {
-  test('returns null if the job is not planar', () => {
+  test('returns empty list if no paths are present', () => {
+    const job = new Job();
+
+    expect(job.layers).toEqual([]);
+  });
+
+  test('returns empty list if no extrusion is present', () => {
+    const job = new Job();
+
+    append_path(job, PathType.Travel, [
+      [0, 0, 0],
+      [1, 2, 0]
+    ]);
+
+    expect(job.layers).toEqual([]);
+  });
+
+  test('returns empty list if the job is not planar', () => {
     const job = new Job();
 
     append_path(job, PathType.Extrusion, [
@@ -76,16 +104,17 @@ describe('.layers', () => {
     ]);
 
     expect(job.layers).toEqual([]);
+    expect(job.isPlanar).toEqual(false);
   });
 
-  test('paths without z changes are on the same layer', () => {
+  test('extrusions with same Z value are on the same layer', () => {
     const job = new Job();
 
     append_path(job, PathType.Extrusion, [
       [0, 0, 0],
       [1, 2, 0]
     ]);
-    append_path(job, PathType.Travel, [
+    append_path(job, PathType.Extrusion, [
       [5, 6, 0],
       [5, 6, 0]
     ]);
@@ -119,7 +148,7 @@ describe('.layers', () => {
     expect(layers[1].paths.length).toEqual(1);
   });
 
-  test('travel paths moving z under the default tolerance are on the same layer', () => {
+  test('travel with a z component is still on the same layer', () => {
     const job = new Job();
 
     append_path(job, PathType.Extrusion, [
@@ -128,7 +157,7 @@ describe('.layers', () => {
     ]);
     append_path(job, PathType.Travel, [
       [5, 6, 0],
-      [5, 6, LayersIndexer.DEFAULT_TOLERANCE - 0.01]
+      [5, 6, 42]
     ]);
 
     const layers = job.layers;
@@ -146,7 +175,7 @@ describe('.layers', () => {
       [0, 0, 0],
       [1, 2, 0]
     ]);
-    append_path(job, PathType.Travel, [
+    append_path(job, PathType.Extrusion, [
       [5, 6, 0],
       [5, 6, 0.09]
     ]);
@@ -207,6 +236,38 @@ describe('.layers', () => {
       [5, 6, 2]
     ]);
     append_path(job, PathType.Extrusion, [
+      [5, 6, 0],
+      [5, 6, 0]
+    ]);
+
+    const layers = job.layers;
+
+    expect(layers).not.toBeNull();
+    expect(layers).toBeInstanceOf(Array);
+    expect(layers.length).toEqual(1);
+    expect(layers[0].paths.length).toEqual(5);
+  });
+
+  test('extrusions with a new Z value after travels are on a new layer', () => {
+    const job = new Job();
+
+    append_path(job, PathType.Extrusion, [
+      [0, 0, 0],
+      [1, 2, 0]
+    ]);
+    append_path(job, PathType.Travel, [
+      [5, 6, 0],
+      [5, 6, 2]
+    ]);
+    append_path(job, PathType.Travel, [
+      [5, 6, 2],
+      [5, 6, 0]
+    ]);
+    append_path(job, PathType.Travel, [
+      [5, 6, 0],
+      [5, 6, 2]
+    ]);
+    append_path(job, PathType.Extrusion, [
       [5, 6, 2],
       [5, 6, 2]
     ]);
@@ -220,7 +281,7 @@ describe('.layers', () => {
     expect(layers[1].paths.length).toEqual(1);
   });
 
-  test('initial travels are on the same layer as the first extrusion', () => {
+  test('travel paths before the first extrusion are not indexed', () => {
     const job = new Job();
 
     append_path(job, PathType.Travel, [
@@ -244,7 +305,61 @@ describe('.layers', () => {
 
     expect(layers).not.toBeNull();
     expect(layers.length).toEqual(1);
-    expect(layers[0].paths.length).toEqual(4);
+    expect(layers[0].paths.length).toEqual(1);
+  });
+
+  test('layer z must equal path z', () => {
+    const job = new Job();
+
+    append_path(job, PathType.Extrusion, [
+      [5, 6, 2],
+      [5, 6, 2]
+    ]);
+
+    const layers = job.layers;
+
+    expect(layers).not.toBeNull();
+    expect(layers.length).toEqual(1);
+    expect(layers[0].z).toEqual(2);
+  });
+
+  test('layer z must equal extrusion path z', () => {
+    const job = new Job();
+
+    append_path(job, PathType.Extrusion, [
+      [5, 6, 2],
+      [5, 6, 2]
+    ]);
+
+    append_path(job, PathType.Travel, [
+      [5, 6, 4],
+      [5, 6, 4]
+    ]);
+
+    const layers = job.layers;
+
+    expect(layers).not.toBeNull();
+    expect(layers.length).toEqual(1);
+    expect(layers[0].z).toEqual(2);
+  });
+
+  test('layer z must equal path z, for second layer', () => {
+    const job = new Job();
+
+    append_path(job, PathType.Extrusion, [
+      [5, 6, 2],
+      [5, 6, 2]
+    ]);
+    append_path(job, PathType.Extrusion, [
+      [5, 6, 4],
+      [5, 6, 4]
+    ]);
+
+    const layers = job.layers;
+
+    expect(layers).not.toBeNull();
+    expect(layers.length).toEqual(2);
+    expect(layers[1].z).toEqual(4);
   });
 });
 

@@ -497,8 +497,10 @@ export class WebGLPreview {
    * @private
    */
   private updateClippingPlanes() {
-    const minZ = this.job.layers[this._startLayer - 1]?.z;
-    const maxZ = this.job.layers[this._endLayer - 1]?.z;
+    const startLayer = this.job.layers[this._startLayer - 1];
+    const endLayer = this.job.layers[this._endLayer - 1];
+    const minZ = startLayer?.z - startLayer?.height;
+    const maxZ = endLayer?.z;
 
     this.updateClippingPlanesForShaderMaterials(minZ, maxZ);
     this.updateLineClipping(minZ, maxZ);
