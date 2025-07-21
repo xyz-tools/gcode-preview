@@ -139,9 +139,8 @@ export class LayersIndexer extends Indexer {
    * @param z - Z height for the new layer
    */
   private createLayer(z: number): void {
-    const layerNumber = this.indexes.length;
     const height = z - (this.lastLayer()?.z || 0);
-    this.indexes.push(new Layer([], layerNumber, height, z));
+    this.indexes.push(new Layer([], height, z));
   }
 }
 
