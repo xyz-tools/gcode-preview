@@ -25,8 +25,7 @@ export class Layer {
    * @param height - Layer height (default: 0)
    * @param z - Z position (default: 0)
    */
-  constructor(layer: number, paths: Path[], lineNumber: number, height: number = 0, z: number = 0) {
-    this.layer = layer;
+  constructor(paths: Path[], lineNumber: number, height: number = 0, z: number = 0) {
     this.paths = paths;
     this.lineNumber = lineNumber;
     this.height = height;

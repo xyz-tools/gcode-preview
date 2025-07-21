@@ -135,10 +135,10 @@ export class Job {
   }
 
   /**
-   * Checks if the job contains planar layers
+   * Checks if the job contains planar extrusion layers
    * @returns True if the job contains at least one layer, false otherwise
    */
-  isPlanar(): boolean {
+  get isPlanar(): boolean {
     return this.layers.length > 0;
   }
 
