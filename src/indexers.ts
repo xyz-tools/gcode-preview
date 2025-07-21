@@ -117,7 +117,13 @@ export class LayersIndexer extends Indexer {
         this.createLayer(path.vertices[2]);
       }
     }
-    this.lastLayer().paths.push(path);
+    
+    const layer = this.lastLayer();
+    if (path.travelType === PathType.Extrusion) {
+      layer.z = path.vertices[2]; // ensure the layer's Z position is updated when extruding
+    }
+
+    layer.paths.push(path);
   }
 
   /**

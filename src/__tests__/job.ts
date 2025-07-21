@@ -300,6 +300,61 @@ describe('.layers', () => {
     expect(layers.length).toEqual(1);
     expect(layers[0].paths.length).toEqual(4);
   });
+
+  test('layer z must equal path z', () => {
+    const job = new Job();
+
+    append_path(job, PathType.Extrusion, [
+      [5, 6, 2],
+      [5, 6, 2]
+    ]);
+
+    const layers = job.layers;
+
+    expect(layers).not.toBeNull();
+    expect(layers.length).toEqual(1);
+    expect(layers[0].z).toEqual(2);
+  });
+
+   test('layer z must equal extrusion path z', () => {
+    const job = new Job();
+
+    append_path(job, PathType.Extrusion, [
+      [5, 6, 2],
+      [5, 6, 2]
+    ]);
+
+    append_path(job, PathType.Travel, [
+      [5, 6, 4],
+      [5, 6, 4]
+    ]);
+
+    const layers = job.layers;
+
+    expect(layers).not.toBeNull();
+    expect(layers.length).toEqual(1);
+    expect(layers[0].z).toEqual(2);
+  });
+
+
+  test('layer z must equal path z, for second layer', () => {
+    const job = new Job();
+
+    append_path(job, PathType.Extrusion, [
+      [5, 6, 2],
+      [5, 6, 2]
+    ]);
+    append_path(job, PathType.Extrusion, [
+      [5, 6, 4],
+      [5, 6, 4]
+    ]);
+
+    const layers = job.layers;
+
+    expect(layers).not.toBeNull();
+    expect(layers.length).toEqual(2);
+    expect(layers[1].z).toEqual(4);
+  });
 });
 
 describe('.extrusions', () => {
