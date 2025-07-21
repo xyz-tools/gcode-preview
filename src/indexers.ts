@@ -105,11 +105,8 @@ export class LayersIndexer extends Indexer {
     }
 
     if (this.indexes[this.indexes.length - 1] === undefined) {
-      console.warn('creating first layer');
       // Create the first layer at the current Z height (which is always 0 bc the gcode origin is at 0,0,0)
       this.createLayer(0);
-    } else {
-      console.log('layer already exists');
     }
 
     if (
@@ -117,7 +114,6 @@ export class LayersIndexer extends Indexer {
       this.lastLayer().paths.some((p) => p.travelType === PathType.Extrusion)
     ) {
       if (path.vertices[2] - (this.lastLayer().z || 0) > this.tolerance) {
-        console.debug('never reached');
         this.createLayer(path.vertices[2]);
       }
     }

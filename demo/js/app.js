@@ -4,7 +4,7 @@ import * as GCodePreview from 'gcode-preview';
 import { defaultSettings } from './default-settings.js';
 import { parseIntOrDefault } from './utils.js';
 
-const defaultPreset = 'easel'; // default preset to load
+const defaultPreset = 'benchy'; // default preset to load
 const preferDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
 const initialBackgroundColor = preferDarkMode.matches ? '#141414' : '#eee';
 const statsContainer = () => document.querySelector('.sidebar');
@@ -97,7 +97,7 @@ export const app = (window.app = createApp({
         backgroundColor: '#' + backgroundColor.getHexString(),
         boundingBoxColor
       };
-      // console.debug('Current settings:', currentSettings);
+      console.debug('app settings:', currentSettings);
       Object.assign(settings.value, currentSettings);
       preview.endLayer = countLayers;
 
@@ -219,7 +219,6 @@ export const app = (window.app = createApp({
       watchEffect(() => {
         const startLayer = parseIntOrDefault(settings.value.startLayer, undefined);
         const endLayer = parseIntOrDefault(settings.value.endLayer, undefined);
-        console.debug('watchEffect: startLayer', startLayer);
 
         preview.startLayer = settings.value.enableStartLayer ? startLayer : undefined;
         preview.endLayer = settings.value.enableEndLayer ? endLayer : undefined;

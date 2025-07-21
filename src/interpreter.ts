@@ -79,7 +79,6 @@ export class Interpreter {
 
     // discard zero length moves
     if (x === undefined && y === undefined && z === undefined) {
-      // console.warn('Discarding zero length move');
       if (e > 0) {
         this.retractions++;
       } else if (e < 0) {

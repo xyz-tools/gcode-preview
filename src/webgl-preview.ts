@@ -273,7 +273,7 @@ export class WebGLPreview {
     }
 
     console.info('Using THREE r' + REVISION);
-    console.debug('opts', opts);
+    console.debug('preview options', opts);
 
     this.canvas = opts.canvas;
     this.renderer = new WebGLRenderer({
@@ -476,7 +476,6 @@ export class WebGLPreview {
    * @param value - Layer number to start rendering from
    */
   set startLayer(value: number | undefined) {
-    console.debug('set startLayer', value);
     if (typeof value === 'number' && value > 0 && value <= this.countLayers) {
       this._startLayer = value;
     } else {
@@ -500,9 +499,6 @@ export class WebGLPreview {
   private updateClippingPlanes() {
     const minZ = this.job.layers[this._startLayer - 1]?.z;
     const maxZ = this.job.layers[this._endLayer - 1]?.z;
-
-    console.log('updateClippingPlanes', this.job.layers.length, 'layers in job');
-    console.debug('minZ', minZ, 'maxZ', maxZ);
 
     this.updateClippingPlanesForShaderMaterials(minZ, maxZ);
     this.updateLineClipping(minZ, maxZ);
@@ -950,17 +946,11 @@ export class WebGLPreview {
    * @param color - Color to use for the lines
    */
   private renderPathsAsLines(paths: Path[], color: Color): void {
-    console.log('renderPathsAsLines', 'minLayer', this._startLayer, 'maxLayer', this._endLayer, 'paths', paths.length);
-
     const minZ = this.job.layers[this._startLayer - 1]?.z;
     const maxZ = this.job.layers[this._endLayer - 1]?.z;
 
     let clippingPlanes: Plane[] = [];
-    console.warn('minZ', minZ, 'maxZ', maxZ);
-
-    // if (this.job.layers.length > 1) {
     clippingPlanes = this.createClippingPlanes(minZ, maxZ);
-    // }
 
     const material = new LineMaterial({
       color: Number(color.getHex()),
