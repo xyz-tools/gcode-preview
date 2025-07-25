@@ -1,18 +1,24 @@
 export const presets = {
-  mach3: {
-    title: 'CNC tool path',
-    file: 'gcodes/mach3.gcode',
-    lineWidth: 2,
-    renderExtrusion: false,
-    renderTravel: true,
-    travelColor: '#00FF00',
-    buildVolume: {
-      x: 10,
-      y: 10,
-      z: 0
+  benchy: {
+    title: '3DBenchy',
+    file: 'gcodes/3DBenchy.gcode',
+    model: {
+      name: '3DBenchy',
+      designer: 'CreativeTools',
+      license: 'CC0 - public domain',
+      original: 'https://www.thingiverse.com/thing:763622'
     },
-    initialCameraPosition: [-20, 20, 1.8]
+    extrusionWidth: 0.45,
+    lineHeight: 0.2,
+    extrusionColor: ['#95dfa1'],
+    travelColor: 'red',
+    buildVolume: {
+      x: 180,
+      y: 180,
+      z: 0
+    }
   },
+
   arcs: {
     title: 'Arcs with G2/G3',
     file: 'gcodes/screw.gcode',
@@ -31,7 +37,8 @@ export const presets = {
     buildVolume: {
       x: 130,
       y: 150,
-      z: 0
+      z: 0,
+      smallGrid: true
     }
   },
   'vase-mode': {
@@ -43,7 +50,7 @@ export const presets = {
       original: 'https://www.thingiverse.com/thing:18672'
     },
     file: 'gcodes/vase.gcode',
-    lineWidth: 0,
+    lineWidth: 0.5,
     lineHeight: 0.4,
     minLayerThreshold: 0.6,
     renderExtrusion: true,
@@ -103,5 +110,61 @@ export const presets = {
       y: 250,
       z: 0
     }
+  },
+  calicat: {
+    title: 'Bounding box',
+    file: 'gcodes/calicat.gcode',
+    model: {
+      name: 'Calicat - the calibration cat',
+      designer: 'Dezign',
+      license: 'CC BY-NC-SA 3.0',
+      original: 'https://www.thingiverse.com/thing:1545913'
+    },
+    extrusionWidth: 0.45,
+    lineHeight: 0.2,
+    extrusionColor: ['pink'],
+    travelColor: 'red',
+    topLayerColor: undefined,
+    lastSegmentColor: undefined,
+    buildVolume: {
+      x: 180,
+      y: 180,
+      z: 0
+    },
+    boundingBoxColor: 'pink'
+  },
+  easel: {
+    title: 'Easel tool path (cnc)',
+    file: 'gcodes/easel.gcode',
+    lineWidth: 1,
+    renderExtrusion: false,
+    renderTravel: true,
+    travelColor: '#00FFFF',
+    buildVolume: {
+      x: 300,
+      y: 180,
+      z: 0
+    },
+    initialCameraPosition: [-20, 20, 1.8],
+    model: {
+      name: 'Easel tool path',
+      designer: 'Remco',
+      license: 'CC0 - public domain',
+      original: 'https://easel.com/projects/jfs2zG8VQ0vNTOqbscKNPA'
+    }
+  },
+  mach3: {
+    title: 'Mach3 tool path (cnc)',
+    file: 'gcodes/mach3.gcode',
+    lineWidth: 2,
+    renderExtrusion: false,
+    renderTravel: true,
+    travelColor: '#00FF00',
+    buildVolume: {
+      x: 10,
+      y: 10,
+      z: 0
+    },
+    initialCameraPosition: [-20, 20, 1.8]
   }
 };

@@ -2,14 +2,14 @@ import { createApp, ref, watch, onMounted, watchEffect } from 'vue';
 import { presets } from './presets.js';
 import * as GCodePreview from 'gcode-preview';
 import { defaultSettings } from './default-settings.js';
-import { debounce, humanFileSize, readFile } from './utils.js';
+import { parseIntOrDefault } from './utils.js';
 
-const defaultPreset = 'arcs';
+const defaultPreset = 'benchy'; // default preset to load
 const preferDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
 const initialBackgroundColor = preferDarkMode.matches ? '#141414' : '#eee';
 const statsContainer = () => document.querySelector('.sidebar');
 
-const loadProgressive = true;
+const loadProgressive = ref(true);
 let observer = null;
 let preview = null;
 
@@ -20,11 +20,11 @@ export const app = (window.app = createApp({
     const thumbnail = ref(null);
     const layerCount = ref(0);
     const fileSize = ref(0);
-    const fileName = ref('');
     const model = ref(null);
     const dragging = ref(false);
     const settings = ref(Object.assign({}, defaultSettings));
     const enableDevMode = ref(false);
+    const drawBoundingBox = ref(false);
 
     watch(selectedPreset, (preset) => {
       selectPreset(preset);
@@ -36,19 +36,12 @@ export const app = (window.app = createApp({
 
     const removeColor = () => settings.value.colors.pop();
 
-    const dragOver = (event) => {
-      event.dataTransfer.dropEffect = 'copy';
-      dragging.value = true;
-    };
-
-    const dragLeave = () => (dragging.value = false);
-
-    const drop = (event) => {
-      dragging.value = false;
-      const file = event.dataTransfer.files[0];
-      fileName.value = file.name;
-      model.value = null;
-      loadDroppedFile(file);
+    const update = async (evt) => {
+      model.value = {
+        name: evt.detail.filename
+      };
+      applyDevMode(enableDevMode.value); // HACK: force dev mode to update UI
+      updateUI();
     };
 
     // Update UI with current preview settings
@@ -67,7 +60,8 @@ export const app = (window.app = createApp({
         renderExtrusion,
         lineWidth,
         renderTubes,
-        extrusionWidth
+        extrusionWidth,
+        boundingBoxColor
       } = preview;
       const { thumbnails } = parser.metadata;
 
@@ -83,7 +77,7 @@ export const app = (window.app = createApp({
       const currentSettings = {
         startLayer: 1,
         enableStartLayer: false,
-        maxLayer: countLayers,
+        maxLayer: countLayers || 1000,
         endLayer: countLayers,
         enableEndLayer: false,
         singleLayerMode,
@@ -100,11 +94,14 @@ export const app = (window.app = createApp({
         highlightLastSegment: !!lastSegmentColor,
         buildVolume: buildVolume,
         drawBuildVolume: !!buildVolume,
-        backgroundColor: '#' + backgroundColor.getHexString()
+        backgroundColor: '#' + backgroundColor.getHexString(),
+        boundingBoxColor
       };
-
+      console.debug('app settings:', currentSettings);
       Object.assign(settings.value, currentSettings);
       preview.endLayer = countLayers;
+
+      applyDevMode(enableDevMode.value);
     };
 
     const loadGCodeFromServer = async (filename) => {
@@ -114,58 +111,39 @@ export const app = (window.app = createApp({
         return;
       }
 
-      const gcode = await response.text();
-      fileSize.value = humanFileSize(gcode.length);
-      startLoadingProgressive(gcode);
-    };
+      const gcodeStream = response.body.pipeThrough(new TextDecoderStream());
 
-    const startLoadingProgressive = async (gcode) => {
       const prevDevMode = preview.devMode;
-      preview.clear();
+      // preview.clear();
       preview.devMode = prevDevMode;
-      const { commands } = preview.parser.parseGCode(gcode);
-      preview.interpreter.execute(commands, preview.job);
 
-      render();
+      await preview.processGCode(gcodeStream, { render: false }); // rendering will be done reactively
     };
 
     const render = async () => {
-      debounce(async () => {
-        if (loadProgressive) {
-          if (preview.job.layers === null) {
-            console.warn('Job is not planar');
-            preview.render();
-            return;
-          }
-          await preview.renderAnimated(preview.job.paths.length / 60);
-        } else {
-          preview.render();
-        }
-      });
-    };
-
-    const loadDroppedFile = async (file) => {
-      fileSize.value = humanFileSize(file.size);
-      const content = await readFile(file);
-      applyDevMode(enableDevMode.value); // HACK
-      startLoadingProgressive(content);
-      applyDevMode(enableDevMode.value);
-      updateUI();
+      if (loadProgressive.value && preview.job.layers !== null) {
+        await preview.renderAnimated();
+      } else {
+        preview.render();
+      }
     };
 
     const selectPreset = async (presetName) => {
       const canvas = document.querySelector('canvas.preview');
       const preset = presets[presetName];
-      fileName.value = preset.file.split('/').pop();
       model.value = preset.model;
-      const options = Object.assign(
-        {
-          canvas,
-          backgroundColor: initialBackgroundColor
-        },
-        defaultSettings,
-        preset
-      );
+
+      // cascade settings: first defaults, then apply the preset, finally some overrides
+      const options = {
+        ...defaultSettings,
+        ...preset,
+        canvas,
+        droppable: true,
+        backgroundColor: initialBackgroundColor
+      };
+
+      // update UI state
+      drawBoundingBox.value = options.boundingBoxColor !== undefined;
 
       // reset previous state
       const lilGuiElement = document.querySelector('.lil-gui');
@@ -175,14 +153,14 @@ export const app = (window.app = createApp({
       if (defaultSettings.devMode) defaultSettings.devMode.statsContainer = statsContainer();
       preview?.dispose();
 
-      preview = new GCodePreview.init(options);
+      window['_preview'] = preview = new GCodePreview.init(options);
 
       // resize preview on canvas resize (TODO: move to GCodePreview)
       if (observer) observer.disconnect();
       observer = new ResizeObserver(() => preview.resize());
       observer.observe(canvas);
 
-      applyDevMode(enableDevMode.value);
+      applyDevMode(enableDevMode.value); // HACK: force dev mode to update UI
 
       await loadGCodeFromServer(preset.file);
       applyDevMode(enableDevMode.value);
@@ -201,14 +179,28 @@ export const app = (window.app = createApp({
 
       watchEffect(() => {
         preview.backgroundColor = settings.value.backgroundColor;
+
+        if (preview.buildVolume && settings.value.drawBuildVolume) {
+          preview.buildVolume.smallGrid = settings.value.buildVolume.smallGrid;
+          preview.buildVolume.x = +settings.value.buildVolume.x;
+          preview.buildVolume.y = +settings.value.buildVolume.y;
+          preview.buildVolume.z = +settings.value.buildVolume.z;
+        }
+
+        if (!preview.buildVolume && settings.value.drawBuildVolume) {
+          preview.buildVolume = {
+            x: +settings.value.buildVolume.x,
+            y: +settings.value.buildVolume.y,
+            z: +settings.value.buildVolume.z,
+            smallGrid: settings.value.buildVolume.smallGrid
+          };
+        } else if (preview.buildVolume && !settings.value.drawBuildVolume) {
+          preview.buildVolume = undefined;
+        }
+        preview.boundingBoxColor = drawBoundingBox.value ? (settings.value.boundingBoxColor ?? 'magenta') : undefined;
       });
 
       watchEffect(() => {
-        preview.buildVolume = settings.value.drawBuildVolume ? settings.value.buildVolume : undefined;
-        preview.buildVolume.x = +settings.value.buildVolume.x;
-        preview.buildVolume.y = +settings.value.buildVolume.y;
-        preview.buildVolume.z = +settings.value.buildVolume.z;
-
         preview.renderTravel = settings.value.renderTravel;
         preview.travelColor = settings.value.travelColor;
         preview.lineWidth = +settings.value.lineWidth;
@@ -217,16 +209,22 @@ export const app = (window.app = createApp({
         preview.renderTubes = settings.value.renderTubes;
         preview.extrusionWidth = +settings.value.extrusionWidth;
 
-        // TODO: should be a quick update:
         preview.topLayerColor = settings.value.highlightTopLayer ? settings.value.topLayerColor : undefined;
         preview.lastSegmentColor = settings.value.highlightLastSegment ? settings.value.lastSegmentColor : undefined;
 
-        render();
+        // run render after settings have been applied
+        // this is needed to prevent reactivity attaching the render function
+        setTimeout(() => {
+          render();
+        }, 0);
       });
 
       watchEffect(() => {
-        preview.startLayer = settings.value.enableStartLayer ? +settings.value.startLayer : undefined;
-        preview.endLayer = settings.value.enableEndLayer ? +settings.value.endLayer : undefined;
+        const startLayer = parseIntOrDefault(settings.value.startLayer, undefined);
+        const endLayer = parseIntOrDefault(settings.value.endLayer, undefined);
+
+        preview.startLayer = settings.value.enableStartLayer ? startLayer : undefined;
+        preview.endLayer = settings.value.enableEndLayer ? endLayer : undefined;
       });
 
       watchEffect(() => {
@@ -245,21 +243,18 @@ export const app = (window.app = createApp({
       thumbnail,
       layerCount,
       fileSize,
-      fileName,
       model,
       dragging,
       settings,
+      loadProgressive,
       enableDevMode,
+      drawBoundingBox,
       selectTab,
       addColor,
       removeColor,
-      dragOver,
-      dragLeave,
-      drop,
+      update,
       resetUI: updateUI,
       loadGCodeFromServer,
-      startLoadingProgressive,
-      loadDroppedFile,
       selectPreset
     };
   }

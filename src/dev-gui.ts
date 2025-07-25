@@ -69,6 +69,10 @@ class DevGUI {
     }
   }
 
+  destroy(): void {
+    this.gui.destroy();
+  }
+
   /**
    * Resets the GUI by destroying and recreating it
    */
@@ -186,30 +190,9 @@ class DevGUI {
     buildVolume.onOpenClose(() => {
       this.saveOpenFolders();
     });
-    buildVolume
-      .add(this.webglPreview.buildVolume, 'x')
-      .min(0)
-      .max(600)
-      .listen()
-      .onChange(() => {
-        this.webglPreview.render();
-      });
-    buildVolume
-      .add(this.webglPreview.buildVolume, 'y')
-      .min(0)
-      .max(600)
-      .listen()
-      .onChange(() => {
-        this.webglPreview.render();
-      });
-    buildVolume
-      .add(this.webglPreview.buildVolume, 'z')
-      .min(0)
-      .max(600)
-      .listen()
-      .onChange(() => {
-        this.webglPreview.render();
-      });
+    buildVolume.add(this.webglPreview.buildVolume, 'x').min(0).max(600).step(10).listen();
+    buildVolume.add(this.webglPreview.buildVolume, 'y').min(0).max(600).step(10).listen();
+    buildVolume.add(this.webglPreview.buildVolume, 'z').min(0).max(600).step(10).listen();
   }
 
   /**
@@ -223,14 +206,19 @@ class DevGUI {
     devHelpers.onOpenClose(() => {
       this.saveOpenFolders();
     });
-    devHelpers
-      .add(this.webglPreview, '_wireframe')
-      .listen()
-      .onChange(() => {
-        this.webglPreview.render();
-      });
+    // devHelpers
+    //   .add(this.webglPreview, '_wireframe')
+    //   .listen()
+    //   .onChange(() => {
+    //     this.webglPreview.render();
+    //   });
     devHelpers.add(this.webglPreview, 'render').listen();
     devHelpers.add(this.webglPreview, 'clear').listen();
+    devHelpers.add(this.webglPreview, 'dispose').listen();
+
+    devHelpers.add(this.webglPreview, 'saveCamera').listen();
+    devHelpers.add(this.webglPreview, 'loadCamera').listen();
+    devHelpers.add(this.webglPreview, 'clearCamera').listen();
   }
 }
 

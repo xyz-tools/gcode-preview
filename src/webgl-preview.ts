@@ -6,6 +6,7 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
 import { BuildVolume } from './build-volume';
 import { type Disposable } from './helpers/three-utils';
+import { LineBox } from './helpers/line-box';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 
 import { DevGUI, DevModeOptions } from './dev-gui';
@@ -29,15 +30,18 @@ import {
   ShaderMaterial,
   Vector3,
   WebGLRenderer,
-  MathUtils
+  MathUtils,
+  LineBasicMaterial
 } from 'three';
+import { makeDroppable } from './extra/dom-utils';
 
+export type BuildVolumeDef = Pick<BuildVolume, 'x' | 'y' | 'z' | 'smallGrid'>;
 /**
  * Options for configuring the G-code preview
  */
 export type GCodePreviewOptions = {
   /** Build volume dimensions */
-  buildVolume?: BuildVolume;
+  buildVolume?: BuildVolumeDef;
   /** Background color of the preview */
   backgroundColor?: ColorRepresentation;
   /** Canvas element to render into */
@@ -76,12 +80,12 @@ export type GCodePreviewOptions = {
   extrusionWidth?: number;
   /** Render paths as 3D tubes instead of lines */
   renderTubes?: boolean;
-  /**
-   * @deprecated Please see the demo how to implement drag and drop.
-   */
-  allowDragNDrop?: boolean;
+  /** Enable drag and drop file handling */
+  droppable?: boolean;
   /** Enable developer mode with additional controls */
   devMode?: boolean | DevModeOptions;
+  /** Color for the bounding box. If undefined, the bounding box is not rendered. */
+  boundingBoxColor?: ColorRepresentation;
 };
 
 /**
@@ -124,11 +128,7 @@ export class WebGLPreview {
   /** Whether single layer mode is enabled */
   _singleLayerMode = false;
   /** Build volume dimensions */
-  buildVolume?: BuildVolume & {
-    x: number;
-    y: number;
-    z: number;
-  };
+  private _buildVolume?: BuildVolume;
   /** Initial camera position [x, y, z] */
   initialCameraPosition = [-100, 400, 450];
   /** Whether to use inches instead of millimeters */
@@ -144,6 +144,10 @@ export class WebGLPreview {
   interpreter = new Interpreter();
   /** G-code parser */
   parser = new Parser();
+  /** Bounding box mesh */
+  private boundingBoxMesh?: LineBox;
+  /** Color for the bounding box */
+  private _boundingBoxColor?: Color;
 
   // rendering
   /** Group containing all rendered paths */
@@ -200,6 +204,7 @@ export class WebGLPreview {
   private devGui?: DevGUI;
   /** Whether to preserve drawing buffer */
   private preserveDrawingBuffer = false;
+  private currentChunk: Group;
 
   /**
    * Creates a new WebGLPreview instance
@@ -218,7 +223,16 @@ export class WebGLPreview {
     this.startLayer = opts.startLayer;
     this.lineWidth = opts.lineWidth ?? 1;
     this.lineHeight = opts.lineHeight ?? this.lineHeight;
-    this.buildVolume = opts.buildVolume && new BuildVolume(opts.buildVolume.x, opts.buildVolume.y, opts.buildVolume.z);
+    if (opts.buildVolume) {
+      this._buildVolume = new BuildVolume(
+        opts.buildVolume.x,
+        opts.buildVolume.y,
+        opts.buildVolume.z,
+        opts.buildVolume.smallGrid,
+        this.scene
+      );
+      this.disposables.push(this._buildVolume);
+    }
     this.initialCameraPosition = opts.initialCameraPosition ?? this.initialCameraPosition;
     this.renderExtrusion = opts.renderExtrusion ?? this.renderExtrusion;
     this.renderTravel = opts.renderTravel ?? this.renderTravel;
@@ -227,6 +241,9 @@ export class WebGLPreview {
     this.extrusionWidth = opts.extrusionWidth;
     this.devMode = opts.devMode ?? this.devMode;
     this.stats = this.devMode ? new Stats() : undefined;
+    if (opts.boundingBoxColor !== undefined) {
+      this._boundingBoxColor = new Color(opts.boundingBoxColor);
+    }
 
     if (!opts.canvas) {
       throw Error('Set either opts.canvas or opts.targetId');
@@ -256,7 +273,7 @@ export class WebGLPreview {
     }
 
     console.info('Using THREE r' + REVISION);
-    console.debug('opts', opts);
+    console.debug('preview options', opts);
 
     this.canvas = opts.canvas;
     this.renderer = new WebGLRenderer({
@@ -265,18 +282,47 @@ export class WebGLPreview {
     });
 
     this.renderer.localClippingEnabled = true;
-    this.camera = new PerspectiveCamera(25, this.canvas.offsetWidth / this.canvas.offsetHeight, 10, 5000);
+    this.camera = new PerspectiveCamera(25, this.canvas.offsetWidth / this.canvas.offsetHeight, 1, 5000);
     this.camera.position.fromArray(this.initialCameraPosition);
-
     this.resize();
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.target.set(this._buildVolume.x / 2, 0, -this._buildVolume.y / 2);
+    this.loadCamera();
+
     this.initScene();
     this.animate();
 
-    if (opts.allowDragNDrop) this._enableDropHandler();
+    if (opts.droppable) makeDroppable(this);
 
     this.initStats();
+  }
+
+  /**
+   * Gets the current build volume
+   * @returns Current build volume or undefined if not set
+   */
+  get buildVolume(): BuildVolume | undefined {
+    return this._buildVolume;
+  }
+
+  /**
+   * Sets the build volume dimensions
+   * @param value - Partial build volume properties (x, y, z, smallGrid)
+   */
+  set buildVolume(value: BuildVolumeDef | undefined) {
+    if (!value) {
+      this._buildVolume?.dispose();
+      this._buildVolume = undefined;
+      return;
+    }
+
+    this._buildVolume = new BuildVolume(value.x, value.y, value.z, value.smallGrid, this.scene);
+
+    if (this._buildVolume) {
+      this.disposables.push(this._buildVolume);
+      this._buildVolume.update();
+    }
   }
 
   /**
@@ -392,6 +438,24 @@ export class WebGLPreview {
   }
 
   /**
+   * Gets the current bounding box color
+   * @returns Color representation or undefined if not set
+   */
+  get boundingBoxColor(): ColorRepresentation | undefined {
+    return this._boundingBoxColor;
+  }
+
+  /**
+   * Sets the bounding box color
+   * @param value - Color value or undefined to hide the bounding box
+   */
+  set boundingBoxColor(value: ColorRepresentation | undefined) {
+    this._boundingBoxColor = value !== undefined ? new Color(value) : undefined;
+
+    this.renderBoundingBox();
+  }
+
+  /**
    * Gets the total number of layers in the job
    * @returns Number of layers
    */
@@ -412,8 +476,8 @@ export class WebGLPreview {
    * @param value - Layer number to start rendering from
    */
   set startLayer(value: number | undefined) {
-    if (typeof value === 'number') {
-      this._startLayer = MathUtils.clamp(value, 1, this.countLayers);
+    if (typeof value === 'number' && value > 0 && value <= this.countLayers) {
+      this._startLayer = value;
     } else {
       this._startLayer = undefined;
     }
@@ -433,9 +497,10 @@ export class WebGLPreview {
    * @private
    */
   private updateClippingPlanes() {
-    const minZ = !this._startLayer ? 0 : this.job.layers[this._startLayer - 1]?.z ?? 0;
-
-    const maxZ = !this._endLayer ? Infinity : this.job.layers[this._endLayer - 1]?.z ?? Infinity;
+    const startLayer = this.job.layers[this._startLayer - 1];
+    const endLayer = this.job.layers[this._endLayer - 1];
+    const minZ = startLayer?.z - startLayer?.height;
+    const maxZ = endLayer?.z;
 
     this.updateClippingPlanesForShaderMaterials(minZ, maxZ);
     this.updateLineClipping(minZ, maxZ);
@@ -466,8 +531,15 @@ export class WebGLPreview {
    * @param minZ - The minimum Z value for the clipping plane.
    * @param maxZ - The maximum Z value for the clipping plane.
    */
-  private applyMinMaxClippingPlanes(material: Material, minZ: number, maxZ: number) {
-    material.clippingPlanes = [new Plane(new Vector3(0, 1, 0), -minZ), new Plane(new Vector3(0, -1, 0), maxZ)];
+  private createClippingPlanes(minZ: number | undefined, maxZ: number | undefined) {
+    const planes = [];
+    if (minZ !== undefined) {
+      planes.push(new Plane(new Vector3(0, 1, 0), -minZ));
+    }
+    if (maxZ !== undefined) {
+      planes.push(new Plane(new Vector3(0, -1, 0), maxZ));
+    }
+    return planes;
   }
 
   /**
@@ -478,11 +550,13 @@ export class WebGLPreview {
    * @param minZ - The minimum Z value for the clipping plane.
    * @param maxZ - The maximum Z value for the clipping plane.
    */
-  private updateLineClipping(minZ: number, maxZ: number) {
+  private updateLineClipping(minZ: number | undefined, maxZ: number | undefined) {
+    // TODO: apply clipping selectively to travels lines and extrusion lines
+    // and/or use a clipping group
     this.scene.traverse((obj) => {
       if (obj instanceof LineSegments2) {
         const material = obj.material as LineMaterial;
-        this.applyMinMaxClippingPlanes(material, minZ, maxZ);
+        material.clippingPlanes = this.createClippingPlanes(minZ, maxZ);
       }
     });
   }
@@ -500,6 +574,7 @@ export class WebGLPreview {
    * @param value - Layer number to end rendering at
    */
   set endLayer(value: number | undefined) {
+    // console.debug('set endLayer', value);
     if (typeof value === 'number') {
       this._endLayer = MathUtils.clamp(value, 1, this.countLayers);
     } else {
@@ -526,12 +601,17 @@ export class WebGLPreview {
    * @param value - True to enable single layer mode
    */
   set singleLayerMode(value: boolean) {
+    if (value == this._singleLayerMode) {
+      return;
+    }
+
     this._singleLayerMode = value;
-    if (value) {
+
+    if (this._singleLayerMode) {
       this.prevStartLayer = this._startLayer;
-      this.startLayer = this._endLayer - 1;
+      this._startLayer = Math.max(this._endLayer - 1, 1);
     } else {
-      this.startLayer = this.prevStartLayer;
+      this._startLayer = this.prevStartLayer;
     }
   }
 
@@ -586,33 +666,69 @@ export class WebGLPreview {
   /**
    * Processes G-code and updates the visualization
    * @param gcode - G-code string or array of strings to process
+   * @param options - Options for rendering: { render: boolean }
+   * @remarks
+   * Parses the G-code, executes commands, and renders the paths if `render` is true.
    */
-  processGCode(gcode: string | string[]): void {
-    const { commands } = this.parser.parseGCode(gcode);
-    this.interpreter.execute(commands, this.job);
-    this.render();
+  async processGCode(gcode: string | string[] | ReadableStream, { render } = { render: true }): Promise<void> {
+    if (gcode instanceof ReadableStream) {
+      await this.readStream(gcode);
+    } else {
+      const { commands } = this.parser.parseGCode(gcode);
+      this.interpreter.execute(commands, this.job);
+    }
+
+    console.debug(
+      `out of ${this.interpreter.points} move commands, the following were pruned due to no actual movement:`
+    );
+    console.debug(this.interpreter.retractions, 'retractions');
+    console.debug(this.interpreter.deretractions, 'deretractions');
+    console.debug(this.interpreter.feedrateChanges, 'feedrateChanges');
+    console.debug(this.interpreter.others, 'other');
+
+    console.debug(Math.round(this.interpreter.extrusionDistance), 'total extrusion distance (mm)');
+
+    if (!this.job.isPlanar) {
+      console.warn('Job is non-planar');
+    }
+
+    if (render) {
+      this.renderAnimated();
+    }
   }
 
   /**
-   * Initializes the Three.js scene by clearing existing elements and setting up lights
+   * Initializes the Three.js scene by clearing the existing model
    * @remarks
    * Clears all existing scene objects and disposables, then adds build volume visualization
    * and lighting if 3D tube rendering is enabled.
    */
   private initScene(): void {
     this.materials = [];
-    while (this.scene.children.length > 0) {
-      this.scene.remove(this.scene.children[0]);
+
+    // Recursively remove all children from the main group and their descendants from the scene
+    const removeRecursively = (object: Group) => {
+      while (object.children.length > 0) {
+        const child = object.children[0];
+        if ((child as Group).children && (child as Group).children.length > 0) {
+          removeRecursively(child as Group);
+        }
+        object.remove(child);
+        this.scene.remove(child);
+      }
+    };
+    if (this.group) {
+      removeRecursively(this.group);
     }
 
-    while (this.disposables.length > 0) {
-      const disposable = this.disposables.pop();
-      if (disposable) disposable.dispose();
-    }
+    // while (this.disposables.length > 0) {
+    //   const disposable = this.disposables.pop();
+    //   if (disposable) disposable.dispose();
+    // }
 
-    if (this.buildVolume) {
-      this.disposables.push(this.buildVolume);
-      this.scene.add(this.buildVolume.createGroup());
+    if (this._buildVolume) {
+      this.disposables.push(this._buildVolume);
+      this._buildVolume.update();
     }
   }
 
@@ -628,8 +744,8 @@ export class WebGLPreview {
     const group = new Group();
     group.name = name;
     group.quaternion.setFromEuler(new Euler(-Math.PI / 2, 0, 0));
-    if (this.buildVolume) {
-      group.position.set(-this.buildVolume.x / 2, 0, this.buildVolume.y / 2);
+    if (this._buildVolume) {
+      // group.position.set(-this._buildVolume.x / 2, 0, this._buildVolume.y / 2);
     } else {
       // FIXME: this is just a very crude approximation for centering
       group.position.set(-100, 0, 100);
@@ -642,10 +758,16 @@ export class WebGLPreview {
    */
   render(): void {
     const startRender = performance.now();
-    this.group = this.createGroup('allLayers');
+    this.group = this.group ?? this.createGroup('allLayers');
+    this.currentChunk = this.group;
     this.initScene();
 
+    this.renderPathIndex = 0;
+
     this.renderPaths();
+    if (this.boundingBoxColor !== undefined) {
+      this.renderBoundingBox();
+    }
 
     this.scene.add(this.group);
     this.renderer.render(this.scene, this.camera);
@@ -658,7 +780,10 @@ export class WebGLPreview {
    * @param pathCount - Number of paths to render per frame
    * @returns Promise that resolves when rendering is complete
    */
-  async renderAnimated(pathCount = 1): Promise<void> {
+  async renderAnimated(pathCount: number | undefined = undefined): Promise<void> {
+    // sensible default for pathCount
+    pathCount = pathCount ?? Math.floor(this.job.paths.length / 60);
+
     this.initScene();
 
     this.renderPathIndex = 0;
@@ -697,11 +822,47 @@ export class WebGLPreview {
    * Updates the renderPathIndex to track progress through the job's paths.
    */
   private renderFrame(pathCount: number): void {
-    this.group = this.createGroup('parts' + this.renderPathIndex);
+    if (!this.group) {
+      this.group = this.createGroup('allLayers');
+      this.scene.add(this.group);
+    }
+    const chunk = new Group();
+    chunk.name = 'chunk' + this.renderPathIndex;
+    this.currentChunk = chunk;
     const endPathNumber = Math.min(this.renderPathIndex + pathCount, this.job.paths.length - 1);
     this.renderPaths(endPathNumber);
+    if (this._boundingBoxColor !== undefined) {
+      this.renderBoundingBox();
+    }
     this.renderPathIndex = endPathNumber;
-    this.scene.add(this.group);
+    this.group?.add(chunk);
+  }
+
+  private renderBoundingBox(): void {
+    if (!this.job || !this.job.boundingBox.isValid) {
+      console.error('Invalid bounding box, skipping rendering');
+      return;
+    }
+
+    // create the bounding box mesh if it doesn't exist
+    if (!this.boundingBoxMesh) {
+      this.boundingBoxMesh = this.createBoundingBox();
+      this.boundingBoxMesh.name = 'bounding-box';
+
+      this.scene.add(this.boundingBoxMesh);
+    }
+
+    this.boundingBoxMesh.visible = this._boundingBoxColor !== undefined;
+    (this.boundingBoxMesh.material as LineBasicMaterial).color = this._boundingBoxColor;
+  }
+
+  createBoundingBox(): LineBox {
+    const bb = this.job.boundingBox;
+    const size = bb.size;
+    const mesh = new LineBox(size.x, size.z, size.y, this._boundingBoxColor, false);
+    const pos = bb.corners.min.toVector3();
+    mesh.position.set(pos.x, pos.y, pos.z);
+    return mesh;
   }
 
   // reset parser & processing state
@@ -719,7 +880,7 @@ export class WebGLPreview {
    * Called when clearing the preview or starting a new job.
    */
   private resetState(): void {
-    this.startLayer = 1;
+    this.startLayer = undefined;
     this.endLayer = Infinity;
     this._singleLayerMode = false;
     this.devGui?.reset();
@@ -740,6 +901,13 @@ export class WebGLPreview {
     this.renderer.dispose();
 
     this.cancelAnimation();
+
+    this.devGui?.destroy();
+    this.devGui = undefined;
+
+    this.stats?.end();
+    this.stats?.dom?.remove();
+    this.stats = undefined;
   }
 
   /**
@@ -751,42 +919,6 @@ export class WebGLPreview {
   private cancelAnimation(): void {
     if (this.animationFrameId !== undefined) cancelAnimationFrame(this.animationFrameId);
     this.animationFrameId = undefined;
-  }
-
-  /**
-   * Enables drag and drop handling for G-code files
-   * @remarks
-   * Adds event listeners for drag and drop operations on the canvas.
-   * @deprecated This feature is deprecated
-   */
-  private _enableDropHandler(): void {
-    console.warn('Drag and drop is deprecated as a library feature. See the demo how to implement your own.');
-    this.canvas.addEventListener('dragover', (evt) => {
-      evt.stopPropagation();
-      evt.preventDefault();
-      if (evt.dataTransfer) evt.dataTransfer.dropEffect = 'copy';
-      this.canvas.classList.add('dragging');
-    });
-
-    this.canvas.addEventListener('dragleave', (evt) => {
-      evt.stopPropagation();
-      evt.preventDefault();
-      this.canvas.classList.remove('dragging');
-    });
-
-    this.canvas.addEventListener('drop', async (evt) => {
-      evt.stopPropagation();
-      evt.preventDefault();
-      this.canvas.classList.remove('dragging');
-      const files: FileList | [] = evt.dataTransfer?.files ?? [];
-      const file = files[0];
-
-      this.clear();
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await this._readFromStream(file.stream() as unknown as ReadableStream<any>);
-      this.render();
-    });
   }
 
   /**
@@ -816,15 +948,17 @@ export class WebGLPreview {
    * @param color - Color to use for the lines
    */
   private renderPathsAsLines(paths: Path[], color: Color): void {
-    const minZ = this.job.layers[this._startLayer - 1]?.z ?? 0;
-    const maxZ = this.job.layers[this._endLayer - 1]?.z ?? Infinity;
+    const minZ = this.job.layers[this._startLayer - 1]?.z;
+    const maxZ = this.job.layers[this._endLayer - 1]?.z;
+
+    let clippingPlanes: Plane[] = [];
+    clippingPlanes = this.createClippingPlanes(minZ, maxZ);
 
     const material = new LineMaterial({
       color: Number(color.getHex()),
-      linewidth: this.lineWidth
+      linewidth: this.lineWidth,
+      clippingPlanes
     });
-
-    this.applyMinMaxClippingPlanes(material, minZ, maxZ);
 
     const lineVertices: number[] = [];
 
@@ -846,7 +980,7 @@ export class WebGLPreview {
 
     this.disposables.push(material);
     this.disposables.push(geometry);
-    this.group?.add(line);
+    this.currentChunk?.add(line);
   }
 
   /**
@@ -867,6 +1001,9 @@ export class WebGLPreview {
         extrusionWidthOverride: this.extrusionWidth,
         lineHeightOverride: this.lineHeight
       });
+
+      if (!geometry) return;
+
       this.disposables.push(geometry);
       geometries.push(geometry);
     });
@@ -874,7 +1011,7 @@ export class WebGLPreview {
     const batchedMesh = this.createBatchMesh(geometries, material);
     this.disposables.push(material);
 
-    this.group?.add(batchedMesh);
+    this.currentChunk?.add(batchedMesh);
   }
 
   /**
@@ -891,28 +1028,29 @@ export class WebGLPreview {
 
     geometries.forEach((geometry) => {
       const geometryId = batchedMesh.addGeometry(geometry);
-      batchedMesh.addInstance(geometryId);
+      // NOTE: for older versions of three.js, addInstance is not available
+      // This allow webgl1 browsers to use the batched mesh
+      batchedMesh.addInstance?.(geometryId);
     });
 
     return batchedMesh;
   }
 
-  /**
-   * Reads and processes G-code from a stream
-   * @experimental
-   * @param stream - Readable stream containing G-code data
-   * @returns Promise that resolves when stream processing is complete
-   */
-  async _readFromStream(stream: ReadableStream): Promise<void> {
+  async readStream(stream: ReadableStream): Promise<void> {
     const reader = stream.getReader();
     let result;
     let tail = '';
     let size = 0;
+
     do {
-      console.debug('reading from stream');
       result = await reader.read();
-      size += result.value?.length ?? 0;
-      const str = decode(result.value);
+      const length = result.value?.length ?? 0;
+      if (length === 0) {
+        break;
+      }
+      console.debug('reading from stream', Math.floor(length / 1024), 'kB');
+      size += length;
+      const str = result.value;
       const idxNewLine = str.lastIndexOf('\n');
       const maxFullLine = str.slice(0, idxNewLine);
 
@@ -924,8 +1062,8 @@ export class WebGLPreview {
 
       tail = str.slice(idxNewLine);
     } while (!result.done);
-    console.debug('read from stream', size);
-    this.render();
+
+    console.debug('total read from stream', Math.floor(size / 1024), 'kB');
   }
 
   /**
@@ -952,8 +1090,38 @@ export class WebGLPreview {
       this.initGui();
     }
   }
-}
 
-function decode(uint8array: Uint8Array) {
-  return new TextDecoder('utf-8').decode(uint8array);
+  saveCamera() {
+    localStorage.setItem('cameraPosition', JSON.stringify(this.camera.position));
+    localStorage.setItem('cameraRotation', JSON.stringify(this.camera.rotation));
+    localStorage.setItem('cameraZoom', JSON.stringify(this.camera.zoom));
+    localStorage.setItem('cameraTarget', JSON.stringify(this.controls.target));
+  }
+  loadCamera() {
+    const position = JSON.parse(localStorage.getItem('cameraPosition'));
+    const rotation = JSON.parse(localStorage.getItem('cameraRotation'));
+    const zoom = JSON.parse(localStorage.getItem('cameraZoom'));
+    const target = JSON.parse(localStorage.getItem('cameraTarget'));
+    if (position && rotation && zoom && target) {
+      this.camera.position.x = position.x;
+      this.camera.position.y = position.y;
+      this.camera.position.z = position.z;
+      this.camera.rotation.x = rotation.x;
+      this.camera.rotation.y = rotation.y;
+      this.camera.rotation.z = rotation.z;
+      this.camera.zoom = zoom;
+      // this.camera.updateProjectionMatrix();
+      this.controls.target.x = target.x;
+      this.controls.target.y = target.y;
+      this.controls.target.z = target.z;
+      this.controls.update();
+    }
+  }
+
+  clearCamera() {
+    localStorage.removeItem('cameraPosition');
+    localStorage.removeItem('cameraRotation');
+    localStorage.removeItem('cameraZoom');
+    localStorage.removeItem('cameraTarget');
+  }
 }

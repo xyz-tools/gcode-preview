@@ -3,7 +3,8 @@ export const defaultSettings = {
   buildVolume: {
     x: 180,
     y: 180,
-    z: 180
+    z: 180,
+    smallGrid: false
   },
   initialCameraPosition: [-200, 232, 200], // resembles the angle of thumbnail
   lineHeight: 0.2,
@@ -14,9 +15,8 @@ export const defaultSettings = {
     buildVolume: true,
     devHelpers: true
   },
-  startLayer: 1,
+  startLayer: undefined, // number | undefined
   endLayer: 1,
-  maxLayer: 1000000, // Infinity doesn't work
   singleLayerMode: false,
   renderTravel: false,
   travelColor: 'red',

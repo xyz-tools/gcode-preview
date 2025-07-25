@@ -108,8 +108,10 @@ export class Path {
    * @returns BufferGeometry representing the path
    */
   geometry(opts: { extrusionWidthOverride?: number; lineHeightOverride?: number } = {}): BufferGeometry {
-    if (this._vertices.length < 3) {
-      return new BufferGeometry();
+    if (this._vertices.length < 6) {
+      // a path needs at least 2 points to be valid
+      console.warn('Path has less than 6 points, returning empty geometry');
+      return null;
     }
 
     return new ExtrusionGeometry(
