@@ -3,6 +3,8 @@ import { SlicerMetadataParser, SlicerMetadataResult } from './metadata-parser-ba
 import { PrusaSlicerMetadataParser } from './prusa-slicer-parser';
 import { CuraMetadataParser } from './cura-parser';
 import { PrusaFamilyMetadataParser } from './prusa-family-parser';
+import { Simplify3DMetadataParser } from './simplify3d-parser';
+import { Slic3rMetadataParser } from './slic3r-parser';
 
 /**
  * Available slicer metadata parsers
@@ -10,6 +12,8 @@ import { PrusaFamilyMetadataParser } from './prusa-family-parser';
 const AVAILABLE_PARSERS: SlicerMetadataParser[] = [
   new PrusaSlicerMetadataParser(),
   new PrusaFamilyMetadataParser(),
+  new Simplify3DMetadataParser(),
+  new Slic3rMetadataParser(),
   new CuraMetadataParser()
 ];
 
@@ -34,9 +38,7 @@ export function detectSlicer(commands: GCodeCommand[]): SlicerMetadataParser | n
  * @param commands - Array of gcode commands
  * @returns Parsed metadata result with layers and detected slicer name
  */
-export function parseSlicerMetadata(commands: GCodeCommand[]): SlicerMetadataResult {
-  const parser = detectSlicer(commands);
-
+export function parseSlicerMetadata(commands: GCodeCommand[], parser: SlicerMetadataParser): SlicerMetadataResult {
   if (!parser) {
     return { layers: [] };
   }
