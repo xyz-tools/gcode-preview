@@ -212,14 +212,16 @@ export class Parser {
     // chunks it has already handled
     const commands = this.lines2commands(lines);
 
+    const comments = commands.filter((cmd) => cmd.comment);
+
     // Extract thumbnails
-    const thumbs = this.parseMetadata(commands.filter((cmd) => cmd.comment)).thumbnails;
+    const thumbs = this.parseMetadata(comments).thumbnails;
     for (const [key, value] of Object.entries(thumbs)) {
       this.metadata.thumbnails[key] = value;
     }
 
     // Extract layer metadata from slicer comments
-    const slicerMetadata = parseSlicerMetadata(commands);
+    const slicerMetadata = parseSlicerMetadata(comments);
     if (slicerMetadata.layers.length > 0) {
       this.metadata.layerMetadata = slicerMetadata.layers;
       this.metadata.slicerName = slicerMetadata.slicerName;

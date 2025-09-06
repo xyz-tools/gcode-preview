@@ -3,7 +3,7 @@ import { State } from './state';
 import { Layer } from './layer';
 import {
   TravelTypeIndexer,
-  LayersIndexer,
+  LayersMetadataIndexer,
   ToolIndexer,
   Indexer,
   NonApplicableIndexer,
@@ -46,12 +46,13 @@ export class Job {
     this.state = opts.state || State.initial;
     this.indexers = [
       new TravelTypeIndexer({ travel: this.travelPaths, extrusion: this.extrusionPaths }),
-      new LayersIndexer(this._layers, opts.minLayerThreshold),
+      new LayersMetadataIndexer(this._layers, [], opts.minLayerThreshold),
       new ToolIndexer(this._toolPaths)
     ];
   }
 
   /**
+   *
    * Gets all extrusion paths in the job
    * @returns Array of extrusion paths
    */

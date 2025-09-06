@@ -100,9 +100,10 @@ test('parseSlicerMetadata returns empty result for unknown slicer', () => {
 test('getAvailableParsers returns all parsers', () => {
   const parsers = getAvailableParsers();
 
-  expect(parsers).toHaveLength(2);
+  expect(parsers).toHaveLength(3);
   expect(parsers[0].slicerName).toBe('PrusaSlicer');
-  expect(parsers[1].slicerName).toBe('Cura');
+  expect(parsers[1].slicerName).toBe('PrusaFamily');
+  expect(parsers[2].slicerName).toBe('Cura');
 });
 
 test('parseSlicerMetadata handles empty commands array', () => {
