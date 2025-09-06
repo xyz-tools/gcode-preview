@@ -12,18 +12,6 @@ import {
 import { BoundingBox } from './bounding-box';
 
 /**
- * Represents the current state of the print job
- * @remarks
- * Tracks the current position, extrusion state, active tool, and units
- */
-
-/**
- * Represents a single layer in the print job
- * @remarks
- * Contains information about the layer number, paths, height, and Z position
- */
-
-/**
  * Represents a complete print job containing paths, layers, and state
  * @remarks
  * Manages the collection of paths, organizes them into layers and tools,
@@ -147,6 +135,14 @@ export class Job {
    */
   get isPlanar(): boolean {
     return this.layers.length > 0;
+  }
+
+  /**
+   * Gets the total number of layers in the job
+   * @returns Number of layers
+   */
+  get countLayers(): number {
+    return this.layers.length;
   }
 
   /**

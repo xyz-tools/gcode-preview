@@ -2,19 +2,19 @@
 
 import { test, expect, vi, assert } from 'vitest';
 
-import { WebGLPreview } from '../webgl-preview';
+import { Renderer } from '../renderer';
 import { GCodeCommand } from '../gcode-parser';
 
-// add a test for destroying the preview which should cancel the render loop.
-test('destroying the preview should dispose renderer and controls', async () => {
-  const mock = createMockPreview();
+// add a test for destroying the renderer which should cancel the render loop.
+test('destroying the renderer should dispose renderer and controls', async () => {
+  const mock = createMockRenderer();
 
-  WebGLPreview.prototype.animate.call(mock);
+  Renderer.prototype.animate.call(mock);
   // wait 50ms
   await new Promise((resolve) => setTimeout(resolve, 50));
 
-  // destroy the preview
-  WebGLPreview.prototype.dispose.call(mock);
+  // destroy the renderer
+  Renderer.prototype.dispose.call(mock);
 
   expect(mock.renderer.dispose).toHaveBeenCalledTimes(1);
   expect(mock.controls.dispose).toHaveBeenCalledTimes(1);
@@ -26,11 +26,11 @@ test('destroying the preview should dispose renderer and controls', async () => 
   });
 });
 
-// add a test for destroying the preview which should cancel the render loop.
-test('destroying the preview should call cancelAnimation', async () => {
-  const mock = createMockPreview();
+// add a test for destroying the renderer which should cancel the render loop.
+test('destroying the renderer should call cancelAnimation', async () => {
+  const mock = createMockRenderer();
 
-  WebGLPreview.prototype.animate.call(mock);
+  Renderer.prototype.animate.call(mock);
 
   // wait 50ms
   await new Promise((resolve) => setTimeout(resolve, 50));
@@ -39,15 +39,15 @@ test('destroying the preview should call cancelAnimation', async () => {
   callCount = mock.controls.update.mock.calls.length;
   assert(callCount > 2, 'callCount > 2');
 
-  // destroy the preview
-  WebGLPreview.prototype.dispose.call(mock);
+  // destroy the renderer
+  Renderer.prototype.dispose.call(mock);
   expect(mock.cancelAnimation).toHaveBeenCalledTimes(1);
 });
 
 test('cancelAnimation should cancel the render loop', async () => {
-  const mock = createMockPreview();
+  const mock = createMockRenderer();
 
-  WebGLPreview.prototype.animate.call(mock);
+  Renderer.prototype.animate.call(mock);
 
   // wait 50ms
   await new Promise((resolve) => setTimeout(resolve, 50));
@@ -64,7 +64,7 @@ test('cancelAnimation should cancel the render loop', async () => {
   expect(callCountAfterDestroy).toBe(callCountAfterDestroy2);
 });
 
-function createMockPreview() {
+function createMockRenderer() {
   return {
     // state: State.initial,
     minLayerIndex: 0,
@@ -99,9 +99,9 @@ function createMockPreview() {
     addLineSegment: () => {},
     doRenderExtrusion: () => {},
     render: vi.fn(() => {}),
-    animate: vi.fn(WebGLPreview.prototype.animate),
+    animate: vi.fn(Renderer.prototype.animate),
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
-    cancelAnimation: vi.fn(WebGLPreview.prototype.cancelAnimation)
+    cancelAnimation: vi.fn(Renderer.prototype.cancelAnimation)
   };
 }

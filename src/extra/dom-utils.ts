@@ -1,10 +1,10 @@
-import { WebGLPreview } from '../webgl-preview.js';
+import { GCodePreview } from '../gcode-preview.js';
 
 /**
  * Enables drag and drop handling for G-code files
  */
-export function makeDroppable(previewInstance: WebGLPreview): void {
-  const element = previewInstance.canvas;
+export function makeDroppable(previewInstance: GCodePreview): void {
+  const element = previewInstance.renderer.canvas;
 
   element.addEventListener('dragover', (evt) => {
     evt.preventDefault();
@@ -35,10 +35,10 @@ export function makeDroppable(previewInstance: WebGLPreview): void {
  * @returns Promise that resolves when file processing is complete
  * @emits update - Custom event with file metadata when file ends
  */
-async function readFile(preview: WebGLPreview, file: File): Promise<void> {
-  await preview.processGCode(file.stream().pipeThrough(new TextDecoderStream()));
+async function readFile(preview: GCodePreview, file: File): Promise<void> {
+  await preview.processGCodeStream(file.stream().pipeThrough(new TextDecoderStream()));
   // preview.processGCode ( await file.text() )
-  preview.endLayer = preview.job.layers.length;
+  preview.renderer.endLayer = preview.job.layers.length;
 
   // dispatch a custom event to notify that the file has been loaded
   const event = new CustomEvent('update', {
@@ -49,5 +49,5 @@ async function readFile(preview: WebGLPreview, file: File): Promise<void> {
       paths: preview.job.paths.length
     }
   });
-  preview.canvas.dispatchEvent(event);
+  preview.renderer.canvas.dispatchEvent(event);
 }

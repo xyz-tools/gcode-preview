@@ -1,5 +1,6 @@
 import { GUI } from 'lil-gui';
-import { WebGLPreview } from './webgl-preview';
+import { GCodePreview } from './gcode-preview';
+import { Renderer } from './renderer';
 
 /**
  * Configuration options for development mode GUI
@@ -24,7 +25,8 @@ export type DevModeOptions = {
  */
 class DevGUI {
   private gui: GUI;
-  private webglPreview;
+  private renderer: Renderer;
+  private gcodePreview: GCodePreview;
   private options?: DevModeOptions | undefined;
   private openFolders: string[] = [];
 
@@ -33,8 +35,9 @@ class DevGUI {
    * @param watchedObject - The object to monitor and control
    * @param options - Configuration options for the GUI
    */
-  constructor(webglPreview: WebGLPreview, options?: DevModeOptions | undefined) {
-    this.webglPreview = webglPreview;
+  constructor(watchedObject: GCodePreview, options?: DevModeOptions | undefined) {
+    this.gcodePreview = watchedObject;
+    this.renderer = this.gcodePreview.renderer;
     this.options = options;
 
     this.gui = new GUI();
@@ -116,17 +119,17 @@ class DevGUI {
     render.onOpenClose(() => {
       this.saveOpenFolders();
     });
-    render.add(this.webglPreview.renderer.info.render, 'triangles').listen();
-    render.add(this.webglPreview.renderer.info.render, 'calls').listen();
-    render.add(this.webglPreview.renderer.info.render, 'lines').listen();
-    render.add(this.webglPreview.renderer.info.render, 'points').listen();
-    render.add(this.webglPreview.renderer.info.memory, 'geometries').listen();
-    render.add(this.webglPreview.renderer.info.memory, 'textures').listen();
-    render.add(this.webglPreview, '_lastRenderTime').listen();
+    render.add(this.renderer.renderer.info.render, 'triangles').listen();
+    render.add(this.renderer.renderer.info.render, 'calls').listen();
+    render.add(this.renderer.renderer.info.render, 'lines').listen();
+    render.add(this.renderer.renderer.info.render, 'points').listen();
+    render.add(this.renderer.renderer.info.memory, 'geometries').listen();
+    render.add(this.renderer.renderer.info.memory, 'textures').listen();
+    render.add(this.renderer, 'lastRenderTime').listen();
 
-    render.add(this.webglPreview, 'ambientLight', 0, 1, 0.01);
-    render.add(this.webglPreview, 'directionalLight', 0, 2, 0.1);
-    render.add(this.webglPreview, 'brightness', 0, 2, 0.1);
+    render.add(this.renderer, 'ambientLight', 0, 1, 0.01);
+    render.add(this.renderer, 'directionalLight', 0, 2, 0.1);
+    render.add(this.renderer, 'brightness', 0, 2, 0.1);
   }
 
   /**
@@ -141,21 +144,21 @@ class DevGUI {
       this.saveOpenFolders();
     });
     const cameraPosition = camera.addFolder('Camera position');
-    cameraPosition.add(this.webglPreview.camera.position, 'x').listen();
-    cameraPosition.add(this.webglPreview.camera.position, 'y').listen();
-    cameraPosition.add(this.webglPreview.camera.position, 'z').listen();
+    cameraPosition.add(this.renderer.camera.position, 'x').listen();
+    cameraPosition.add(this.renderer.camera.position, 'y').listen();
+    cameraPosition.add(this.renderer.camera.position, 'z').listen();
 
     // button to save camera position to local storage
     // cameraPosition.add({
     //   saveCameraPosition: () => {
-    //     localStorage.setItem('cameraPosition', JSON.stringify(this.webglPreview.camera.position));
+    //     localStorage.setItem('cameraPosition', JSON.stringify(this.renderer.camera.position));
     //   },
     // }, 'saveCameraPosition').name('Save camera position');
 
     const cameraRotation = camera.addFolder('Camera rotation');
-    cameraRotation.add(this.webglPreview.camera.rotation, 'x').listen();
-    cameraRotation.add(this.webglPreview.camera.rotation, 'y').listen();
-    cameraRotation.add(this.webglPreview.camera.rotation, 'z').listen();
+    cameraRotation.add(this.renderer.camera.rotation, 'x').listen();
+    cameraRotation.add(this.renderer.camera.rotation, 'y').listen();
+    cameraRotation.add(this.renderer.camera.rotation, 'z').listen();
   }
 
   /**
@@ -169,18 +172,18 @@ class DevGUI {
     parser.onOpenClose(() => {
       this.saveOpenFolders();
     });
-    parser.add(this.webglPreview.job.state, 'x').listen();
-    parser.add(this.webglPreview.job.state, 'y').listen();
-    parser.add(this.webglPreview.job.state, 'z').listen();
-    parser.add(this.webglPreview.job.paths, 'length').name('paths.count').listen();
-    parser.add(this.webglPreview.parser.lines, 'length').name('lines.count').listen();
+    parser.add(this.gcodePreview.job.state, 'x').listen();
+    parser.add(this.gcodePreview.job.state, 'y').listen();
+    parser.add(this.gcodePreview.job.state, 'z').listen();
+    parser.add(this.gcodePreview.job.paths, 'length').name('paths.count').listen();
+    parser.add(this.gcodePreview.parser.lines, 'length').name('lines.count').listen();
   }
 
   /**
    * Sets up the build volume controls panel with dimension controls
    */
   private setupBuildVolumeFolder(): void {
-    if (!this.webglPreview.buildVolume) {
+    if (!this.renderer.buildVolume) {
       return;
     }
     const buildVolume = this.gui.addFolder('Build Volume');
@@ -190,9 +193,9 @@ class DevGUI {
     buildVolume.onOpenClose(() => {
       this.saveOpenFolders();
     });
-    buildVolume.add(this.webglPreview.buildVolume, 'x').min(0).max(600).step(10).listen();
-    buildVolume.add(this.webglPreview.buildVolume, 'y').min(0).max(600).step(10).listen();
-    buildVolume.add(this.webglPreview.buildVolume, 'z').min(0).max(600).step(10).listen();
+    buildVolume.add(this.renderer.buildVolume, 'x').min(0).max(600).step(10).listen();
+    buildVolume.add(this.renderer.buildVolume, 'y').min(0).max(600).step(10).listen();
+    buildVolume.add(this.renderer.buildVolume, 'z').min(0).max(600).step(10).listen();
   }
 
   /**
@@ -207,18 +210,18 @@ class DevGUI {
       this.saveOpenFolders();
     });
     // devHelpers
-    //   .add(this.webglPreview, '_wireframe')
+    //   .add(this.renderer, '_wireframe')
     //   .listen()
     //   .onChange(() => {
-    //     this.webglPreview.render();
+    //     this.renderer.render();
     //   });
-    devHelpers.add(this.webglPreview, 'render').listen();
-    devHelpers.add(this.webglPreview, 'clear').listen();
-    devHelpers.add(this.webglPreview, 'dispose').listen();
+    devHelpers.add(this.gcodePreview, 'render').listen();
+    devHelpers.add(this.gcodePreview, 'clear').listen();
+    devHelpers.add(this.gcodePreview, 'dispose').listen();
 
-    devHelpers.add(this.webglPreview, 'saveCamera').listen();
-    devHelpers.add(this.webglPreview, 'loadCamera').listen();
-    devHelpers.add(this.webglPreview, 'clearCamera').listen();
+    devHelpers.add(this.renderer, 'saveCamera').listen();
+    devHelpers.add(this.renderer, 'loadCamera').listen();
+    devHelpers.add(this.renderer, 'clearCamera').listen();
   }
 }
 
