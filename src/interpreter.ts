@@ -1,5 +1,5 @@
 import { Path, PathType } from './path';
-import { GCodeCommand } from './gcode-parser';
+import { GCodeCommand } from './parser/gcode-parser';
 import { Job } from './job';
 
 // eslint-disable-next-line no-unused-vars

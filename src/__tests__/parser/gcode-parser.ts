@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { GCodeCommand, Parser } from '../gcode-parser';
+import { GCodeCommand, Parser } from '../../parser/gcode-parser';
 
 test('a single extrusion cmd should result in 1 command', () => {
   const parser = new Parser();

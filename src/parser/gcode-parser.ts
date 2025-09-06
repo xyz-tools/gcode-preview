@@ -1,4 +1,6 @@
-import { Thumbnail } from './thumbnail';
+import { Thumbnail } from '../thumbnail';
+import { LayerMetadata } from './metadata-parser-base';
+import { parseSlicerMetadata } from './slicer-detector';
 
 /**
  * Parameters for G-code commands used in 3D printing.
@@ -103,7 +105,11 @@ export class GCodeCommand {
 }
 
 export type ParseResult = { metadata: Metadata; commands: GCodeCommand[] };
-export type Metadata = { thumbnails: Record<string, Thumbnail> };
+export type Metadata = {
+  thumbnails: Record<string, Thumbnail>;
+  layerMetadata?: LayerMetadata[];
+  slicerName?: string;
+};
 
 /**
  * Whether a character code is an ASCII letter, which is what opens a G-code word.
@@ -206,10 +212,17 @@ export class Parser {
     // chunks it has already handled
     const commands = this.lines2commands(lines);
 
-    // merge thumbs
+    // Extract thumbnails
     const thumbs = this.parseMetadata(commands.filter((cmd) => cmd.comment)).thumbnails;
     for (const [key, value] of Object.entries(thumbs)) {
       this.metadata.thumbnails[key] = value;
+    }
+
+    // Extract layer metadata from slicer comments
+    const slicerMetadata = parseSlicerMetadata(commands);
+    if (slicerMetadata.layers.length > 0) {
+      this.metadata.layerMetadata = slicerMetadata.layers;
+      this.metadata.slicerName = slicerMetadata.slicerName;
     }
 
     return { metadata: this.metadata, commands: commands };

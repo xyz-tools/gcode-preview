@@ -4,7 +4,7 @@ import { test, expect, vi, afterEach, beforeEach } from 'vitest';
 
 import { SceneManager, SceneManagerOptions } from '../scene-manager';
 import { Job } from '../job';
-import { Parser } from '../gcode-parser';
+import { Parser } from '../parser/gcode-parser';
 import { Interpreter } from '../interpreter';
 import { Path, PathType } from '../path';
 import { BatchedMesh, Color, OrthographicCamera, PerspectiveCamera } from 'three';

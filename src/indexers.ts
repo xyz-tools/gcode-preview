@@ -1,5 +1,6 @@
 import { Path, PathType } from './path';
-import { Layer } from './layer'; // Assuming Layer is now in its own file
+import { Layer } from './layer';
+import { LayerMetadata } from './parser/metadata-parser-base';
 
 /**
  * Base error class for indexer-related errors
@@ -164,6 +165,122 @@ export class ToolIndexer extends Indexer {
         this.indexes[path.tool] = [];
       }
       this.indexes[path.tool].push(path);
+    }
+  }
+}
+
+/**
+ * Indexer that organizes paths into layers using slicer metadata when available,
+ * falling back to tolerance-based detection
+ */
+export class LayersMetadataIndexer extends Indexer {
+  /** Array of layers being managed */
+  declare protected indexes: Layer[];
+
+  /** Layer metadata from slicer comments */
+  private layerMetadata: LayerMetadata[];
+
+  /** Fallback tolerance indexer */
+  private fallbackIndexer: LayersIndexer;
+
+  /** Current layer index for metadata-based indexing */
+  private currentMetadataLayerIndex = 0;
+
+  /**
+   * Creates a new LayersMetadataIndexer
+   * @param indexes - Array to store layers
+   * @param layerMetadata - Layer metadata from slicer comments
+   * @param tolerance - Height tolerance for fallback detection
+   */
+  constructor(
+    indexes: Layer[],
+    layerMetadata: LayerMetadata[] = [],
+    tolerance: number = LayersIndexer.DEFAULT_TOLERANCE
+  ) {
+    super(indexes);
+    this.layerMetadata = layerMetadata;
+    this.fallbackIndexer = new LayersIndexer([], tolerance);
+  }
+
+  /**
+   * Sorts a path into the appropriate layer using metadata or tolerance fallback
+   * @param path - Path to sort
+   * @throws NonPlanarPathError if path is non-planar
+   */
+  sortIn(path: Path): void {
+    // If we have metadata, use it
+    if (this.layerMetadata.length > 0) {
+      this.sortWithMetadata(path);
+    } else {
+      // Fallback to tolerance-based detection
+      this.fallbackIndexer.sortIn(path);
+      // Copy layers from fallback indexer to our indexes
+      this.syncFromFallback();
+    }
+  }
+
+  /**
+   * Sort path using slicer metadata
+   * @param path - Path to sort
+   */
+  private sortWithMetadata(path: Path): void {
+    if (path.travelType === PathType.Extrusion) {
+      const pathZ = path.vertices[2];
+
+      // Find the appropriate layer based on Z position
+      let targetLayerIndex = -1;
+      for (let i = this.currentMetadataLayerIndex; i < this.layerMetadata.length; i++) {
+        const metadata = this.layerMetadata[i];
+        // If metadata has Z, use it for matching, otherwise just use layer order
+        if (metadata.z !== undefined) {
+          if (pathZ <= metadata.z + 0.01) {
+            // small tolerance for floating point
+            targetLayerIndex = i;
+            break;
+          }
+        } else {
+          // No Z in metadata, just use the first available layer
+          targetLayerIndex = i;
+          break;
+        }
+      }
+
+      // If we found a matching layer in metadata
+      if (targetLayerIndex >= 0) {
+        // Ensure we have enough layers in our indexes
+        while (this.indexes.length <= targetLayerIndex) {
+          const metadata = this.layerMetadata[this.indexes.length];
+          const z = metadata.z !== undefined ? metadata.z : pathZ; // Use path Z if metadata Z missing
+          const height = metadata.height || 0.2; // default height if not specified
+          this.indexes.push(new Layer(z, height));
+        }
+
+        this.currentMetadataLayerIndex = targetLayerIndex;
+        this.indexes[targetLayerIndex].paths.push(path);
+      } else {
+        // If no metadata match, add to last layer or create new one
+        if (this.indexes.length === 0) {
+          this.indexes.push(new Layer(pathZ, 0.2));
+        }
+        this.indexes[this.indexes.length - 1].paths.push(path);
+      }
+    } else {
+      // Travel paths go to the last layer
+      if (this.indexes.length > 0) {
+        this.indexes[this.indexes.length - 1].paths.push(path);
+      }
+    }
+  }
+
+  /**
+   * Copy layers from fallback indexer to our indexes
+   */
+  private syncFromFallback(): void {
+    const fallbackLayers = (this.fallbackIndexer as { indexes: Layer[] }).indexes;
+    for (const layer of fallbackLayers) {
+      if (!this.indexes.includes(layer)) {
+        this.indexes.push(layer);
+      }
     }
   }
 }
