@@ -89,8 +89,8 @@ export class GCodePreview {
     this.opts = opts;
     this._parser = new Parser();
     this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
-    this._renderer = new Renderer(this.opts, this.job, () => this.stats?.update());
     this.stats = this.devMode ? new Stats() : undefined;
+    this._renderer = new Renderer(this.opts, this.job, () => this.stats?.update());
     this.devMode = opts?.devMode;
 
     this.initStats();
