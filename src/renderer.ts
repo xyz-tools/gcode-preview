@@ -170,14 +170,14 @@ export class Renderer {
   /** Whether to preserve drawing buffer */
   private preserveDrawingBuffer = false;
   private currentChunk: Group;
-  private animateCallback: () => void;
+  private onFrame: () => void;
 
   /**
    * Creates a new Renderer instance
    * @param opts - Configuration options
    * @throws Error if no canvas element is provided
    */
-  constructor(opts: RendererOptions, job: Job, animateCallback?: () => void) {
+  constructor(opts: RendererOptions, job: Job, onFrame?: () => void) {
     this.job = job;
     this.scene = new Scene();
     this.scene.background = this._backgroundColor;
@@ -204,7 +204,7 @@ export class Renderer {
     this.nonTravelmoves = opts.nonTravelMoves ?? this.nonTravelmoves;
     this.renderTubes = opts.renderTubes ?? this.renderTubes;
     this.extrusionWidth = opts.extrusionWidth;
-    this.animateCallback = animateCallback;
+    this.onFrame = onFrame;
 
     if (opts.boundingBoxColor !== undefined) {
       this._boundingBoxColor = new Color(opts.boundingBoxColor);
@@ -613,8 +613,8 @@ export class Renderer {
     this.animationFrameId = requestAnimationFrame(() => this.animate());
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
-    if (this.animateCallback) {
-      this.animateCallback();
+    if (this.onFrame) {
+      this.onFrame();
     }
   }
 
