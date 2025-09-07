@@ -46,7 +46,7 @@ export const app = (window.app = createApp({
 
     // Update UI with current preview settings
     const updateUI = async () => {
-      const { parser, renderer, countLayers } = preview;
+      const { parser, sceneManager, countLayers } = preview;
       const {
         topLayerColor,
         lastSegmentColor,
@@ -61,7 +61,7 @@ export const app = (window.app = createApp({
         boundingBoxColor,
         extrusionColor,
         backgroundColor
-      } = renderer;
+      } = sceneManager;
       const { thumbnails } = parser.metadata;
 
       // thumbnail.value = thumbnails['220x124']?.src;
@@ -98,7 +98,7 @@ export const app = (window.app = createApp({
       };
       console.debug('app settings:', currentSettings);
       Object.assign(settings.value, currentSettings);
-      renderer.endLayer = countLayers;
+      sceneManager.endLayer = countLayers;
 
       applyDevMode(enableDevMode.value);
     };
@@ -121,7 +121,7 @@ export const app = (window.app = createApp({
 
     const render = async () => {
       if (loadProgressive.value && preview.job.layers !== null) {
-        await preview.renderer.renderAnimated();
+        await preview.sceneManager.renderAnimated();
       } else {
         preview.render();
       }
@@ -156,7 +156,7 @@ export const app = (window.app = createApp({
 
       // resize preview on canvas resize (TODO: move to GCodePreview)
       if (observer) observer.disconnect();
-      observer = new ResizeObserver(() => preview.renderer.resize());
+      observer = new ResizeObserver(() => preview.sceneManager.resize());
       observer.observe(canvas);
 
       applyDevMode(enableDevMode.value); // HACK: force dev mode to update UI
@@ -178,42 +178,44 @@ export const app = (window.app = createApp({
 
       watchEffect(() => {
         if (!preview) return;
-        preview.renderer.backgroundColor = settings.value.backgroundColor;
+        preview.sceneManager.backgroundColor = settings.value.backgroundColor;
 
-        if (preview.renderer.buildVolume && settings.value.drawBuildVolume) {
-          preview.renderer.buildVolume.smallGrid = settings.value.buildVolume.smallGrid;
-          preview.renderer.buildVolume.x = +settings.value.buildVolume.x;
-          preview.renderer.buildVolume.y = +settings.value.buildVolume.y;
-          preview.renderer.buildVolume.z = +settings.value.buildVolume.z;
+        if (preview.sceneManager.buildVolume && settings.value.drawBuildVolume) {
+          preview.sceneManager.buildVolume.smallGrid = settings.value.buildVolume.smallGrid;
+          preview.sceneManager.buildVolume.x = +settings.value.buildVolume.x;
+          preview.sceneManager.buildVolume.y = +settings.value.buildVolume.y;
+          preview.sceneManager.buildVolume.z = +settings.value.buildVolume.z;
         }
 
-        if (!preview.renderer.buildVolume && settings.value.drawBuildVolume) {
-          preview.renderer.buildVolume = {
+        if (!preview.sceneManager.buildVolume && settings.value.drawBuildVolume) {
+          preview.sceneManager.buildVolume = {
             x: +settings.value.buildVolume.x,
             y: +settings.value.buildVolume.y,
             z: +settings.value.buildVolume.z,
             smallGrid: settings.value.buildVolume.smallGrid
           };
-        } else if (preview.renderer.buildVolume && !settings.value.drawBuildVolume) {
-          preview.renderer.buildVolume = undefined;
+        } else if (preview.sceneManager.buildVolume && !settings.value.drawBuildVolume) {
+          preview.sceneManager.buildVolume = undefined;
         }
-        preview.renderer.boundingBoxColor = drawBoundingBox.value
+        preview.sceneManager.boundingBoxColor = drawBoundingBox.value
           ? (settings.value.boundingBoxColor ?? 'magenta')
           : undefined;
       });
 
       watchEffect(() => {
         if (!preview) return;
-        preview.renderer.renderTravel = settings.value.renderTravel;
-        preview.renderer.travelColor = settings.value.travelColor;
-        preview.renderer.lineWidth = +settings.value.lineWidth;
+        preview.sceneManager.renderTravel = settings.value.renderTravel;
+        preview.sceneManager.travelColor = settings.value.travelColor;
+        preview.sceneManager.lineWidth = +settings.value.lineWidth;
 
-        preview.renderer.renderExtrusion = settings.value.renderExtrusion;
-        preview.renderer.renderTubes = settings.value.renderTubes;
-        preview.renderer.extrusionWidth = +settings.value.extrusionWidth;
+        preview.sceneManager.renderExtrusion = settings.value.renderExtrusion;
+        preview.sceneManager.renderTubes = settings.value.renderTubes;
+        preview.sceneManager.extrusionWidth = +settings.value.extrusionWidth;
 
-        preview.renderer.topLayerColor = settings.value.highlightTopLayer ? settings.value.topLayerColor : undefined;
-        preview.renderer.lastSegmentColor = settings.value.highlightLastSegment
+        preview.sceneManager.topLayerColor = settings.value.highlightTopLayer
+          ? settings.value.topLayerColor
+          : undefined;
+        preview.sceneManager.lastSegmentColor = settings.value.highlightLastSegment
           ? settings.value.lastSegmentColor
           : undefined;
 
@@ -229,18 +231,18 @@ export const app = (window.app = createApp({
         const startLayer = parseIntOrDefault(settings.value.startLayer, undefined);
         const endLayer = parseIntOrDefault(settings.value.endLayer, undefined);
 
-        preview.renderer.startLayer = settings.value.enableStartLayer ? startLayer : undefined;
-        preview.renderer.endLayer = settings.value.enableEndLayer ? endLayer : undefined;
+        preview.sceneManager.startLayer = settings.value.enableStartLayer ? startLayer : undefined;
+        preview.sceneManager.endLayer = settings.value.enableEndLayer ? endLayer : undefined;
       });
 
       watchEffect(() => {
         if (!preview) return;
-        preview.renderer.singleLayerMode = settings.value.singleLayerMode;
+        preview.sceneManager.singleLayerMode = settings.value.singleLayerMode;
       });
 
       watchEffect(() => {
         if (!preview) return;
-        preview.renderer.extrusionColor =
+        preview.sceneManager.extrusionColor =
           settings.value.colors.length === 1 ? settings.value.colors[0] : settings.value.colors;
       });
     });
