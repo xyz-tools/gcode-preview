@@ -33,9 +33,9 @@ Click to see the [full-fledged demo](https://gcode-preview.web.app/):
 ### Quick start
 
 ```  
-  import * as GCodePreview from 'gcode-preview';
+  import { GCodePreview } from 'gcode-preview';
 
-  const preview = GCodePreview.init({
+  const preview = new GCodePreview({
       canvas: document.querySelector('canvas'),
       extrusionColor: 'hotpink'
   });
