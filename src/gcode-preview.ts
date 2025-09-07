@@ -1,11 +1,23 @@
-import { Renderer } from './renderer';
+import { Renderer, RendererOptions } from './renderer';
 import { GCodeCommand, Parser } from './gcode-parser';
 import { Interpreter } from './interpreter';
 import { Job } from './job';
 import { DevGUI, type DevModeOptions } from './dev-gui';
-import type { GCodePreviewOptions } from './types';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { makeDroppable } from './extra/dom-utils';
+
+/**
+ * Options for configuring the G-code preview
+ */
+type LibOptions = {
+  /** Enable developer mode with additional controls */
+  devMode?: boolean | DevModeOptions;
+  minLayerThreshold?: number;
+  /** Enable drag and drop file handling */
+  droppable?: boolean;
+};
+
+export type GCodePreviewOptions = LibOptions & RendererOptions;
 
 /**
  * Main G-code preview class that orchestrates rendering and parsing
@@ -249,4 +261,4 @@ export class GCodePreview {
  * This class provides a simple interface for rendering G-code previews.
  * Most properties and methods are available through the `renderer` property.
  */
-export { Renderer, DevModeOptions, GCodeCommand, Parser, GCodePreviewOptions };
+export { Renderer, DevModeOptions, GCodeCommand, Parser };

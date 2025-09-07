@@ -10,7 +10,6 @@ import { LineBox } from './helpers/line-box';
 import { Path } from './path';
 import { Job } from './job';
 import { createColorMaterial } from './helpers/colorMaterial';
-import type { RendererOptions, BuildVolumeDef } from './types';
 
 import {
   BatchedMesh,
@@ -30,6 +29,53 @@ import {
   MathUtils,
   LineBasicMaterial
 } from 'three';
+
+export type BuildVolumeDef = Pick<BuildVolume, 'x' | 'y' | 'z' | 'smallGrid'>;
+
+export type RendererOptions = {
+  /** Build volume dimensions */
+  buildVolume?: BuildVolumeDef;
+  /** Background color of the preview */
+  backgroundColor?: ColorRepresentation;
+  /** Canvas element to render into */
+  canvas?: HTMLCanvasElement;
+  /** Last layer to render (1-based index) */
+  endLayer?: number;
+  /** Color(s) for extruded paths */
+  extrusionColor?: ColorRepresentation | ColorRepresentation[];
+  /** Initial camera position [x, y, z] */
+  initialCameraPosition?: number[];
+  /** Color for the last segment of each path */
+  lastSegmentColor?: ColorRepresentation;
+  /** Width of rendered lines */
+  lineWidth?: number;
+  /** Height of extruded lines */
+  lineHeight?: number;
+  /** List of G-code commands considered non-travel moves */
+  nonTravelMoves?: string[];
+  /** Minimum layer height threshold */
+  minLayerThreshold?: number;
+  /** Whether to render extrusion paths */
+  renderExtrusion?: boolean;
+  /** Whether to render travel moves */
+  renderTravel?: boolean;
+  /** First layer to render (1-based index) */
+  startLayer?: number;
+  /** Color for the top layer */
+  topLayerColor?: ColorRepresentation;
+  /** Color for travel moves */
+  travelColor?: ColorRepresentation;
+  /** Colors for different tools */
+  toolColors?: Record<number, ColorRepresentation>;
+  /** Disable color gradient between layers */
+  disableGradient?: boolean;
+  /** Width of extruded material */
+  extrusionWidth?: number;
+  /** Render paths as 3D tubes instead of lines */
+  renderTubes?: boolean;
+  /** Color for the bounding box. If undefined, the bounding box is not rendered. */
+  boundingBoxColor?: ColorRepresentation;
+};
 
 /**
  * WebGL-based G-code preview renderer
