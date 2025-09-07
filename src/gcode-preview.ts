@@ -1,4 +1,4 @@
-import { Renderer, RendererOptions } from './renderer';
+import { SceneManager, SceneManagerOptions } from './scene-manager';
 import { GCodeCommand, Parser } from './gcode-parser';
 import { Interpreter } from './interpreter';
 import { Job } from './job';
@@ -17,7 +17,7 @@ type LibOptions = {
   droppable?: boolean;
 };
 
-export type GCodePreviewOptions = LibOptions & RendererOptions;
+export type GCodePreviewOptions = LibOptions & SceneManagerOptions;
 
 /**
  * Main G-code preview class that orchestrates rendering and parsing
@@ -31,9 +31,9 @@ export type GCodePreviewOptions = LibOptions & RendererOptions;
  *   buildVolume: { x: 200, y: 200, z: 200 }
  * });
  *
- * // Use the renderer directly for most operations
- * preview.renderer.backgroundColor = '#000000';
- * preview.renderer.extrusionColor = '#00ff00';
+ * // Use the sceneManager directly for most operations
+ * preview.sceneManager.backgroundColor = '#000000';
+ * preview.sceneManager.extrusionColor = '#00ff00';
  *
  * // Process G-code
  * preview.processGCode(gcodeString);
@@ -42,8 +42,8 @@ export type GCodePreviewOptions = LibOptions & RendererOptions;
 export class GCodePreview {
   /** Job containing parsed G-code data */
   job: Job;
-  /** The WebGL renderer instance for direct access to rendering properties */
-  private _renderer: Renderer | null;
+  /** The WebGL sceneManager instance for direct access to rendering properties */
+  private _sceneManager: SceneManager | null;
   /** The G-code parser instance */
   private _parser: Parser | null;
   private opts: GCodePreviewOptions | null;
@@ -59,12 +59,12 @@ export class GCodePreview {
   private statsContainer?: HTMLElement;
   private devGui?: DevGUI;
 
-  /** The WebGL renderer instance for direct access to rendering properties */
-  get renderer(): Renderer {
-    if (!this._renderer) {
-      this._renderer = new Renderer(this.opts, this.job, () => this.stats?.update());
+  /** The WebGL sceneManager instance for direct access to rendering properties */
+  get sceneManager(): SceneManager {
+    if (!this._sceneManager) {
+      this._sceneManager = new SceneManager(this.opts, this.job, () => this.stats?.update());
     }
-    return this._renderer;
+    return this._sceneManager;
   }
 
   /** The G-code parser instance */
@@ -102,7 +102,7 @@ export class GCodePreview {
     this._parser = new Parser();
     this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
     this.stats = this.devMode ? new Stats() : undefined;
-    this._renderer = new Renderer(this.opts, this.job, () => this.stats?.update());
+    this._sceneManager = new SceneManager(this.opts, this.job, () => this.stats?.update());
     this.devMode = opts?.devMode;
 
     this.initStats();
@@ -110,14 +110,14 @@ export class GCodePreview {
   }
 
   /**
-   * Clears the preview and resets the parser, renderer, gui and job
+   * Clears the preview and resets the parser, sceneManager, gui and job
    */
   clear(): void {
     this._parser = new Parser();
     this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
-    this.renderer.clear();
-    this.renderer.job = this.job;
-    this.renderer.render();
+    this.sceneManager.clear();
+    this.sceneManager.job = this.job;
+    this.sceneManager.render();
     this.devGui?.reset();
   }
 
@@ -129,15 +129,15 @@ export class GCodePreview {
     // Parse the gcode using our managed parser
     const { commands } = this.parser.parseGCode(gcode);
 
-    // Pass the parsed commands to the renderer
+    // Pass the parsed commands to the sceneManager
     this.interpreter.execute(commands, this.job);
 
     // Render the result
-    this.renderer.renderAnimated();
+    this.sceneManager.renderAnimated();
   }
 
   /**
-   * Processes G-code using the renderer's built-in streaming method
+   * Processes G-code using the sceneManager's built-in streaming method
    * @param gcode - G-code string or array of strings to process
    * @param options - Options for rendering: { render: boolean }
    * @remarks
@@ -169,7 +169,7 @@ export class GCodePreview {
     }
 
     if (options.render) {
-      this.renderer.renderAnimated();
+      this.sceneManager.renderAnimated();
     }
   }
 
@@ -207,7 +207,7 @@ export class GCodePreview {
    * Renders the current scene
    */
   render(): void {
-    this.renderer.render();
+    this.sceneManager.render();
   }
 
   /**
@@ -217,9 +217,9 @@ export class GCodePreview {
     this.devGui?.destroy();
     this.devGui = undefined;
 
-    // Dispose renderer (heaviest resource user)
-    this._renderer?.dispose();
-    this._renderer = null;
+    // Dispose sceneManager (heaviest resource user)
+    this._sceneManager?.dispose();
+    this._sceneManager = null;
 
     this.stats?.end();
     this.stats?.dom?.remove();
@@ -231,7 +231,7 @@ export class GCodePreview {
    * @private
    */
   private initGui(): void {
-    if (!this.opts || !this._renderer) return;
+    if (!this.opts || !this._sceneManager) return;
     if (this.devMode === false || this.devMode === undefined) return;
 
     if (typeof this.devMode === 'boolean' && this.devMode === true) {
@@ -259,6 +259,6 @@ export class GCodePreview {
  * Main exports for the G-code preview module
  * @remarks
  * This class provides a simple interface for rendering G-code previews.
- * Most properties and methods are available through the `renderer` property.
+ * Most properties and methods are available through the `sceneManager` property.
  */
-export { Renderer, DevModeOptions, GCodeCommand, Parser };
+export { SceneManager, DevModeOptions, GCodeCommand, Parser };

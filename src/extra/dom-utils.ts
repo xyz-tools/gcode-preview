@@ -4,7 +4,7 @@ import { GCodePreview } from '../gcode-preview.js';
  * Enables drag and drop handling for G-code files
  */
 export function makeDroppable(previewInstance: GCodePreview): void {
-  const element = previewInstance.renderer.canvas;
+  const element = previewInstance.sceneManager.canvas;
 
   element.addEventListener('dragover', (evt) => {
     evt.preventDefault();
@@ -38,7 +38,7 @@ export function makeDroppable(previewInstance: GCodePreview): void {
 async function readFile(preview: GCodePreview, file: File): Promise<void> {
   await preview.processGCodeStream(file.stream().pipeThrough(new TextDecoderStream()));
   // preview.processGCode ( await file.text() )
-  preview.renderer.endLayer = preview.job.layers.length;
+  preview.sceneManager.endLayer = preview.job.layers.length;
 
   // dispatch a custom event to notify that the file has been loaded
   const event = new CustomEvent('update', {
@@ -49,5 +49,5 @@ async function readFile(preview: GCodePreview, file: File): Promise<void> {
       paths: preview.job.paths.length
     }
   });
-  preview.renderer.canvas.dispatchEvent(event);
+  preview.sceneManager.canvas.dispatchEvent(event);
 }

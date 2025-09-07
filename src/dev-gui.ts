@@ -1,11 +1,11 @@
 import { GUI } from 'lil-gui';
 import { GCodePreview } from './gcode-preview';
-import { Renderer } from './renderer';
+import { SceneManager } from './scene-manager';
 
 /**
  * Configuration options for development mode GUI
  * @property camera - Show camera controls (default: false)
- * @property renderer - Show renderer stats (default: false)
+ * @property sceneManager - Show sceneManager stats (default: false)
  * @property parser - Show parser/job stats (default: false)
  * @property buildVolume - Show build volume controls (default: false)
  * @property devHelpers - Show development helpers (default: false)
@@ -13,7 +13,7 @@ import { Renderer } from './renderer';
  */
 export type DevModeOptions = {
   camera?: boolean | false;
-  renderer?: boolean | false;
+  sceneManager?: boolean | false;
   parser?: boolean | false;
   buildVolume?: boolean | false;
   devHelpers?: boolean | false;
@@ -25,7 +25,7 @@ export type DevModeOptions = {
  */
 class DevGUI {
   private gui: GUI;
-  private renderer: Renderer;
+  private sceneManager: SceneManager;
   private gcodePreview: GCodePreview;
   private options?: DevModeOptions | undefined;
   private openFolders: string[] = [];
@@ -37,7 +37,7 @@ class DevGUI {
    */
   constructor(watchedObject: GCodePreview, options?: DevModeOptions | undefined) {
     this.gcodePreview = watchedObject;
-    this.renderer = this.gcodePreview.renderer;
+    this.sceneManager = this.gcodePreview.sceneManager;
     this.options = options;
 
     this.gui = new GUI();
@@ -51,8 +51,8 @@ class DevGUI {
    */
   setup(): void {
     this.loadOpenFolders();
-    if (!this.options || this.options.renderer) {
-      this.setupRendererFolder();
+    if (!this.options || this.options.sceneManager) {
+      this.setupSceneManagerFolder();
     }
 
     if (!this.options || this.options.camera) {
@@ -111,7 +111,7 @@ class DevGUI {
   /**
    * Sets up the renderer stats panel with memory and render call information
    */
-  private setupRendererFolder(): void {
+  private setupSceneManagerFolder(): void {
     const render = this.gui.addFolder('Render Info');
     if (!this.openFolders.includes('Render Info')) {
       render.close();
@@ -119,17 +119,17 @@ class DevGUI {
     render.onOpenClose(() => {
       this.saveOpenFolders();
     });
-    render.add(this.renderer.renderer.info.render, 'triangles').listen();
-    render.add(this.renderer.renderer.info.render, 'calls').listen();
-    render.add(this.renderer.renderer.info.render, 'lines').listen();
-    render.add(this.renderer.renderer.info.render, 'points').listen();
-    render.add(this.renderer.renderer.info.memory, 'geometries').listen();
-    render.add(this.renderer.renderer.info.memory, 'textures').listen();
-    render.add(this.renderer, 'lastRenderTime').listen();
+    render.add(this.sceneManager.renderer.info.render, 'triangles').listen();
+    render.add(this.sceneManager.renderer.info.render, 'calls').listen();
+    render.add(this.sceneManager.renderer.info.render, 'lines').listen();
+    render.add(this.sceneManager.renderer.info.render, 'points').listen();
+    render.add(this.sceneManager.renderer.info.memory, 'geometries').listen();
+    render.add(this.sceneManager.renderer.info.memory, 'textures').listen();
+    render.add(this.sceneManager, 'lastRenderTime').listen();
 
-    render.add(this.renderer, 'ambientLight', 0, 1, 0.01);
-    render.add(this.renderer, 'directionalLight', 0, 2, 0.1);
-    render.add(this.renderer, 'brightness', 0, 2, 0.1);
+    render.add(this.sceneManager, 'ambientLight', 0, 1, 0.01);
+    render.add(this.sceneManager, 'directionalLight', 0, 2, 0.1);
+    render.add(this.sceneManager, 'brightness', 0, 2, 0.1);
   }
 
   /**
@@ -144,9 +144,9 @@ class DevGUI {
       this.saveOpenFolders();
     });
     const cameraPosition = camera.addFolder('Camera position');
-    cameraPosition.add(this.renderer.camera.position, 'x').listen();
-    cameraPosition.add(this.renderer.camera.position, 'y').listen();
-    cameraPosition.add(this.renderer.camera.position, 'z').listen();
+    cameraPosition.add(this.sceneManager.camera.position, 'x').listen();
+    cameraPosition.add(this.sceneManager.camera.position, 'y').listen();
+    cameraPosition.add(this.sceneManager.camera.position, 'z').listen();
 
     // button to save camera position to local storage
     // cameraPosition.add({
@@ -156,9 +156,9 @@ class DevGUI {
     // }, 'saveCameraPosition').name('Save camera position');
 
     const cameraRotation = camera.addFolder('Camera rotation');
-    cameraRotation.add(this.renderer.camera.rotation, 'x').listen();
-    cameraRotation.add(this.renderer.camera.rotation, 'y').listen();
-    cameraRotation.add(this.renderer.camera.rotation, 'z').listen();
+    cameraRotation.add(this.sceneManager.camera.rotation, 'x').listen();
+    cameraRotation.add(this.sceneManager.camera.rotation, 'y').listen();
+    cameraRotation.add(this.sceneManager.camera.rotation, 'z').listen();
   }
 
   /**
@@ -183,7 +183,7 @@ class DevGUI {
    * Sets up the build volume controls panel with dimension controls
    */
   private setupBuildVolumeFolder(): void {
-    if (!this.renderer.buildVolume) {
+    if (!this.sceneManager.buildVolume) {
       return;
     }
     const buildVolume = this.gui.addFolder('Build Volume');
@@ -193,9 +193,9 @@ class DevGUI {
     buildVolume.onOpenClose(() => {
       this.saveOpenFolders();
     });
-    buildVolume.add(this.renderer.buildVolume, 'x').min(0).max(600).step(10).listen();
-    buildVolume.add(this.renderer.buildVolume, 'y').min(0).max(600).step(10).listen();
-    buildVolume.add(this.renderer.buildVolume, 'z').min(0).max(600).step(10).listen();
+    buildVolume.add(this.sceneManager.buildVolume, 'x').min(0).max(600).step(10).listen();
+    buildVolume.add(this.sceneManager.buildVolume, 'y').min(0).max(600).step(10).listen();
+    buildVolume.add(this.sceneManager.buildVolume, 'z').min(0).max(600).step(10).listen();
   }
 
   /**
@@ -219,9 +219,9 @@ class DevGUI {
     devHelpers.add(this.gcodePreview, 'clear').listen();
     devHelpers.add(this.gcodePreview, 'dispose').listen();
 
-    devHelpers.add(this.renderer, 'saveCamera').listen();
-    devHelpers.add(this.renderer, 'loadCamera').listen();
-    devHelpers.add(this.renderer, 'clearCamera').listen();
+    devHelpers.add(this.sceneManager, 'saveCamera').listen();
+    devHelpers.add(this.sceneManager, 'loadCamera').listen();
+    devHelpers.add(this.sceneManager, 'clearCamera').listen();
   }
 }
 

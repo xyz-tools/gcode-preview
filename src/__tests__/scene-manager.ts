@@ -2,19 +2,19 @@
 
 import { test, expect, vi, assert } from 'vitest';
 
-import { Renderer } from '../renderer';
+import { SceneManager } from '../scene-manager';
 import { GCodeCommand } from '../gcode-parser';
 
-// add a test for destroying the renderer which should cancel the render loop.
-test('destroying the renderer should dispose renderer and controls', async () => {
-  const mock = createMockRenderer();
+// add a test for destroying the scene manager which should cancel the render loop.
+test('destroying the scene manager should dispose renderer and controls', async () => {
+  const mock = createMockSceneManager();
 
-  Renderer.prototype.animate.call(mock);
+  SceneManager.prototype.animate.call(mock);
   // wait 50ms
   await new Promise((resolve) => setTimeout(resolve, 50));
 
-  // destroy the renderer
-  Renderer.prototype.dispose.call(mock);
+  // destroy the scene manager
+  SceneManager.prototype.dispose.call(mock);
 
   expect(mock.renderer.dispose).toHaveBeenCalledTimes(1);
   expect(mock.controls.dispose).toHaveBeenCalledTimes(1);
@@ -26,11 +26,11 @@ test('destroying the renderer should dispose renderer and controls', async () =>
   });
 });
 
-// add a test for destroying the renderer which should cancel the render loop.
-test('destroying the renderer should call cancelAnimation', async () => {
-  const mock = createMockRenderer();
+// add a test for destroying the scene manager which should cancel the render loop.
+test('destroying the scene manager should call cancelAnimation', async () => {
+  const mock = createMockSceneManager();
 
-  Renderer.prototype.animate.call(mock);
+  SceneManager.prototype.animate.call(mock);
 
   // wait 50ms
   await new Promise((resolve) => setTimeout(resolve, 50));
@@ -40,14 +40,14 @@ test('destroying the renderer should call cancelAnimation', async () => {
   assert(callCount > 2, 'callCount > 2');
 
   // destroy the renderer
-  Renderer.prototype.dispose.call(mock);
+  SceneManager.prototype.dispose.call(mock);
   expect(mock.cancelAnimation).toHaveBeenCalledTimes(1);
 });
 
 test('cancelAnimation should cancel the render loop', async () => {
-  const mock = createMockRenderer();
+  const mock = createMockSceneManager();
 
-  Renderer.prototype.animate.call(mock);
+  SceneManager.prototype.animate.call(mock);
 
   // wait 50ms
   await new Promise((resolve) => setTimeout(resolve, 50));
@@ -64,7 +64,7 @@ test('cancelAnimation should cancel the render loop', async () => {
   expect(callCountAfterDestroy).toBe(callCountAfterDestroy2);
 });
 
-function createMockRenderer() {
+function createMockSceneManager() {
   return {
     // state: State.initial,
     minLayerIndex: 0,
@@ -99,9 +99,9 @@ function createMockRenderer() {
     addLineSegment: () => {},
     doRenderExtrusion: () => {},
     render: vi.fn(() => {}),
-    animate: vi.fn(Renderer.prototype.animate),
+    animate: vi.fn(SceneManager.prototype.animate),
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
-    cancelAnimation: vi.fn(Renderer.prototype.cancelAnimation)
+    cancelAnimation: vi.fn(SceneManager.prototype.cancelAnimation)
   };
 }

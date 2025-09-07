@@ -32,7 +32,7 @@ import {
 
 export type BuildVolumeDef = Pick<BuildVolume, 'x' | 'y' | 'z' | 'smallGrid'>;
 
-export type RendererOptions = {
+export type SceneManagerOptions = {
   /** Build volume dimensions */
   buildVolume?: BuildVolumeDef;
   /** Background color of the preview */
@@ -80,7 +80,7 @@ export type RendererOptions = {
 /**
  * WebGL-based G-code preview renderer
  */
-export class Renderer {
+export class SceneManager {
   /** Three.js scene */
   scene: Scene;
   /** Three.js perspective camera */
@@ -138,7 +138,7 @@ export class Renderer {
   /** Default extrusion color */
   static readonly defaultExtrusionColor = new Color('hotpink');
   /** Current extrusion color(s) */
-  private _extrusionColor: Color | Color[] = Renderer.defaultExtrusionColor;
+  private _extrusionColor: Color | Color[] = SceneManager.defaultExtrusionColor;
   /** Animation frame ID */
   private animationFrameId?: number;
   /** Current path index for animated rendering */
@@ -173,11 +173,11 @@ export class Renderer {
   private onFrame: () => void;
 
   /**
-   * Creates a new Renderer instance
+   * Creates a new SceneManager instance
    * @param opts - Configuration options
    * @throws Error if no canvas element is provided
    */
-  constructor(opts: RendererOptions, job: Job, onFrame?: () => void) {
+  constructor(opts: SceneManagerOptions, job: Job, onFrame?: () => void) {
     this.job = job;
     this.scene = new Scene();
     this.scene.background = this._backgroundColor;

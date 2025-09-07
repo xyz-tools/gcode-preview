@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GCodePreview } from '../gcode-preview';
-import { Renderer } from '../renderer';
+import { SceneManager } from '../scene-manager';
 import { Parser } from '../gcode-parser';
 import { DevGUI } from '../dev-gui';
 import { Job } from '../job';
@@ -9,7 +9,7 @@ import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { makeDroppable } from '../extra/dom-utils';
 
 // Mock the dependencies
-vi.mock('../renderer');
+vi.mock('../scene-manager');
 vi.mock('../gcode-parser');
 vi.mock('../dev-gui');
 vi.mock('../job');
@@ -20,7 +20,7 @@ vi.mock('../extra/dom-utils');
 describe('GCodePreview', () => {
   let mockCanvas: HTMLCanvasElement;
   let preview: GCodePreview;
-  let mockRenderer: ReturnType<typeof vi.fn>;
+  let mockSceneManager: ReturnType<typeof vi.fn>;
   let mockDevGui: ReturnType<typeof vi.fn>;
   let mockJob: ReturnType<typeof vi.fn>;
   let mockInterpreter: ReturnType<typeof vi.fn>;
@@ -46,7 +46,7 @@ describe('GCodePreview', () => {
       extrusionDistance: 150.5
     };
 
-    mockRenderer = {
+    mockSceneManager = {
       backgroundColor: '#ffffff',
       extrusionColor: '#ff0000',
       startLayer: 1,
@@ -67,7 +67,7 @@ describe('GCodePreview', () => {
     // Setup mocks
     vi.mocked(Job).mockImplementation(() => mockJob);
     vi.mocked(Interpreter).mockImplementation(() => mockInterpreter);
-    vi.mocked(Renderer).mockImplementation(() => mockRenderer);
+    vi.mocked(SceneManager).mockImplementation(() => mockSceneManager);
     vi.mocked(Parser).mockImplementation(() => ({
       parseGCode: vi.fn().mockReturnValue({
         commands: ['G0 X0 Y0', 'G1 X10 Y10']
@@ -92,7 +92,7 @@ describe('GCodePreview', () => {
 
       expect(Job).toHaveBeenCalledWith({ minLayerThreshold: undefined });
       expect(Interpreter).toHaveBeenCalled();
-      expect(Renderer).toHaveBeenCalledWith(options, mockJob, expect.any(Function));
+      expect(SceneManager).toHaveBeenCalledWith(options, mockJob, expect.any(Function));
       expect(Parser).toHaveBeenCalled();
       expect(preview).toBeInstanceOf(GCodePreview);
     });
@@ -101,7 +101,7 @@ describe('GCodePreview', () => {
       const options = { canvas: mockCanvas };
       preview = new GCodePreview(options);
 
-      expect(preview.renderer).toBe(mockRenderer);
+      expect(preview.sceneManager).toBe(mockSceneManager);
       expect(preview.parser).toBeDefined();
       expect(preview.parser).toHaveProperty('parseGCode');
       expect(preview.job).toBe(mockJob);
@@ -168,7 +168,7 @@ describe('GCodePreview', () => {
         const originalParser = preview.parser;
         preview.clear();
 
-        expect(mockRenderer.clear).toHaveBeenCalled();
+        expect(mockSceneManager.clear).toHaveBeenCalled();
         expect(preview.parser).not.toBe(originalParser);
         expect(Parser).toHaveBeenCalledTimes(2); // Once in constructor, once in clear
         expect(Job).toHaveBeenCalledTimes(2); // Once in constructor, once in clear
@@ -189,7 +189,7 @@ describe('GCodePreview', () => {
 
         expect(preview.parser.parseGCode).toHaveBeenCalledWith(gcode);
         expect(mockInterpreter.execute).toHaveBeenCalledWith(['G0 X0 Y0', 'G1 X10 Y10'], mockJob);
-        expect(mockRenderer.renderAnimated).toHaveBeenCalled();
+        expect(mockSceneManager.renderAnimated).toHaveBeenCalled();
       });
 
       it('should handle array of gcode lines', () => {
@@ -198,7 +198,7 @@ describe('GCodePreview', () => {
 
         expect(preview.parser.parseGCode).toHaveBeenCalledWith(gcode);
         expect(mockInterpreter.execute).toHaveBeenCalled();
-        expect(mockRenderer.renderAnimated).toHaveBeenCalled();
+        expect(mockSceneManager.renderAnimated).toHaveBeenCalled();
       });
     });
 
@@ -209,7 +209,7 @@ describe('GCodePreview', () => {
 
         expect(preview.parser.parseGCode).toHaveBeenCalledWith(gcode);
         expect(mockInterpreter.execute).toHaveBeenCalled();
-        expect(mockRenderer.renderAnimated).toHaveBeenCalled();
+        expect(mockSceneManager.renderAnimated).toHaveBeenCalled();
       });
 
       it('should not render when render option is false', async () => {
@@ -218,7 +218,7 @@ describe('GCodePreview', () => {
 
         expect(preview.parser.parseGCode).toHaveBeenCalledWith(gcode);
         expect(mockInterpreter.execute).toHaveBeenCalled();
-        expect(mockRenderer.renderAnimated).not.toHaveBeenCalled();
+        expect(mockSceneManager.renderAnimated).not.toHaveBeenCalled();
       });
 
       it('should handle ReadableStream', async () => {
@@ -242,14 +242,14 @@ describe('GCodePreview', () => {
     describe('render', () => {
       it('should call render on renderer', () => {
         preview.render();
-        expect(mockRenderer.render).toHaveBeenCalled();
+        expect(mockSceneManager.render).toHaveBeenCalled();
       });
     });
 
     describe('dispose', () => {
       it('should dispose renderer', () => {
         preview.dispose();
-        expect(mockRenderer.dispose).toHaveBeenCalled();
+        expect(mockSceneManager.dispose).toHaveBeenCalled();
       });
 
       it('should destroy and clear devGui if it exists', () => {
@@ -257,7 +257,7 @@ describe('GCodePreview', () => {
         preview.dispose();
 
         expect(mockDevGui.destroy).toHaveBeenCalled();
-        expect(mockRenderer.dispose).toHaveBeenCalled();
+        expect(mockSceneManager.dispose).toHaveBeenCalled();
       });
     });
   });
@@ -312,13 +312,13 @@ describe('GCodePreview', () => {
       const lazyPreview = Object.create(GCodePreview.prototype);
       lazyPreview.opts = options;
       lazyPreview.job = mockJob;
-      lazyPreview._renderer = null;
+      lazyPreview._sceneManager = null;
 
       // Access renderer getter
-      const renderer = lazyPreview.renderer;
+      const renderer = lazyPreview.sceneManager;
 
-      expect(Renderer).toHaveBeenCalledWith(options, mockJob, expect.any(Function));
-      expect(renderer).toBe(mockRenderer);
+      expect(SceneManager).toHaveBeenCalledWith(options, mockJob, expect.any(Function));
+      expect(renderer).toBe(mockSceneManager);
     });
 
     it('should lazily initialize parser when accessed', () => {
@@ -451,7 +451,7 @@ describe('GCodePreview', () => {
 
       // Should not throw when disposing without stats
       expect(() => preview.dispose()).not.toThrow();
-      expect(mockRenderer.dispose).toHaveBeenCalled();
+      expect(mockSceneManager.dispose).toHaveBeenCalled();
     });
   });
 
@@ -460,13 +460,13 @@ describe('GCodePreview', () => {
       preview = new GCodePreview({ canvas: mockCanvas });
 
       // Add more properties to mock to test advanced access
-      mockRenderer.buildVolume = { x: 200, y: 200, z: 200 };
-      mockRenderer.travelColor = '#00ff00';
-      mockRenderer.renderTubes = true;
+      mockSceneManager.buildVolume = { x: 200, y: 200, z: 200 };
+      mockSceneManager.travelColor = '#00ff00';
+      mockSceneManager.renderTubes = true;
 
-      expect(preview.renderer.buildVolume).toEqual({ x: 200, y: 200, z: 200 });
-      expect(preview.renderer.travelColor).toBe('#00ff00');
-      expect(preview.renderer.renderTubes).toBe(true);
+      expect(preview.sceneManager.buildVolume).toEqual({ x: 200, y: 200, z: 200 });
+      expect(preview.sceneManager.travelColor).toBe('#00ff00');
+      expect(preview.sceneManager.renderTubes).toBe(true);
     });
   });
 });
