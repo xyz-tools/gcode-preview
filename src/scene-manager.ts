@@ -613,9 +613,7 @@ export class SceneManager {
     this.animationFrameId = requestAnimationFrame(() => this.animate());
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
-    if (this.onFrame) {
-      this.onFrame();
-    }
+    this.onFrame?.();
   }
 
   /**
