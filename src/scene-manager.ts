@@ -1,34 +1,26 @@
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
-import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
-import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
 import { BuildVolume } from './build-volume';
 import { type Disposable } from './helpers/three-utils';
 import { LineBox } from './helpers/line-box';
 
-import { Path } from './path';
 import { Job } from './job';
+import { ObjectsManager } from './objects-manager';
 import { createColorMaterial } from './helpers/colorMaterial';
 
 import {
-  BatchedMesh,
-  BufferGeometry,
   Color,
   ColorRepresentation,
   Euler,
   Group,
-  Material,
   OrthographicCamera,
   PerspectiveCamera,
-  Plane,
   REVISION,
   Scene,
-  ShaderMaterial,
-  Vector3,
   WebGLRenderer,
   MathUtils,
-  LineBasicMaterial
+  LineBasicMaterial,
+  Object3D
 } from 'three';
 import { EventsDispatcher } from './events-dispatcher';
 
@@ -137,12 +129,6 @@ export class SceneManager {
   private _renderTravel = false;
   /** Whether to render paths as 3D tubes */
   private _renderTubes = false;
-  /** Width of extruded material */
-  private _extrusionWidth?: number;
-  /** Width of rendered lines */
-  private _lineWidth?: number;
-  /** Height of extruded lines */
-  private _lineHeight = 0.2;
   /** First layer to render (1-based index) */
   private _startLayer?: number;
   /** Last layer to render (1-based index) */
@@ -164,8 +150,6 @@ export class SceneManager {
   private _boundingBoxColor?: Color;
 
   // rendering
-  /** Group containing all rendered paths */
-  private group?: Group;
   /** Disposable resources */
   private disposables: Disposable[] = [];
   /** Default extrusion color */
@@ -180,13 +164,6 @@ export class SceneManager {
   private renderPathIndex?: number;
   /** Previous start layer before single layer mode */
   private prevStartLayer = 0;
-
-  // shader material
-  private materials: ShaderMaterial[] = [];
-  private _ambientLight = 0.4;
-  private _directionalLight = 1.3;
-  private _brightness = 1.3;
-
   // colors
   /** Background color */
   private _backgroundColor = new Color(0xe0e0e0);
@@ -202,8 +179,8 @@ export class SceneManager {
   private _wireframe = false;
   /** Whether to preserve drawing buffer */
   private preserveDrawingBuffer = false;
-  private currentChunk: Group;
   private eventsDispatcher: EventsDispatcher = new EventsDispatcher();
+  private objectsManager: ObjectsManager;
 
   private _renderTimeout: ReturnType<typeof setTimeout>;
 
@@ -215,14 +192,15 @@ export class SceneManager {
   constructor(opts: SceneManagerOptions, job: Job, eventsDispatcher?: EventsDispatcher) {
     this.job = job;
     this.scene = new Scene();
+    this.objectsManager = new ObjectsManager(this.scene, opts.lineWidth ?? 1, opts.lineHeight, opts.extrusionWidth);
+    this.disposables.push(this.objectsManager);
     this.scene.background = this._backgroundColor;
     if (opts.backgroundColor !== undefined) {
       this.backgroundColor = new Color(opts.backgroundColor);
     }
     this.endLayer = opts.endLayer;
     this.startLayer = opts.startLayer;
-    this.lineWidth = opts.lineWidth ?? 1;
-    this.lineHeight = opts.lineHeight ?? this.lineHeight;
+
     if (opts.buildVolume) {
       this._buildVolume = new BuildVolume(
         opts.buildVolume.x,
@@ -237,7 +215,6 @@ export class SceneManager {
     this.renderExtrusion = opts.renderExtrusion ?? this.renderExtrusion;
     this.renderTravel = opts.renderTravel ?? this.renderTravel;
     this.renderTubes = opts.renderTubes ?? this.renderTubes;
-    this.extrusionWidth = opts.extrusionWidth;
     this.eventsDispatcher = eventsDispatcher ?? this.eventsDispatcher;
 
     if (opts.boundingBoxColor !== undefined) {
@@ -272,6 +249,7 @@ export class SceneManager {
       canvas: this.canvas,
       preserveDrawingBuffer: this.preserveDrawingBuffer
     });
+    this.disposables.push(this.renderer);
 
     this.renderer.localClippingEnabled = true;
     this.camera = this.createCamera(opts.orthographic ?? false);
@@ -280,6 +258,7 @@ export class SceneManager {
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.target.set(this._buildVolume.x / 2, 0, -this._buildVolume.y / 2);
+    this.disposables.push(this.controls);
     this.loadCamera();
 
     this.initScene();
@@ -334,15 +313,15 @@ export class SceneManager {
       // loop over the object and convert all colors to Color
       for (const [index, color] of value.entries()) {
         this._extrusionColor[index] = new Color(color);
-        if (!this.materials[index]) {
-          this.materials[index] = createColorMaterial(
+        if (!this.objectsManager.materials[index]) {
+          this.objectsManager.materials[index] = createColorMaterial(
             this._extrusionColor[index].getHex(),
-            this.ambientLight,
-            this.directionalLight,
-            this.brightness
+            this.objectsManager.ambientLight,
+            this.objectsManager.directionalLight,
+            this.objectsManager.brightness
           );
         }
-        const material = this.materials[index];
+        const material = this.objectsManager.materials[index];
         if (material && material.uniforms) {
           material.uniforms.uColor.value = this._extrusionColor[index];
         }
@@ -351,16 +330,16 @@ export class SceneManager {
     }
 
     this._extrusionColor = new Color(value);
-    if (!this.materials[0]) {
-      this.materials[0] = createColorMaterial(
+    if (!this.objectsManager.materials[0]) {
+      this.objectsManager.materials[0] = createColorMaterial(
         this._extrusionColor.getHex(),
-        this.ambientLight,
-        this.directionalLight,
-        this.brightness
+        this.objectsManager.ambientLight,
+        this.objectsManager.directionalLight,
+        this.objectsManager.brightness
       );
     }
 
-    this.materials[0].uniforms.uColor.value = this._extrusionColor;
+    this.objectsManager.materials[0].uniforms.uColor.value = this._extrusionColor;
     this.eventsDispatcher.emit(SceneManagerEvent.EXTRUSION_COLOR_CHANGE, this._extrusionColor);
   }
 
@@ -509,27 +488,27 @@ export class SceneManager {
   }
 
   get lineWidth(): number | undefined {
-    return this._lineWidth;
+    return this.objectsManager.lineWidth;
   }
   set lineWidth(value: number | undefined) {
-    this._lineWidth = value;
-    this.eventsDispatcher.emit(SceneManagerEvent.LINE_WIDTH_CHANGE, this._lineWidth);
+    this.objectsManager.lineWidth = value;
+    this.eventsDispatcher.emit(SceneManagerEvent.LINE_WIDTH_CHANGE, this.objectsManager.lineWidth);
   }
 
   get lineHeight(): number {
-    return this._lineHeight;
+    return this.objectsManager.lineHeight;
   }
   set lineHeight(value: number) {
-    this._lineHeight = value;
-    this.eventsDispatcher.emit(SceneManagerEvent.LINE_HEIGHT_CHANGE, [this._lineHeight]);
+    this.objectsManager.lineHeight = value;
+    this.eventsDispatcher.emit(SceneManagerEvent.LINE_HEIGHT_CHANGE, this.objectsManager.lineHeight);
   }
 
   get extrusionWidth(): number | undefined {
-    return this._extrusionWidth;
+    return this.objectsManager.extrusionWidth;
   }
   set extrusionWidth(value: number | undefined) {
-    this._extrusionWidth = value;
-    this.eventsDispatcher.emit(SceneManagerEvent.EXTRUSION_WIDTH_CHANGE, [this._extrusionWidth]);
+    this.objectsManager.extrusionWidth = value;
+    this.eventsDispatcher.emit(SceneManagerEvent.EXTRUSION_WIDTH_CHANGE, this.objectsManager.extrusionWidth);
   }
 
   get disableGradient(): boolean {
@@ -537,7 +516,7 @@ export class SceneManager {
   }
   set disableGradient(value: boolean) {
     this._disableGradient = value;
-    this.eventsDispatcher.emit(SceneManagerEvent.DISABLE_GRADIENT_CHANGE, [this._disableGradient]);
+    this.eventsDispatcher.emit(SceneManagerEvent.DISABLE_GRADIENT_CHANGE, this._disableGradient);
   }
 
   /**
@@ -549,71 +528,14 @@ export class SceneManager {
    *
    * It then updates the clipping planes for shader materials and line clipping using these Z values.
    *
-   * @private
    */
-  private updateClippingPlanes() {
+  updateClippingPlanes() {
     const startLayer = this.job.layers[this._startLayer - 1];
     const endLayer = this.job.layers[this._endLayer - 1];
     const minZ = startLayer?.z - startLayer?.height;
     const maxZ = endLayer?.z;
 
-    this.updateClippingPlanesForShaderMaterials(minZ, maxZ);
-    this.updateLineClipping(minZ, maxZ);
-  }
-
-  /**
-   * Updates the clipping planes for all shader materials in the scene.
-   * This method sets the min and max Z values for the clipping planes in the shader materials.
-   *
-   * @param minZ - The minimum Z value for the clipping plane.
-   * @param maxZ - The maximum Z value for the clipping plane
-   */
-
-  private updateClippingPlanesForShaderMaterials(minZ: number, maxZ: number) {
-    this.materials.forEach((material) => {
-      material.uniforms.clipMinY.value = minZ;
-      material.uniforms.clipMaxY.value = maxZ;
-    });
-  }
-
-  /**
-   * Applies clipping planes to the specified material based on the minimum and maximum Z values.
-   *
-   * This method creates clipping planes for the top and bottom of the specified Z range,
-   * then applies them to the material's clippingPlanes property.
-   *
-   * @param material - Shader material to apply clipping planes to
-   * @param minZ - The minimum Z value for the clipping plane.
-   * @param maxZ - The maximum Z value for the clipping plane.
-   */
-  private createClippingPlanes(minZ: number | undefined, maxZ: number | undefined) {
-    const planes = [];
-    if (minZ !== undefined) {
-      planes.push(new Plane(new Vector3(0, 1, 0), -minZ));
-    }
-    if (maxZ !== undefined) {
-      planes.push(new Plane(new Vector3(0, -1, 0), maxZ));
-    }
-    return planes;
-  }
-
-  /**
-   * Updates the clipping planes for all `LineSegments2` objects in the scene.
-   * This method filters the scene's children to find instances of `LineSegments2`,
-   * then applies the clipping planes to their materials.
-   *
-   * @param minZ - The minimum Z value for the clipping plane.
-   * @param maxZ - The maximum Z value for the clipping plane.
-   */
-  private updateLineClipping(minZ: number | undefined, maxZ: number | undefined) {
-    // TODO: apply clipping selectively to travels lines and extrusion lines
-    // and/or use a clipping group
-    this.scene.traverse((obj) => {
-      if (obj instanceof LineSegments2) {
-        const material = obj.material as LineMaterial;
-        material.clippingPlanes = this.createClippingPlanes(minZ, maxZ);
-      }
-    });
+    this.objectsManager.updateClippingPlanes(minZ, maxZ);
   }
 
   /**
@@ -671,37 +593,37 @@ export class SceneManager {
   }
 
   get ambientLight(): number {
-    return this._ambientLight;
+    return this.objectsManager.ambientLight;
   }
   set ambientLight(value: number) {
-    this._ambientLight = value;
+    this.objectsManager.ambientLight = value;
 
     // update material uniforms
-    this.materials.forEach((material) => {
+    this.objectsManager.materials.forEach((material) => {
       material.uniforms.ambient.value = value;
     });
   }
 
   get directionalLight(): number {
-    return this._directionalLight;
+    return this.objectsManager.directionalLight;
   }
   set directionalLight(value: number) {
-    this._directionalLight = value;
+    this.objectsManager.directionalLight = value;
 
     // update material uniforms
-    this.materials.forEach((material) => {
+    this.objectsManager.materials.forEach((material) => {
       material.uniforms.directional.value = value;
     });
   }
 
   get brightness(): number {
-    return this._brightness;
+    return this.objectsManager.brightness;
   }
   set brightness(value: number) {
-    this._brightness = value;
+    this.objectsManager.brightness = value;
 
     // update material uniforms
-    this.materials.forEach((material) => {
+    this.objectsManager.materials.forEach((material) => {
       material.uniforms.brightness.value = value;
     });
   }
@@ -771,9 +693,6 @@ export class SceneManager {
    * and lighting if 3D tube rendering is enabled.
    */
   private initScene(): void {
-    this.group = this.group ?? this.createGroup('allLayers');
-    this.currentChunk = this.group;
-
     this.renderPathIndex = 0;
 
     this.renderPaths();
@@ -784,7 +703,6 @@ export class SceneManager {
       this.disposables.push(this._buildVolume);
       this._buildVolume.update();
     }
-    this.scene.add(this.group);
   }
 
   /** Resets the scene by clearing all existing objects and re-initializing
@@ -793,10 +711,10 @@ export class SceneManager {
    * and calls initScene to set up a fresh scene.
    */
   private resetScene() {
-    this.materials = [];
+    // this.objectsManager.materials = [];
 
     // Recursively remove all children from the main group and their descendants from the scene
-    const removeRecursively = (object: Group) => {
+    const removeRecursively = (object: Object3D) => {
       while (object.children.length > 0) {
         const child = object.children[0];
         if ((child as Group).children && (child as Group).children.length > 0) {
@@ -806,32 +724,9 @@ export class SceneManager {
         this.scene.remove(child);
       }
     };
-    if (this.group) {
-      removeRecursively(this.group);
-    }
+    // removeRecursively(this.scene);
 
     this.initScene();
-  }
-
-  /**
-   * Creates a new Three.js group for organizing rendered paths
-   * @param name - Name for the group
-   * @returns Configured Three.js group
-   * @remarks
-   * Sets up the group's orientation and position based on build volume dimensions.
-   * If no build volume is defined, uses a default position.
-   */
-  private createGroup(name: string): Group {
-    const group = new Group();
-    group.name = name;
-    group.quaternion.setFromEuler(new Euler(-Math.PI / 2, 0, 0));
-    if (this._buildVolume) {
-      // group.position.set(-this._buildVolume.x / 2, 0, this._buildVolume.y / 2);
-    } else {
-      // FIXME: this is just a very crude approximation for centering
-      group.position.set(-100, 0, 100);
-    }
-    return group;
   }
 
   /**
@@ -893,20 +788,12 @@ export class SceneManager {
    * Updates the renderPathIndex to track progress through the job's paths.
    */
   private renderFrame(pathCount: number): void {
-    if (!this.group) {
-      this.group = this.createGroup('allLayers');
-      this.scene.add(this.group);
-    }
-    const chunk = new Group();
-    chunk.name = 'chunk' + this.renderPathIndex;
-    this.currentChunk = chunk;
     const endPathNumber = Math.min(this.renderPathIndex + pathCount, this.job.paths.length - 1);
     this.renderPaths(endPathNumber);
     this.renderBoundingBox();
     this.renderPathIndex = endPathNumber;
 
     this.renderBoundingBox();
-    this.group?.add(chunk);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -945,6 +832,9 @@ export class SceneManager {
     this.job = undefined;
     this.scene.remove(this.boundingBoxMesh);
     this.boundingBoxMesh = undefined;
+    this.objectsManager.dispose();
+    this.objectsManager = new ObjectsManager(this.scene, this.lineWidth, this.lineHeight, this.extrusionWidth);
+    this.disposables.push(this.objectsManager);
   }
 
   resize(): void {
@@ -968,12 +858,9 @@ export class SceneManager {
   }
 
   dispose(): void {
+    this.cancelAnimation();
     this.disposables.forEach((d) => d.dispose());
     this.disposables = [];
-    this.controls.dispose();
-    this.renderer.dispose();
-
-    this.cancelAnimation();
   }
 
   /**
@@ -993,7 +880,13 @@ export class SceneManager {
    */
   private renderPaths(endPathNumber: number = Infinity): void {
     if (this.renderTravel) {
-      this.renderPathsAsLines(this.job.travels.slice(this.renderPathIndex, endPathNumber), this._travelColor);
+      this.objectsManager.renderTravelLines(
+        this.job.travels.slice(this.renderPathIndex, endPathNumber),
+        this._travelColor
+      );
+      this.objectsManager.showTravels();
+    } else {
+      this.objectsManager.hideTravels();
     }
 
     if (this.renderExtrusion && this.job?.toolPaths.length > 0) {
@@ -1002,11 +895,14 @@ export class SceneManager {
           ? (this._extrusionColor[index] ?? this.fallbackExtrusionColor(index))
           : this._extrusionColor;
         if (this.renderTubes) {
-          this.renderPathsAsTubes(toolPaths.slice(this.renderPathIndex, endPathNumber), color);
+          this.objectsManager.renderExtrusionTubes(toolPaths.slice(this.renderPathIndex, endPathNumber), color);
         } else {
-          this.renderPathsAsLines(toolPaths.slice(this.renderPathIndex, endPathNumber), color);
+          this.objectsManager.renderExtrusionLines(toolPaths.slice(this.renderPathIndex, endPathNumber), color);
         }
       });
+      this.objectsManager.showExtrusions();
+    } else {
+      this.objectsManager.hideExtrusions();
     }
   }
 
@@ -1025,125 +921,6 @@ export class SceneManager {
     }
     const colors = this._extrusionColor as Color[];
     return colors[colors.length - 1] ?? SceneManager.defaultExtrusionColor;
-  }
-
-  /**
-   * Renders paths as 2D lines
-   * @param paths - Array of paths to render
-   * @param color - Color to use for the lines
-   */
-  private renderPathsAsLines(paths: Path[], color: Color): void {
-    const minZ = this.job.layers[this._startLayer - 1]?.z;
-    const maxZ = this.job.layers[this._endLayer - 1]?.z;
-
-    let clippingPlanes: Plane[] = [];
-    clippingPlanes = this.createClippingPlanes(minZ, maxZ);
-
-    const material = new LineMaterial({
-      color: Number(color.getHex()),
-      linewidth: this.lineWidth,
-      clippingPlanes
-    });
-
-    const geometry = new LineSegmentsGeometry().setPositions(this.packLineVertices(paths));
-    const line = new LineSegments2(geometry, material);
-
-    this.disposables.push(material);
-    this.disposables.push(geometry);
-    this.currentChunk?.add(line);
-  }
-
-  /**
-   * Packs path vertices into the flat position buffer LineSegmentsGeometry wants.
-   * @param paths - Paths to pack, back to back
-   * @returns Six floats per segment: the two endpoints of each line
-   * @remarks
-   * Sized up front and filled in place. Pushing onto a plain array instead makes
-   * it grow repeatedly and leaves setPositions to copy the whole thing into a
-   * Float32Array, which measured ~6x slower on a 650k float model.
-   *
-   * Lines need to be offset: the gcode specifies the nozzle height, which is the
-   * top of the extrusion. The line has no constant height in world coords, so it
-   * is drawn at the horizontal midplane of the extrusion layer — otherwise the
-   * clipping plane cuts it.
-   */
-  private packLineVertices(paths: Path[]): Float32Array {
-    const offset = -this.lineHeight / 2;
-
-    let segments = 0;
-    for (const path of paths) {
-      segments += Math.max(0, Math.ceil((path.vertices.length - 3) / 3));
-    }
-
-    const positions = new Float32Array(segments * 6);
-    let next = 0;
-
-    for (const path of paths) {
-      const vertices = path.vertices;
-      for (let i = 0; i < vertices.length - 3; i += 3) {
-        positions[next++] = vertices[i];
-        positions[next++] = vertices[i + 1] - 0.1;
-        positions[next++] = vertices[i + 2] + offset;
-        positions[next++] = vertices[i + 3];
-        positions[next++] = vertices[i + 4] - 0.1;
-        positions[next++] = vertices[i + 5] + offset;
-      }
-    }
-
-    return positions;
-  }
-
-  /**
-   * Renders paths as 3D tubes
-   * @param paths - Array of paths to render
-   * @param color - Color to use for the tubes
-   */
-  private renderPathsAsTubes(paths: Path[], color: Color): void {
-    const colorNumber = Number(color.getHex());
-    const geometries: BufferGeometry[] = [];
-
-    const material = createColorMaterial(colorNumber, this.ambientLight, this.directionalLight, this.brightness);
-
-    this.materials.push(material);
-
-    paths.forEach((path) => {
-      const geometry = path.geometry({
-        extrusionWidthOverride: this.extrusionWidth,
-        lineHeightOverride: this.lineHeight
-      });
-
-      if (!geometry) return;
-
-      this.disposables.push(geometry);
-      geometries.push(geometry);
-    });
-
-    const batchedMesh = this.createBatchMesh(geometries, material);
-    this.disposables.push(material);
-
-    this.currentChunk?.add(batchedMesh);
-  }
-
-  /**
-   * Creates a batched mesh from multiple geometries sharing the same material
-   * @param geometries - Array of geometries to batch
-   * @param material - Material to use for the batched mesh
-   * @returns Batched mesh instance
-   */
-  private createBatchMesh(geometries: BufferGeometry[], material: Material): BatchedMesh {
-    const maxVertexCount = geometries.reduce((acc, geometry) => geometry.attributes.position.count * 3 + acc, 0);
-
-    const batchedMesh = new BatchedMesh(geometries.length, maxVertexCount, undefined, material);
-    this.disposables.push(batchedMesh);
-
-    geometries.forEach((geometry) => {
-      const geometryId = batchedMesh.addGeometry(geometry);
-      // NOTE: for older versions of three.js, addInstance is not available
-      // This allow webgl1 browsers to use the batched mesh
-      batchedMesh.addInstance?.(geometryId);
-    });
-
-    return batchedMesh;
   }
 
   private setRerenderListeners() {
