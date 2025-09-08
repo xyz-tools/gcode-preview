@@ -7,6 +7,7 @@ import { Job } from '../job';
 import { Interpreter } from '../interpreter';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { makeDroppable } from '../extra/dom-utils';
+import { EventsDispatcher } from '../events-dispatcher';
 
 // Mock the dependencies
 vi.mock('../scene-manager');
@@ -92,7 +93,7 @@ describe('GCodePreview', () => {
 
       expect(Job).toHaveBeenCalledWith({ minLayerThreshold: undefined });
       expect(Interpreter).toHaveBeenCalled();
-      expect(SceneManager).toHaveBeenCalledWith(options, mockJob, expect.any(Function));
+      expect(SceneManager).toHaveBeenCalledWith(options, mockJob, expect.any(EventsDispatcher));
       expect(Parser).toHaveBeenCalled();
       expect(preview).toBeInstanceOf(GCodePreview);
     });
@@ -239,13 +240,6 @@ describe('GCodePreview', () => {
       });
     });
 
-    describe('render', () => {
-      it('should call render on renderer', () => {
-        preview.render();
-        expect(mockSceneManager.render).toHaveBeenCalled();
-      });
-    });
-
     describe('dispose', () => {
       it('should dispose renderer', () => {
         preview.dispose();
@@ -313,11 +307,12 @@ describe('GCodePreview', () => {
       lazyPreview.opts = options;
       lazyPreview.job = mockJob;
       lazyPreview._sceneManager = null;
+      lazyPreview.eventsDispatcher = new EventsDispatcher();
 
       // Access renderer getter
       const renderer = lazyPreview.sceneManager;
 
-      expect(SceneManager).toHaveBeenCalledWith(options, mockJob, expect.any(Function));
+      expect(SceneManager).toHaveBeenCalledWith(options, mockJob, lazyPreview.eventsDispatcher);
       expect(renderer).toBe(mockSceneManager);
     });
 

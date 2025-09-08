@@ -10,7 +10,7 @@ export const presets = {
     },
     extrusionWidth: 0.45,
     lineHeight: 0.2,
-    extrusionColor: ['#95dfa1'],
+    colors: ['#95dfa1'],
     travelColor: 'red',
     buildVolume: {
       x: 180,
@@ -30,7 +30,7 @@ export const presets = {
     },
     extrusionWidth: 0.5,
     lineHeight: 0.3,
-    extrusionColor: ['#95dfa1'],
+    colors: ['#95dfa1'],
     travelColor: 'red',
     topLayerColor: undefined,
     lastSegmentColor: undefined,
@@ -55,7 +55,7 @@ export const presets = {
     minLayerThreshold: 0.6,
     renderExtrusion: true,
     renderTubes: true,
-    extrusionColor: ['#8782bf'],
+    colors: ['#8782bf'],
     renderTravel: true,
     travelColor: '#00FF00',
     topLayerColor: undefined,
@@ -80,7 +80,7 @@ export const presets = {
     lineHeight: 0.3,
     renderExtrusion: true,
     renderTubes: true,
-    extrusionColor: ['#919191'],
+    colors: ['#919191'],
     renderTravel: true,
     travelColor: '#00FF00',
     topLayerColor: '#aaaaaa',
@@ -101,7 +101,7 @@ export const presets = {
       original: 'https://www.thingiverse.com/thing:387266'
     },
     extrusionWidth: 0.5,
-    extrusionColor: ['orange', 'black', 'white'],
+    colors: ['orange', 'black', 'white'],
     travelColor: 'red',
     topLayerColor: undefined,
     lastSegmentColor: undefined,
@@ -122,7 +122,7 @@ export const presets = {
     },
     extrusionWidth: 0.45,
     lineHeight: 0.2,
-    extrusionColor: ['pink'],
+    colors: ['pink'],
     travelColor: 'red',
     topLayerColor: undefined,
     lastSegmentColor: undefined,
@@ -131,7 +131,8 @@ export const presets = {
       y: 180,
       z: 0
     },
-    boundingBoxColor: 'pink'
+    boundingBoxColor: 'pink',
+    drawBoundingBox: true
   },
   easel: {
     title: 'Easel tool path (cnc)',

@@ -29,6 +29,33 @@ import {
   MathUtils,
   LineBasicMaterial
 } from 'three';
+import { EventsDispatcher } from './events-dispatcher';
+
+export enum SceneManagerEvent {
+  BUILD_VOLUME_CHANGE = 'buildVolumeChange',
+  EXTRUSION_COLOR_CHANGE = 'extrusionColorChange',
+  BACKGROUND_COLOR_CHANGE = 'backgroundColorChange',
+  TRAVEL_COLOR_CHANGE = 'travelColorChange',
+  TOP_LAYER_COLOR_CHANGE = 'topLayerColorChange',
+  LAST_SEGMENT_COLOR_CHANGE = 'lastSegmentColorChange',
+  BOUNDING_BOX_COLOR_CHANGE = 'boundingBoxColorChange',
+  RENDER_EXTRUSION_CHANGE = 'renderExtrusionChange',
+  RENDER_TRAVEL_CHANGE = 'renderTravelChange',
+  RENDER_TUBES_CHANGE = 'renderTubesChange',
+  SINGLE_LAYER_MODE_CHANGE = 'singleLayerModeChange',
+  LINE_WIDTH_CHANGE = 'lineWidthChange',
+  START_LAYER_CHANGE = 'startLayerChange',
+  END_LAYER_CHANGE = 'endLayerChange',
+  AMBIENT_LIGHT_CHANGE = 'ambientLightChange',
+  DIRECTIONAL_LIGHT_CHANGE = 'directionalLightChange',
+  BRIGHTNESS_CHANGE = 'brightnessChange',
+  BOUNDING_BOX_MESH_CHANGE = 'boundingBoxMeshChange',
+  LINE_HEIGHT_CHANGE = 'lineHeightChange',
+  EXTRUSION_WIDTH_CHANGE = 'extrusionWidthChange',
+  DISABLE_GRADIENT_CHANGE = 'disableGradientChange',
+  ANIMATION_COMPLETE = 'animationComplete',
+  FRAME_RENDERED = 'frameRendered'
+}
 
 export type BuildVolumeDef = Pick<BuildVolume, 'x' | 'y' | 'z' | 'smallGrid'>;
 
@@ -51,8 +78,6 @@ export type SceneManagerOptions = {
   lineWidth?: number;
   /** Height of extruded lines */
   lineHeight?: number;
-  /** List of G-code commands considered non-travel moves */
-  nonTravelMoves?: string[];
   /** Minimum layer height threshold */
   minLayerThreshold?: number;
   /** Whether to render extrusion paths */
@@ -97,36 +122,34 @@ export class SceneManager {
   /** Canvas element being rendered to */
   canvas: HTMLCanvasElement;
   /** Whether to render extrusion paths */
-  renderExtrusion = true;
+  private _renderExtrusion = true;
   /** Whether to render travel moves */
-  renderTravel = false;
+  private _renderTravel = false;
   /** Whether to render paths as 3D tubes */
-  renderTubes = false;
+  private _renderTubes = false;
   /** Width of extruded material */
-  extrusionWidth?: number;
+  private _extrusionWidth?: number;
   /** Width of rendered lines */
-  lineWidth?: number;
+  private _lineWidth?: number;
   /** Height of extruded lines */
-  lineHeight = 0.2;
+  private _lineHeight = 0.2;
   /** First layer to render (1-based index) */
-  _startLayer?: number;
+  private _startLayer?: number;
   /** Last layer to render (1-based index) */
-  _endLayer?: number;
+  private _endLayer?: number;
   /** Whether single layer mode is enabled */
-  _singleLayerMode = false;
+  private _singleLayerMode = false;
   /** Build volume dimensions */
   private _buildVolume?: BuildVolume;
   /** Initial camera position [x, y, z] */
-  initialCameraPosition = [-100, 400, 450];
+  private initialCameraPosition = [-100, 400, 450];
   /** Whether to use inches instead of millimeters */
-  inches = false;
-  /** List of G-code commands considered non-travel moves */
-  nonTravelmoves: string[] = [];
+  private _inches = false;
   /** Disable color gradient between layers */
-  disableGradient = false;
+  private _disableGradient = false;
   job: Job;
   /** Bounding box mesh */
-  private boundingBoxMesh?: LineBox;
+  private _boundingBoxMesh?: LineBox;
   /** Color for the bounding box */
   private _boundingBoxColor?: Color;
 
@@ -166,18 +189,20 @@ export class SceneManager {
   /** Last render time in milliseconds */
   lastRenderTime = 0;
   /** Whether to render in wireframe mode */
-  _wireframe = false;
+  private _wireframe = false;
   /** Whether to preserve drawing buffer */
   private preserveDrawingBuffer = false;
   private currentChunk: Group;
-  private onFrame: () => void;
+  private eventsDispatcher: EventsDispatcher = new EventsDispatcher();
+
+  private _renderTimeout: ReturnType<typeof setTimeout>;
 
   /**
    * Creates a new SceneManager instance
    * @param opts - Configuration options
    * @throws Error if no canvas element is provided
    */
-  constructor(opts: SceneManagerOptions, job: Job, onFrame?: () => void) {
+  constructor(opts: SceneManagerOptions, job: Job, eventsDispatcher?: EventsDispatcher) {
     this.job = job;
     this.scene = new Scene();
     this.scene.background = this._backgroundColor;
@@ -201,10 +226,9 @@ export class SceneManager {
     this.initialCameraPosition = opts.initialCameraPosition ?? this.initialCameraPosition;
     this.renderExtrusion = opts.renderExtrusion ?? this.renderExtrusion;
     this.renderTravel = opts.renderTravel ?? this.renderTravel;
-    this.nonTravelmoves = opts.nonTravelMoves ?? this.nonTravelmoves;
     this.renderTubes = opts.renderTubes ?? this.renderTubes;
     this.extrusionWidth = opts.extrusionWidth;
-    this.onFrame = onFrame;
+    this.eventsDispatcher = eventsDispatcher ?? this.eventsDispatcher;
 
     if (opts.boundingBoxColor !== undefined) {
       this._boundingBoxColor = new Color(opts.boundingBoxColor);
@@ -257,6 +281,9 @@ export class SceneManager {
 
     this.initScene();
     this.animate();
+    this.eventsDispatcher.addEventListener(SceneManagerEvent.ANIMATION_COMPLETE, () => {
+      this.setRerenderListeners();
+    });
   }
 
   /**
@@ -275,15 +302,15 @@ export class SceneManager {
     if (!value) {
       this._buildVolume?.dispose();
       this._buildVolume = undefined;
-      return;
-    }
+    } else {
+      this._buildVolume = new BuildVolume(value.x, value.y, value.z, value.smallGrid, this.scene);
 
-    this._buildVolume = new BuildVolume(value.x, value.y, value.z, value.smallGrid, this.scene);
-
-    if (this._buildVolume) {
-      this.disposables.push(this._buildVolume);
-      this._buildVolume.update();
+      if (this._buildVolume) {
+        this.disposables.push(this._buildVolume);
+        this._buildVolume.update();
+      }
     }
+    this.eventsDispatcher.emit(SceneManagerEvent.BUILD_VOLUME_CHANGE, this._buildVolume);
   }
 
   /**
@@ -331,6 +358,7 @@ export class SceneManager {
     }
 
     this.materials[0].uniforms.uColor.value = this._extrusionColor;
+    this.eventsDispatcher.emit(SceneManagerEvent.EXTRUSION_COLOR_CHANGE, this._extrusionColor);
   }
 
   /**
@@ -348,6 +376,7 @@ export class SceneManager {
   set backgroundColor(value: number | string | Color) {
     this._backgroundColor = new Color(value);
     this.scene.background = this._backgroundColor;
+    this.eventsDispatcher.emit(SceneManagerEvent.BACKGROUND_COLOR_CHANGE, this._backgroundColor);
   }
 
   /**
@@ -364,6 +393,7 @@ export class SceneManager {
    */
   set travelColor(value: number | string | Color) {
     this._travelColor = new Color(value);
+    this.eventsDispatcher.emit(SceneManagerEvent.TRAVEL_COLOR_CHANGE, this._travelColor);
   }
 
   /**
@@ -380,6 +410,7 @@ export class SceneManager {
    */
   set topLayerColor(value: ColorRepresentation | undefined) {
     this._topLayerColor = value !== undefined ? new Color(value) : undefined;
+    this.eventsDispatcher.emit(SceneManagerEvent.TOP_LAYER_COLOR_CHANGE, this._topLayerColor);
   }
 
   /**
@@ -396,6 +427,7 @@ export class SceneManager {
    */
   set lastSegmentColor(value: ColorRepresentation | undefined) {
     this._lastSegmentColor = value !== undefined ? new Color(value) : undefined;
+    this.eventsDispatcher.emit(SceneManagerEvent.LAST_SEGMENT_COLOR_CHANGE, this._lastSegmentColor);
   }
 
   /**
@@ -414,6 +446,8 @@ export class SceneManager {
     this._boundingBoxColor = value !== undefined ? new Color(value) : undefined;
 
     this.renderBoundingBox();
+
+    this.eventsDispatcher.emit(SceneManagerEvent.BOUNDING_BOX_COLOR_CHANGE, this._boundingBoxColor);
   }
 
   /**
@@ -436,6 +470,71 @@ export class SceneManager {
     }
 
     this.updateClippingPlanes();
+    this.eventsDispatcher.emit(SceneManagerEvent.START_LAYER_CHANGE, [this._startLayer]);
+  }
+
+  get renderExtrusion(): boolean {
+    return this._renderExtrusion;
+  }
+  set renderExtrusion(value: boolean) {
+    this._renderExtrusion = value;
+    this.eventsDispatcher.emit(SceneManagerEvent.RENDER_EXTRUSION_CHANGE, [this._renderExtrusion]);
+  }
+
+  get renderTravel(): boolean {
+    return this._renderTravel;
+  }
+  set renderTravel(value: boolean) {
+    this._renderTravel = value;
+    this.eventsDispatcher.emit(SceneManagerEvent.RENDER_TRAVEL_CHANGE, this._renderTravel);
+  }
+
+  get renderTubes(): boolean {
+    return this._renderTubes;
+  }
+  set renderTubes(value: boolean) {
+    this._renderTubes = value;
+    this.eventsDispatcher.emit(SceneManagerEvent.RENDER_TUBES_CHANGE, this._renderTubes);
+  }
+
+  get boundingBoxMesh(): LineBox | undefined {
+    return this._boundingBoxMesh;
+  }
+  set boundingBoxMesh(value: LineBox | undefined) {
+    this._boundingBoxMesh = value;
+    this.eventsDispatcher.emit(SceneManagerEvent.BOUNDING_BOX_MESH_CHANGE, this._boundingBoxMesh);
+  }
+
+  get lineWidth(): number | undefined {
+    return this._lineWidth;
+  }
+  set lineWidth(value: number | undefined) {
+    this._lineWidth = value;
+    this.eventsDispatcher.emit(SceneManagerEvent.LINE_WIDTH_CHANGE, this._lineWidth);
+  }
+
+  get lineHeight(): number {
+    return this._lineHeight;
+  }
+  set lineHeight(value: number) {
+    this._lineHeight = value;
+    this.eventsDispatcher.emit(SceneManagerEvent.LINE_HEIGHT_CHANGE, [this._lineHeight]);
+  }
+
+  get extrusionWidth(): number | undefined {
+    return this._extrusionWidth;
+  }
+  set extrusionWidth(value: number | undefined) {
+    this._extrusionWidth = value;
+    this.eventsDispatcher.emit(SceneManagerEvent.EXTRUSION_WIDTH_CHANGE, [this._extrusionWidth]);
+  }
+
+  get disableGradient(): boolean {
+    return this._disableGradient;
+  }
+  set disableGradient(value: boolean) {
+    this._disableGradient = value;
+    this.eventsDispatcher.emit(SceneManagerEvent.DISABLE_GRADIENT_CHANGE, [this._disableGradient]);
   }
 
   /**
@@ -527,7 +626,6 @@ export class SceneManager {
    * @param value - Layer number to end rendering at
    */
   set endLayer(value: number | undefined) {
-    // console.debug('set endLayer', value);
     if (typeof value === 'number') {
       this._endLayer = MathUtils.clamp(value, 1, this.job.countLayers);
     } else {
@@ -566,6 +664,7 @@ export class SceneManager {
     } else {
       this._startLayer = this.prevStartLayer;
     }
+    this.eventsDispatcher.emit(SceneManagerEvent.SINGLE_LAYER_MODE_CHANGE, [this._singleLayerMode]);
   }
 
   get ambientLight(): number {
@@ -613,16 +712,38 @@ export class SceneManager {
     this.animationFrameId = requestAnimationFrame(() => this.animate());
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
-    this.onFrame?.();
+    this.eventsDispatcher.emit(SceneManagerEvent.FRAME_RENDERED, null);
   }
 
   /**
-   * Initializes the Three.js scene by clearing the existing model
+   * Initializes the Three.js scene by creating all necessary objects
    * @remarks
-   * Clears all existing scene objects and disposables, then adds build volume visualization
+   * Adds build volume visualization
    * and lighting if 3D tube rendering is enabled.
    */
   private initScene(): void {
+    this.group = this.group ?? this.createGroup('allLayers');
+    this.currentChunk = this.group;
+
+    this.renderPathIndex = 0;
+
+    this.renderPaths();
+
+    this.renderBoundingBox();
+
+    if (this._buildVolume) {
+      this.disposables.push(this._buildVolume);
+      this._buildVolume.update();
+    }
+    this.scene.add(this.group);
+  }
+
+  /** Resets the scene by clearing all existing objects and re-initializing
+   * @remarks
+   * Disposes of all materials and geometries, removes all children from the main group,
+   * and calls initScene to set up a fresh scene.
+   */
+  private resetScene() {
     this.materials = [];
 
     // Recursively remove all children from the main group and their descendants from the scene
@@ -640,15 +761,7 @@ export class SceneManager {
       removeRecursively(this.group);
     }
 
-    // while (this.disposables.length > 0) {
-    //   const disposable = this.disposables.pop();
-    //   if (disposable) disposable.dispose();
-    // }
-
-    if (this._buildVolume) {
-      this.disposables.push(this._buildVolume);
-      this._buildVolume.update();
-    }
+    this.initScene();
   }
 
   /**
@@ -677,19 +790,10 @@ export class SceneManager {
    */
   render(): void {
     const startRender = performance.now();
-    this.group = this.group ?? this.createGroup('allLayers');
-    this.currentChunk = this.group;
-    this.initScene();
 
-    this.renderPathIndex = 0;
+    this.resetScene();
 
-    this.renderPaths();
-    if (this.boundingBoxColor !== undefined) {
-      this.renderBoundingBox();
-    }
-
-    this.scene.add(this.group);
-    this.renderer.render(this.scene, this.camera);
+    this.renderer?.render(this.scene, this.camera);
     this.lastRenderTime = performance.now() - startRender;
   }
 
@@ -703,12 +807,10 @@ export class SceneManager {
     // sensible default for pathCount
     pathCount = pathCount ?? Math.floor(this.job.paths.length / 60);
 
-    this.initScene();
-
     this.renderPathIndex = 0;
 
     if (this.renderPathIndex >= this.job.paths.length - 1) {
-      this.render();
+      this.renderPaths();
     } else {
       return this.renderFrameLoop(pathCount > 0 ? Math.min(pathCount, this.job.paths.length) : 1);
     }
@@ -723,6 +825,7 @@ export class SceneManager {
     return new Promise((resolve) => {
       const loop = () => {
         if (this.renderPathIndex >= this.job.paths.length - 1) {
+          this.eventsDispatcher.emit(SceneManagerEvent.ANIMATION_COMPLETE, [this._buildVolume]);
           resolve();
         } else {
           this.renderFrame(pathCount);
@@ -750,17 +853,17 @@ export class SceneManager {
     this.currentChunk = chunk;
     const endPathNumber = Math.min(this.renderPathIndex + pathCount, this.job.paths.length - 1);
     this.renderPaths(endPathNumber);
-    if (this._boundingBoxColor !== undefined) {
-      this.renderBoundingBox();
-    }
+    this.renderBoundingBox();
     this.renderPathIndex = endPathNumber;
+
+    this.renderBoundingBox();
     this.group?.add(chunk);
+    this.renderer.render(this.scene, this.camera);
   }
 
   private renderBoundingBox(): void {
     if (!this.job) return;
     if (!this.job.boundingBox.isValid) {
-      console.error('Invalid bounding box, skipping rendering');
       return;
     }
 
@@ -772,7 +875,6 @@ export class SceneManager {
 
       this.scene.add(this.boundingBoxMesh);
     }
-
     this.boundingBoxMesh.visible = this._boundingBoxColor !== undefined;
     (this.boundingBoxMesh.material as LineBasicMaterial).color = this._boundingBoxColor;
   }
@@ -792,6 +894,8 @@ export class SceneManager {
     this.endLayer = Infinity;
     this._singleLayerMode = false;
     this.job = undefined;
+    this.scene.remove(this.boundingBoxMesh);
+    this.boundingBoxMesh = undefined;
   }
 
   resize(): void {
@@ -831,9 +935,9 @@ export class SceneManager {
       this.renderPathsAsLines(this.job.travels.slice(this.renderPathIndex, endPathNumber), this._travelColor);
     }
 
-    if (this.renderExtrusion) {
+    if (this.renderExtrusion && this.job?.toolPaths.length > 0) {
       this.job.toolPaths.forEach((toolPaths, index) => {
-        const color = Array.isArray(this._extrusionColor) ? this._extrusionColor[index] : this._extrusionColor;
+        const color = Array.isArray(this.extrusionColor) ? this.extrusionColor[index] : this.extrusionColor;
         if (this.renderTubes) {
           this.renderPathsAsTubes(toolPaths.slice(this.renderPathIndex, endPathNumber), color);
         } else {
@@ -935,6 +1039,30 @@ export class SceneManager {
     });
 
     return batchedMesh;
+  }
+
+  private setRerenderListeners() {
+    const eventsRequiringRerender = [
+      SceneManagerEvent.BACKGROUND_COLOR_CHANGE,
+      SceneManagerEvent.BUILD_VOLUME_CHANGE,
+      SceneManagerEvent.EXTRUSION_COLOR_CHANGE,
+      SceneManagerEvent.LINE_WIDTH_CHANGE,
+      SceneManagerEvent.RENDER_TUBES_CHANGE,
+      SceneManagerEvent.BOUNDING_BOX_COLOR_CHANGE,
+      SceneManagerEvent.SINGLE_LAYER_MODE_CHANGE,
+      SceneManagerEvent.TRAVEL_COLOR_CHANGE,
+      SceneManagerEvent.RENDER_EXTRUSION_CHANGE,
+      SceneManagerEvent.TOP_LAYER_COLOR_CHANGE,
+      SceneManagerEvent.LAST_SEGMENT_COLOR_CHANGE,
+      SceneManagerEvent.RENDER_TRAVEL_CHANGE
+    ];
+    const rerenderDebounce = 100;
+    this.eventsDispatcher.addEventListener(eventsRequiringRerender, () => {
+      if (this._renderTimeout) clearTimeout(this._renderTimeout);
+      this._renderTimeout = setTimeout(() => {
+        this.render();
+      }, rerenderDebounce);
+    });
   }
 
   saveCamera() {

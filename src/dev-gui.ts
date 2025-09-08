@@ -215,7 +215,7 @@ class DevGUI {
     //   .onChange(() => {
     //     this.renderer.render();
     //   });
-    devHelpers.add(this.gcodePreview, 'render').listen();
+    devHelpers.add(this.gcodePreview.sceneManager, 'render').listen();
     devHelpers.add(this.gcodePreview, 'clear').listen();
     devHelpers.add(this.gcodePreview, 'dispose').listen();
 

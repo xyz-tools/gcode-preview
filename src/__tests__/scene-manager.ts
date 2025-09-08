@@ -4,6 +4,7 @@ import { test, expect, vi, assert } from 'vitest';
 
 import { SceneManager } from '../scene-manager';
 import { GCodeCommand } from '../gcode-parser';
+import { EventsDispatcher } from '../events-dispatcher';
 
 // add a test for destroying the scene manager which should cancel the render loop.
 test('destroying the scene manager should dispose renderer and controls', async () => {
@@ -92,7 +93,6 @@ function createMockSceneManager() {
       dispose: vi.fn(() => {})
     },
     setInches: () => {},
-    nonTravelmoves: [],
     renderExtrusion: () => {},
     renderTravel: () => {},
     addArcSegment: () => {},
@@ -102,6 +102,7 @@ function createMockSceneManager() {
     animate: vi.fn(SceneManager.prototype.animate),
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
-    cancelAnimation: vi.fn(SceneManager.prototype.cancelAnimation)
+    cancelAnimation: vi.fn(SceneManager.prototype.cancelAnimation),
+    eventsDispatcher: new EventsDispatcher()
   };
 }

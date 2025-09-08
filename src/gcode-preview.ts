@@ -1,7 +1,8 @@
-import { SceneManager, SceneManagerOptions } from './scene-manager';
+import { SceneManager, SceneManagerOptions, SceneManagerEvent } from './scene-manager';
 import { GCodeCommand, Parser } from './gcode-parser';
-import { Interpreter } from './interpreter';
+import { Interpreter, InterpreterEvent } from './interpreter';
 import { Job } from './job';
+import { CallbackFunction, EventsDispatcher } from './events-dispatcher';
 import { DevGUI, type DevModeOptions } from './dev-gui';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { makeDroppable } from './extra/dom-utils';
@@ -18,6 +19,12 @@ type LibOptions = {
 };
 
 export type GCodePreviewOptions = LibOptions & SceneManagerOptions;
+export const EventName = {
+  ...SceneManagerEvent,
+  ...InterpreterEvent
+};
+
+export type EventNameType = (typeof EventName)[keyof typeof EventName];
 
 /**
  * Main G-code preview class that orchestrates rendering and parsing
@@ -40,6 +47,7 @@ export type GCodePreviewOptions = LibOptions & SceneManagerOptions;
  * ```
  */
 export class GCodePreview {
+  private eventsDispatcher = new EventsDispatcher();
   /** Job containing parsed G-code data */
   job: Job;
   /** The WebGL sceneManager instance for direct access to rendering properties */
@@ -48,7 +56,7 @@ export class GCodePreview {
   private _parser: Parser | null;
   private opts: GCodePreviewOptions | null;
 
-  private interpreter = new Interpreter();
+  private interpreter: Interpreter;
 
   // dev mode
   /** Developer mode configuration */
@@ -62,7 +70,7 @@ export class GCodePreview {
   /** The WebGL sceneManager instance for direct access to rendering properties */
   get sceneManager(): SceneManager {
     if (!this._sceneManager) {
-      this._sceneManager = new SceneManager(this.opts, this.job, () => this.stats?.update());
+      this._sceneManager = new SceneManager(this.opts, this.job, this.eventsDispatcher);
     }
     return this._sceneManager;
   }
@@ -102,10 +110,14 @@ export class GCodePreview {
     this._parser = new Parser();
     this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
     this.stats = this.devMode ? new Stats() : undefined;
-    this._sceneManager = new SceneManager(this.opts, this.job, () => this.stats?.update());
+    this._sceneManager = new SceneManager(this.opts, this.job, this.eventsDispatcher);
     this.devMode = opts?.devMode;
+    this.interpreter = new Interpreter(this.eventsDispatcher);
+
+    this.eventsDispatcher.addEventListener(EventName.FRAME_RENDERED, () => this.stats?.update());
 
     this.initStats();
+    this.initGui();
     if (opts.droppable) makeDroppable(this);
   }
 
@@ -154,16 +166,6 @@ export class GCodePreview {
       this.interpreter.execute(commands, this.job);
     }
 
-    console.debug(
-      `out of ${this.interpreter.points} move commands, the following were pruned due to no actual movement:`
-    );
-    console.debug(this.interpreter.retractions, 'retractions');
-    console.debug(this.interpreter.deretractions, 'deretractions');
-    console.debug(this.interpreter.feedrateChanges, 'feedrateChanges');
-    console.debug(this.interpreter.others, 'other');
-
-    console.debug(Math.round(this.interpreter.extrusionDistance), 'total extrusion distance (mm)');
-
     if (!this.job.isPlanar) {
       console.warn('Job is non-planar');
     }
@@ -204,13 +206,6 @@ export class GCodePreview {
   }
 
   /**
-   * Renders the current scene
-   */
-  render(): void {
-    this.sceneManager.render();
-  }
-
-  /**
    * Disposes of all resources and cleans up
    */
   dispose(): void {
@@ -224,6 +219,15 @@ export class GCodePreview {
     this.stats?.end();
     this.stats?.dom?.remove();
     this.stats = undefined;
+  }
+
+  /**
+   * Adds an event listener for triggering callbacks on specific events
+   * @param type - Event type to listen for
+   * @param listener - Callback function to invoke when the event occurs
+   */
+  addEventListener(type: EventNameType | EventNameType[], listener: CallbackFunction): void {
+    this.eventsDispatcher.addEventListener(type, listener);
   }
 
   /**
@@ -261,4 +265,4 @@ export class GCodePreview {
  * This class provides a simple interface for rendering G-code previews.
  * Most properties and methods are available through the `sceneManager` property.
  */
-export { SceneManager, DevModeOptions, GCodeCommand, Parser };
+export { SceneManager, SceneManagerEvent, DevModeOptions, GCodeCommand, Parser };

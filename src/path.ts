@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 import { BufferGeometry, Vector3 } from 'three';
 import { ExtrusionGeometry } from './extrusion-geometry';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
