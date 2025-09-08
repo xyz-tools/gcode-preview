@@ -27,9 +27,13 @@ type LibOptions = {
 };
 
 export type GCodePreviewOptions = LibOptions & SceneManagerOptions;
+enum GCodePreviewEvent {
+  STREAM_READ_END = 'streamReadEnd'
+}
 export const EventName = {
   ...SceneManagerEvent,
-  ...InterpreterEvent
+  ...InterpreterEvent,
+  ...GCodePreviewEvent
 };
 
 export type EventNameType = (typeof EventName)[keyof typeof EventName];
@@ -213,6 +217,7 @@ export class GCodePreview {
     } while (!result.done);
 
     console.debug('total read from stream', Math.floor(size / 1024), 'kB');
+    this.eventsDispatcher.emit(EventName.STREAM_READ_END, null);
   }
 
   /**

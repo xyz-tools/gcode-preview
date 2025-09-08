@@ -36,30 +36,10 @@ export const app = (window.app = createApp({
 
     const removeColor = () => settings.value.colors.pop();
 
-    const update = async (evt) => {
-      model.value = {
-        name: evt.detail.filename
-      };
-      updateUI();
-    };
-
     // Update UI with current preview settings
     const updateUI = async () => {
-      const { parser, sceneManager, countLayers } = preview;
-      const {
-        topLayerColor,
-        lastSegmentColor,
-        buildVolume,
-        singleLayerMode,
-        renderTravel,
-        travelColor,
-        renderExtrusion,
-        lineWidth,
-        renderTubes,
-        extrusionWidth,
-        extrusionColor,
-        backgroundColor
-      } = sceneManager;
+      console.log('Updating UI');
+      const { parser, countLayers, sceneManager } = preview;
       const { thumbnails } = parser.metadata;
 
       // thumbnail.value = thumbnails['220x124']?.src;
@@ -70,33 +50,16 @@ export const app = (window.app = createApp({
       thumbnail.value = thumbnails[largestThumbnailKey]?.src;
 
       layerCount.value = countLayers;
-      const colors = extrusionColor instanceof Array ? extrusionColor : [extrusionColor];
+      sceneManager.endLayer = countLayers;
+
       const currentSettings = {
-        startLayer: 1,
-        enableStartLayer: false,
         maxLayer: countLayers || 1000,
-        endLayer: countLayers,
-        enableEndLayer: false,
-        singleLayerMode,
-        renderTravel,
-        travelColor: '#' + travelColor.getHexString(),
-        renderExtrusion,
-        lineWidth,
-        renderTubes,
-        extrusionWidth,
-        colors: colors.map((c) => '#' + c.getHexString()),
-        topLayerColor: '#' + topLayerColor?.getHexString(),
-        highlightTopLayer: !!topLayerColor,
-        lastSegmentColor: '#' + lastSegmentColor?.getHexString(),
-        highlightLastSegment: !!lastSegmentColor,
-        buildVolume: buildVolume,
-        drawBuildVolume: !!buildVolume,
-        backgroundColor: '#' + backgroundColor.getHexString()
+        endLayer: countLayers
       };
 
-      console.debug('app settings:', currentSettings);
       Object.assign(settings.value, currentSettings);
-      sceneManager.endLayer = countLayers;
+
+      applyDevMode(enableDevMode.value);
     };
 
     const loadGCodeFromServer = async (filename) => {
@@ -164,8 +127,8 @@ export const app = (window.app = createApp({
       observer = new ResizeObserver(() => preview.sceneManager.resize());
       observer.observe(canvas);
 
-      // to update the layer count
-      preview.addEventListener('jobUpdated', () => {
+      // to update the layer count and the thumbnail when available
+      preview.addEventListener(['jobUpdated', 'streamReadEnd'], () => {
         updateUI();
       });
 
@@ -253,7 +216,6 @@ export const app = (window.app = createApp({
       selectTab,
       addColor,
       removeColor,
-      update,
       resetUI: updateUI,
       loadGCodeFromServer,
       selectPreset
