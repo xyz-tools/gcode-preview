@@ -30,5 +30,7 @@ export const defaultSettings = {
   lastSegmentColor: null,
   drawBuildVolume: true,
   backgroundColor: '#141414',
-  orthographic: false
+  orthographic: false,
+  boundingBoxColor: '#A830F8',
+  drawBoundingBox: false
 };

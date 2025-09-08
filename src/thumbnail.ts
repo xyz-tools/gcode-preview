@@ -15,10 +15,10 @@ export class Thumbnail {
    * @param charLength - Expected length of base64 characters
    */
   constructor(
-    public size: string, // eslint-disable-line no-unused-vars
-    public width: number, // eslint-disable-line no-unused-vars
-    public height: number, // eslint-disable-line no-unused-vars
-    public charLength: number // eslint-disable-line no-unused-vars
+    public size: string,
+    public width: number,
+    public height: number,
+    public charLength: number
   ) {}
 
   /**

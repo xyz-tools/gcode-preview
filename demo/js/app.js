@@ -24,6 +24,7 @@ export const app = (window.app = createApp({
     const dragging = ref(false);
     const settings = ref(Object.assign({}, defaultSettings));
     const drawBoundingBox = ref(false);
+    const enableDevMode = ref(false);
 
     watch(selectedPreset, (preset) => {
       selectPreset(preset);
@@ -56,7 +57,6 @@ export const app = (window.app = createApp({
         lineWidth,
         renderTubes,
         extrusionWidth,
-        boundingBoxColor,
         extrusionColor,
         backgroundColor
       } = sceneManager;
@@ -91,9 +91,9 @@ export const app = (window.app = createApp({
         highlightLastSegment: !!lastSegmentColor,
         buildVolume: buildVolume,
         drawBuildVolume: !!buildVolume,
-        backgroundColor: '#' + backgroundColor.getHexString(),
-        boundingBoxColor
+        backgroundColor: '#' + backgroundColor.getHexString()
       };
+
       console.debug('app settings:', currentSettings);
       Object.assign(settings.value, currentSettings);
       sceneManager.endLayer = countLayers;
@@ -109,36 +109,28 @@ export const app = (window.app = createApp({
       const gcodeStream = response.body.pipeThrough(new TextDecoderStream());
 
       const prevDevMode = preview.devMode;
-      // preview.clear();
       preview.devMode = prevDevMode;
 
-      await preview.processGCodeStream(gcodeStream, { render: false }); // rendering will be done reactively
-    };
-
-    const render = async () => {
-      if (loadProgressive.value && preview.job.layers !== null) {
-        await preview.sceneManager.renderAnimated();
-      } else {
-        preview.render();
-      }
+      await preview.processGCodeStream(gcodeStream); // rendering will be done reactively
+      updateUI();
     };
 
     const selectPreset = async (presetName) => {
-      const canvas = document.querySelector('canvas.preview');
+      preview.clear();
       const preset = presets[presetName];
       model.value = preset.model;
 
-      // cascade settings: first defaults, then apply the preset, finally some overrides
       const options = {
         ...defaultSettings,
-        ...preset,
-        canvas,
-        droppable: true,
-        backgroundColor: initialBackgroundColor
+        ...preset
       };
+      if (options.initialCameraPosition) {
+        preview.sceneManager.camera.position.fromArray(options.initialCameraPosition);
+      }
 
-      // update UI state
-      drawBoundingBox.value = options.boundingBoxColor !== undefined;
+      console.debug('Applying preset', presetName, options);
+
+      Object.assign(settings.value, options);
 
       // reset previous state
       const lilGuiElement = document.querySelector('.lil-gui');
@@ -146,25 +138,38 @@ export const app = (window.app = createApp({
       const stats = document.querySelector('.stats');
       if (stats) stats.parentNode.removeChild(stats);
       if (defaultSettings.devMode) defaultSettings.devMode.statsContainer = statsContainer();
-      preview?.dispose();
 
-      window['_preview'] = preview = new GCodePreview(options);
+      loadGCodeFromServer(preset.file);
+    };
+
+    function applyDevMode(enabled) {
+      // these elements will be recreated when changing presets, so we'll look them up dynamically
+      document.querySelectorAll('.lil-gui, .stats').forEach((el) => (el.style.display = enabled ? 'block' : 'none'));
+    }
+
+    watch(enableDevMode, applyDevMode);
+
+    onMounted(async () => {
+      const canvas = document.querySelector('canvas.preview');
+
+      window['_preview'] = preview = new GCodePreview({
+        ...defaultSettings,
+        canvas: canvas,
+        droppable: true,
+        backgroundColor: initialBackgroundColor
+      });
 
       // resize preview on canvas resize (TODO: move to GCodePreview)
       if (observer) observer.disconnect();
       observer = new ResizeObserver(() => preview.sceneManager.resize());
       observer.observe(canvas);
 
-      await loadGCodeFromServer(preset.file);
-
-      updateUI();
-    };
-
-    onMounted(async () => {
-      await selectPreset(defaultPreset);
+      // to update the layer count
+      preview.addEventListener('jobUpdated', () => {
+        updateUI();
+      });
 
       watchEffect(() => {
-        if (!preview) return;
         preview.sceneManager.backgroundColor = settings.value.backgroundColor;
 
         if (preview.sceneManager.buildVolume && settings.value.drawBuildVolume) {
@@ -184,13 +189,12 @@ export const app = (window.app = createApp({
         } else if (preview.sceneManager.buildVolume && !settings.value.drawBuildVolume) {
           preview.sceneManager.buildVolume = undefined;
         }
-        preview.sceneManager.boundingBoxColor = drawBoundingBox.value
-          ? (settings.value.boundingBoxColor ?? 'magenta')
+        preview.sceneManager.boundingBoxColor = settings.value.drawBoundingBox
+          ? settings.value.boundingBoxColor
           : undefined;
       });
 
       watchEffect(() => {
-        if (!preview) return;
         preview.sceneManager.renderTravel = settings.value.renderTravel;
         preview.sceneManager.travelColor = settings.value.travelColor;
         preview.sceneManager.lineWidth = +settings.value.lineWidth;
@@ -205,16 +209,9 @@ export const app = (window.app = createApp({
         preview.sceneManager.lastSegmentColor = settings.value.highlightLastSegment
           ? settings.value.lastSegmentColor
           : undefined;
-
-        // run render after settings have been applied
-        // this is needed to prevent reactivity attaching the render function
-        setTimeout(() => {
-          render();
-        }, 0);
       });
 
       watchEffect(() => {
-        if (!preview) return;
         const startLayer = parseIntOrDefault(settings.value.startLayer, undefined);
         const endLayer = parseIntOrDefault(settings.value.endLayer, undefined);
 
@@ -223,7 +220,6 @@ export const app = (window.app = createApp({
       });
 
       watchEffect(() => {
-        if (!preview) return;
         preview.sceneManager.singleLayerMode = settings.value.singleLayerMode;
       });
 
@@ -237,6 +233,8 @@ export const app = (window.app = createApp({
         preview.sceneManager.extrusionColor =
           settings.value.colors.length === 1 ? settings.value.colors[0] : settings.value.colors;
       });
+
+      selectPreset(defaultPreset);
     });
 
     return {
@@ -251,6 +249,7 @@ export const app = (window.app = createApp({
       settings,
       loadProgressive,
       drawBoundingBox,
+      enableDevMode,
       selectTab,
       addColor,
       removeColor,
