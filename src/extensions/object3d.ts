@@ -1,4 +1,4 @@
-import { Object3D } from "three";
+import { Object3D } from 'three';
 
 declare module 'three' {
   interface Object3D {
@@ -18,4 +18,4 @@ Object3D.prototype.getByUserData = function (this: Object3D, name: string, value
   });
 
   return meshes;
-}
+};

@@ -615,6 +615,16 @@ export class SceneManager {
     });
   }
 
+  private get travelLines() {
+    const lines = this.scene.getByUserData('lineType', 'travel');
+    return lines as unknown as [LineSegments2];
+  }
+
+  private get extrusionLines() {
+    const lines = this.scene.getByUserData('lineType', 'extrusion');
+    return lines as unknown as [LineSegments2];
+  }
+
   /** @internal */
   /**
    * Animation loop that continuously renders the scene
@@ -839,10 +849,13 @@ export class SceneManager {
    */
   private renderPaths(endPathNumber: number = Infinity): void {
     if (this.renderTravel) {
-      const travelLine = this.renderPathsAsLines(this.job.travels.slice(this.renderPathIndex, endPathNumber), this._travelColor);
+      const travelLine = this.renderPathsAsLines(
+        this.job.travels.slice(this.renderPathIndex, endPathNumber),
+        this._travelColor
+      );
       travelLine.userData = {
         lineType: 'travel'
-      }
+      };
     }
 
     if (this.renderExtrusion) {
@@ -854,7 +867,7 @@ export class SceneManager {
           const extrusionLine = this.renderPathsAsLines(toolPaths.slice(this.renderPathIndex, endPathNumber), color);
           extrusionLine.userData = {
             lineType: 'extrusion'
-          }
+          };
         }
       });
     }
@@ -987,15 +1000,5 @@ export class SceneManager {
     localStorage.removeItem('cameraRotation');
     localStorage.removeItem('cameraZoom');
     localStorage.removeItem('cameraTarget');
-  }
-
-  private get travelLines() {
-    const lines = this.scene.getByUserData('lineType', 'travel');
-    return lines as unknown as [LineSegments2];
-  }
-
-  private get extrusionLines() {
-    const lines = this.scene.getByUserData('lineType', 'extrusion');
-    return lines as unknown as [LineSegments2];
   }
 }
