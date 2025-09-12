@@ -364,6 +364,10 @@ export class SceneManager {
    */
   set travelColor(value: number | string | Color) {
     this._travelColor = new Color(value);
+
+    if (this.travelLineMaterial) {
+      this.travelLineMaterial.color.set(this._travelColor);
+    }
   }
 
   /**
@@ -843,6 +847,7 @@ export class SceneManager {
     }
   }
 
+  private travelLineMaterial: LineMaterial;
   /**
    * Renders paths as 2D lines
    * @param paths - Array of paths to render
@@ -855,7 +860,7 @@ export class SceneManager {
     let clippingPlanes: Plane[] = [];
     clippingPlanes = this.createClippingPlanes(minZ, maxZ);
 
-    const material = new LineMaterial({
+    this.travelLineMaterial = new LineMaterial({
       color: Number(color.getHex()),
       linewidth: this.lineWidth,
       clippingPlanes
@@ -877,9 +882,9 @@ export class SceneManager {
     });
 
     const geometry = new LineSegmentsGeometry().setPositions(lineVertices);
-    const line = new LineSegments2(geometry, material);
+    const line = new LineSegments2(geometry, this.travelLineMaterial);
 
-    this.disposables.push(material);
+    this.disposables.push(this.travelLineMaterial);
     this.disposables.push(geometry);
     this.currentChunk?.add(line);
   }
