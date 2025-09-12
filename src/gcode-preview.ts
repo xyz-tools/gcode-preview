@@ -5,6 +5,7 @@ import { Job } from './job';
 import { DevGUI, type DevModeOptions } from './dev-gui';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { makeDroppable } from './extra/dom-utils';
+import "./extensions/object3d"; // import extensions 
 
 /**
  * Options for configuring the G-code preview
