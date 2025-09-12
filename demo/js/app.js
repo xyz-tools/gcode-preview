@@ -200,12 +200,12 @@ export const app = (window.app = createApp({
         preview.sceneManager.boundingBoxColor = drawBoundingBox.value
           ? (settings.value.boundingBoxColor ?? 'magenta')
           : undefined;
+        preview.sceneManager.travelColor = settings.value.travelColor;
       });
 
       watchEffect(() => {
         if (!preview) return;
         preview.sceneManager.renderTravel = settings.value.renderTravel;
-        preview.sceneManager.travelColor = settings.value.travelColor;
         preview.sceneManager.lineWidth = +settings.value.lineWidth;
 
         preview.sceneManager.renderExtrusion = settings.value.renderExtrusion;
