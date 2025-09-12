@@ -3,20 +3,19 @@ import { Object3D } from "three";
 declare module 'three' {
   interface Object3D {
     // eslint-disable-next-line no-unused-vars
-    getObjectByUserDataProperty(name: string, value: unknown): Array<Object3D>;
+    getByUserData(name: string, value: unknown): Array<Object3D>;
   }
 }
 
-Object3D.prototype.getObjectByUserDataProperty = function (this: Object3D, name: string, value: unknown) {
-  const result: Array<Object3D> = [];
+// from https://discourse.threejs.org/t/getobject-by-any-custom-property-present-in-userdata-of-object/3378/3
+Object3D.prototype.getByUserData = function (this: Object3D, name: string, value: unknown) {
+  const meshes: Array<Object3D> = [];
 
-  if (this.userData[name] === value)
-    result.push(this);
+  this.traverse((node) => {
+    if (node.userData[name] === value) {
+      meshes.push(node);
+    }
+  });
 
-  for (const child of this.children) {
-    const objects = child.getObjectByUserDataProperty(name, value);
-    result.push(...objects);
-  }
-
-  return result;
+  return meshes;
 }

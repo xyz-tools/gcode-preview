@@ -334,7 +334,7 @@ export class SceneManager {
     this.materials[0].uniforms.uColor.value = this._extrusionColor;
 
     if (!this.renderTubes) {
-      for (const line of this._extrusionLines) {
+      for (const line of this.extrusionLines) {
         line.material.color.set(this._extrusionColor);
       }
     }
@@ -372,7 +372,7 @@ export class SceneManager {
   set travelColor(value: number | string | Color) {
     this._travelColor = new Color(value);
 
-    for (const line of this._travelLines) {
+    for (const line of this.travelLines) {
       line.material.color.set(this._travelColor);
     }
   }
@@ -989,14 +989,13 @@ export class SceneManager {
     localStorage.removeItem('cameraTarget');
   }
 
-  get _travelLines() {
-    const lines = this.scene.getObjectByUserDataProperty('lineType', 'travel');
+  private get travelLines() {
+    const lines = this.scene.getByUserData('lineType', 'travel');
     return lines as unknown as [LineSegments2];
   }
 
-  get _extrusionLines() {
-    const lines = this.scene.getObjectByUserDataProperty('lineType', 'extrusion');
+  private get extrusionLines() {
+    const lines = this.scene.getByUserData('lineType', 'extrusion');
     return lines as unknown as [LineSegments2];
   }
 }
-
