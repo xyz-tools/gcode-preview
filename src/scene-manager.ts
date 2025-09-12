@@ -27,7 +27,8 @@ import {
   Vector3,
   WebGLRenderer,
   MathUtils,
-  LineBasicMaterial
+  LineBasicMaterial,
+  Object3D
 } from 'three';
 
 export type BuildVolumeDef = Pick<BuildVolume, 'x' | 'y' | 'z' | 'smallGrid'>;
@@ -331,6 +332,12 @@ export class SceneManager {
     }
 
     this.materials[0].uniforms.uColor.value = this._extrusionColor;
+
+    if (!this.renderTubes) {
+      for (const line of this._extrusionLines) {
+        line.material.color.set(this._extrusionColor);
+      }
+    }
   }
 
   /**
@@ -365,8 +372,8 @@ export class SceneManager {
   set travelColor(value: number | string | Color) {
     this._travelColor = new Color(value);
 
-    if (this.travelLineMaterial) {
-      this.travelLineMaterial.color.set(this._travelColor);
+    for (const line of this._travelLines) {
+      line.material.color.set(this._travelColor);
     }
   }
 
@@ -832,7 +839,10 @@ export class SceneManager {
    */
   private renderPaths(endPathNumber: number = Infinity): void {
     if (this.renderTravel) {
-      this.renderPathsAsLines(this.job.travels.slice(this.renderPathIndex, endPathNumber), this._travelColor);
+      const travelLine = this.renderPathsAsLines(this.job.travels.slice(this.renderPathIndex, endPathNumber), this._travelColor);
+      travelLine.userData = {
+        lineType: 'travel'
+      }
     }
 
     if (this.renderExtrusion) {
@@ -841,26 +851,28 @@ export class SceneManager {
         if (this.renderTubes) {
           this.renderPathsAsTubes(toolPaths.slice(this.renderPathIndex, endPathNumber), color);
         } else {
-          this.renderPathsAsLines(toolPaths.slice(this.renderPathIndex, endPathNumber), color);
+          const extrusionLine = this.renderPathsAsLines(toolPaths.slice(this.renderPathIndex, endPathNumber), color);
+          extrusionLine.userData = {
+            lineType: 'extrusion'
+          }
         }
       });
     }
   }
 
-  private travelLineMaterial: LineMaterial;
   /**
    * Renders paths as 2D lines
    * @param paths - Array of paths to render
    * @param color - Color to use for the lines
    */
-  private renderPathsAsLines(paths: Path[], color: Color): void {
+  private renderPathsAsLines(paths: Path[], color: Color): Object3D {
     const minZ = this.job.layers[this._startLayer - 1]?.z;
     const maxZ = this.job.layers[this._endLayer - 1]?.z;
 
     let clippingPlanes: Plane[] = [];
     clippingPlanes = this.createClippingPlanes(minZ, maxZ);
 
-    this.travelLineMaterial = new LineMaterial({
+    const material = new LineMaterial({
       color: Number(color.getHex()),
       linewidth: this.lineWidth,
       clippingPlanes
@@ -882,11 +894,12 @@ export class SceneManager {
     });
 
     const geometry = new LineSegmentsGeometry().setPositions(lineVertices);
-    const line = new LineSegments2(geometry, this.travelLineMaterial);
+    const line = new LineSegments2(geometry, material);
 
-    this.disposables.push(this.travelLineMaterial);
+    this.disposables.push(material);
     this.disposables.push(geometry);
     this.currentChunk?.add(line);
+    return line;
   }
 
   /**
@@ -975,4 +988,37 @@ export class SceneManager {
     localStorage.removeItem('cameraZoom');
     localStorage.removeItem('cameraTarget');
   }
+
+  get _travelLines() {
+    const lines = this.scene.getObjectByUserDataProperty('lineType', 'travel');
+    return lines as unknown as [LineSegments2];
+  }
+
+  get _extrusionLines() {
+    const lines = this.scene.getObjectByUserDataProperty('lineType', 'extrusion');
+    return lines as unknown as [LineSegments2];
+  }
+}
+
+import * as THREE from "three";
+
+declare module 'three' {
+  interface Object3D {
+    // eslint-disable-next-line no-unused-vars
+    getObjectByUserDataProperty(name: string, value: unknown): Array<Object3D>;
+  }
+}
+
+THREE.Object3D.prototype.getObjectByUserDataProperty = function (this: Object3D, name: string, value: unknown) {
+  const result: Array<Object3D> = [];
+
+  if (this.userData[name] === value)
+    result.push(this);
+
+  for (const child of this.children) {
+    const objects = child.getObjectByUserDataProperty(name, value);
+    result.push(...objects);
+  }
+
+  return result;
 }
