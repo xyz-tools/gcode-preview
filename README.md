@@ -51,15 +51,15 @@ Check the full API documentation at https://gcode-preview.web.app/docs
 ### Vue.js / React / Svelte integration
 <img src="https://vuejs.org/logo.svg" height="40px" />
 
- There's a [Vue.js example](https://github.com/remcoder/gcode-preview/tree/develop/vue-demo) that has a [Vue component](https://github.com/remcoder/gcode-preview/blob/develop/vue-demo/src/components/GCodePreview.vue) to wrap the library.
+ There's a [Vue.js example](https://github.com/xyz-tools/gcode-preview-examples) that has a [Vue component](https://github.com/xyz-tools/gcode-preview-examples/blob/main/GCodePreview.vue) to wrap the library.
 
  <img src="https://reactjs.org/favicon.ico" height="42px"/>
  
- @Zeng95 provided a [React & Typescript example](https://github.com/remcoder/gcode-preview/tree/develop/react-typescript-demo) that has a [React component](https://github.com/remcoder/gcode-preview/blob/develop/react-typescript-demo/src/components/GCodePreview.tsx) to wrap the library.
+ @Zeng95 provided a [React & Typescript example](https://github.com/xyz-tools/gcode-preview-react) that has a [React component](https://github.com/xyz-tools/gcode-preview-react/blob/main/src/components/GCodePreview.tsx) to wrap the library.
  
  <img src='https://svelte.dev/favicon.png' height='42px' />
  
- There is a [Svelte example](https://github.com/remcoder/gcode-preview/tree/develop/svelte-demo) with a [Svelte component](https://github.com/remcoder/gcode-preview/blob/develop/svelte-demo/src/lib/GCodePreview.svelte).
+ There is a [Svelte example](https://github.com/xyz-tools/gcode-preview-svelte) with a [Svelte component](https://github.com/xyz-tools/gcode-preview-svelte/blob/main/src/lib/GCodePreview.svelte).
 
 ## Feature description
 
