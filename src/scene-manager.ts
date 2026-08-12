@@ -19,6 +19,7 @@ import {
   Euler,
   Group,
   Material,
+  OrthographicCamera,
   PerspectiveCamera,
   Plane,
   REVISION,
@@ -75,6 +76,8 @@ export type SceneManagerOptions = {
   renderTubes?: boolean;
   /** Color for the bounding box. If undefined, the bounding box is not rendered. */
   boundingBoxColor?: ColorRepresentation;
+  /** Use orthographic camera instead of perspective */
+  orthographic?: boolean;
 };
 
 /**
@@ -83,8 +86,8 @@ export type SceneManagerOptions = {
 export class SceneManager {
   /** Three.js scene */
   scene: Scene;
-  /** Three.js perspective camera */
-  camera: PerspectiveCamera;
+  /** Three.js camera (perspective or orthographic) */
+  camera: PerspectiveCamera | OrthographicCamera;
   /** Three.js WebGL renderer */
   renderer: WebGLRenderer & {
     info: {
@@ -120,6 +123,8 @@ export class SceneManager {
   initialCameraPosition = [-100, 400, 450];
   /** Whether to use inches instead of millimeters */
   inches = false;
+  /** Whether to use orthographic camera */
+  private _orthographic = false;
   /** List of G-code commands considered non-travel moves */
   nonTravelmoves: string[] = [];
   /** Disable color gradient between layers */
@@ -247,7 +252,8 @@ export class SceneManager {
     });
 
     this.renderer.localClippingEnabled = true;
-    this.camera = new PerspectiveCamera(25, this.canvas.offsetWidth / this.canvas.offsetHeight, 1, 5000);
+    this._orthographic = opts.orthographic ?? false;
+    this.camera = this.createCamera();
     this.camera.position.fromArray(this.initialCameraPosition);
     this.resize();
 
@@ -604,6 +610,66 @@ export class SceneManager {
     });
   }
 
+  /**
+   * Gets whether orthographic camera mode is enabled
+   */
+  get orthographic(): boolean {
+    return this._orthographic;
+  }
+
+  /**
+   * Sets orthographic camera mode, switching the camera type at runtime
+   */
+  set orthographic(value: boolean) {
+    if (value === this._orthographic) return;
+    this._orthographic = value;
+
+    const oldPosition = this.camera.position.clone();
+    const oldTarget = this.controls.target.clone();
+
+    this.camera = this.createCamera();
+    this.camera.position.copy(oldPosition);
+
+    this.controls.dispose();
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.target.copy(oldTarget);
+    if (this._orthographic) {
+      this.controls.enableRotate = false;
+      this.controls.screenSpacePanning = true;
+    }
+    this.controls.update();
+
+    this.resize();
+  }
+
+  /**
+   * Creates either a PerspectiveCamera or OrthographicCamera based on current settings
+   */
+  private createCamera(): PerspectiveCamera | OrthographicCamera {
+    if (this._orthographic) {
+      const aspect = this.canvas.offsetWidth / this.canvas.offsetHeight;
+      const frustumSize = this.getOrthoFrustumSize();
+      const halfH = frustumSize / 2;
+      const halfW = halfH * aspect;
+      return new OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.1, 10000);
+    }
+    return new PerspectiveCamera(25, this.canvas.offsetWidth / this.canvas.offsetHeight, 1, 5000);
+  }
+
+  /**
+   * Calculates the orthographic frustum size from the build volume or model bounding box
+   */
+  private getOrthoFrustumSize(): number {
+    if (this.job?.boundingBox?.isValid) {
+      const size = this.job.boundingBox.size;
+      return Math.max(size.x, size.y, size.z) * 1.2;
+    }
+    if (this._buildVolume) {
+      return Math.max(this._buildVolume.x, this._buildVolume.y, this._buildVolume.z) * 1.2;
+    }
+    return 500;
+  }
+
   /** @internal */
   /**
    * Animation loop that continuously renders the scene
@@ -796,7 +862,19 @@ export class SceneManager {
 
   resize(): void {
     const [w, h] = [this.canvas.offsetWidth, this.canvas.offsetHeight];
-    this.camera.aspect = w / h;
+    const aspect = w / h;
+
+    if (this.camera instanceof OrthographicCamera) {
+      const frustumSize = this.getOrthoFrustumSize();
+      const halfH = frustumSize / 2;
+      const halfW = halfH * aspect;
+      this.camera.left = -halfW;
+      this.camera.right = halfW;
+      this.camera.top = halfH;
+      this.camera.bottom = -halfH;
+    } else {
+      this.camera.aspect = aspect;
+    }
     this.camera.updateProjectionMatrix();
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setSize(w, h, false);

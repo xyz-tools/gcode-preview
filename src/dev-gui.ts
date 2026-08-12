@@ -143,6 +143,10 @@ class DevGUI {
     camera.onOpenClose(() => {
       this.saveOpenFolders();
     });
+    camera.add(this.sceneManager, 'orthographic').name('Orthographic').onChange(() => {
+      this.reset();
+    });
+
     const cameraPosition = camera.addFolder('Camera position');
     cameraPosition.add(this.sceneManager.camera.position, 'x').listen();
     cameraPosition.add(this.sceneManager.camera.position, 'y').listen();
