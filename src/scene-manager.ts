@@ -33,6 +33,15 @@ import {
 
 export type BuildVolumeDef = Pick<BuildVolume, 'x' | 'y' | 'z' | 'smallGrid'>;
 
+// Orthographic camera constants
+const PERSPECTIVE_FOV = 25;
+const PERSPECTIVE_NEAR = 1;
+const PERSPECTIVE_FAR = 5000;
+const ORTHO_NEAR = 0.1;
+const ORTHO_FAR = 10000;
+const FRUSTUM_PADDING = 1.2; // 20% margin around model/volume
+const DEFAULT_FRUSTUM_SIZE = 500; // fallback when no model or build volume is loaded
+
 export type SceneManagerOptions = {
   /** Build volume dimensions */
   buildVolume?: BuildVolumeDef;
@@ -76,7 +85,7 @@ export type SceneManagerOptions = {
   renderTubes?: boolean;
   /** Color for the bounding box. If undefined, the bounding box is not rendered. */
   boundingBoxColor?: ColorRepresentation;
-  /** Use orthographic camera instead of perspective */
+  /** Use an orthographic (flat, no perspective distortion) camera instead of the default perspective camera */
   orthographic?: boolean;
 };
 
@@ -123,8 +132,6 @@ export class SceneManager {
   initialCameraPosition = [-100, 400, 450];
   /** Whether to use inches instead of millimeters */
   inches = false;
-  /** Whether to use orthographic camera */
-  private _orthographic = false;
   /** List of G-code commands considered non-travel moves */
   nonTravelmoves: string[] = [];
   /** Disable color gradient between layers */
@@ -252,8 +259,7 @@ export class SceneManager {
     });
 
     this.renderer.localClippingEnabled = true;
-    this._orthographic = opts.orthographic ?? false;
-    this.camera = this.createCamera();
+    this.camera = this.createCamera(opts.orthographic ?? false);
     this.camera.position.fromArray(this.initialCameraPosition);
     this.resize();
 
@@ -610,30 +616,23 @@ export class SceneManager {
     });
   }
 
-  /**
-   * Gets whether orthographic camera mode is enabled
-   */
   get orthographic(): boolean {
-    return this._orthographic;
+    return this.camera instanceof OrthographicCamera;
   }
 
-  /**
-   * Sets orthographic camera mode, switching the camera type at runtime
-   */
   set orthographic(value: boolean) {
-    if (value === this._orthographic) return;
-    this._orthographic = value;
+    if (value === this.orthographic) return;
 
     const oldPosition = this.camera.position.clone();
     const oldTarget = this.controls.target.clone();
 
-    this.camera = this.createCamera();
+    this.camera = this.createCamera(value);
     this.camera.position.copy(oldPosition);
 
     this.controls.dispose();
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.target.copy(oldTarget);
-    if (this._orthographic) {
+    if (value) {
       this.controls.enableRotate = false;
       this.controls.screenSpacePanning = true;
     }
@@ -642,32 +641,26 @@ export class SceneManager {
     this.resize();
   }
 
-  /**
-   * Creates either a PerspectiveCamera or OrthographicCamera based on current settings
-   */
-  private createCamera(): PerspectiveCamera | OrthographicCamera {
-    if (this._orthographic) {
-      const aspect = this.canvas.offsetWidth / this.canvas.offsetHeight;
+  private createCamera(orthographic: boolean): PerspectiveCamera | OrthographicCamera {
+    const aspect = this.canvas.offsetWidth / this.canvas.offsetHeight;
+    if (orthographic) {
       const frustumSize = this.getOrthoFrustumSize();
       const halfH = frustumSize / 2;
       const halfW = halfH * aspect;
-      return new OrthographicCamera(-halfW, halfW, halfH, -halfH, 0.1, 10000);
+      return new OrthographicCamera(-halfW, halfW, halfH, -halfH, ORTHO_NEAR, ORTHO_FAR);
     }
-    return new PerspectiveCamera(25, this.canvas.offsetWidth / this.canvas.offsetHeight, 1, 5000);
+    return new PerspectiveCamera(PERSPECTIVE_FOV, aspect, PERSPECTIVE_NEAR, PERSPECTIVE_FAR);
   }
 
-  /**
-   * Calculates the orthographic frustum size from the build volume or model bounding box
-   */
   private getOrthoFrustumSize(): number {
     if (this.job?.boundingBox?.isValid) {
       const size = this.job.boundingBox.size;
-      return Math.max(size.x, size.y, size.z) * 1.2;
+      return Math.max(size.x, size.y, size.z) * FRUSTUM_PADDING;
     }
     if (this._buildVolume) {
-      return Math.max(this._buildVolume.x, this._buildVolume.y, this._buildVolume.z) * 1.2;
+      return Math.max(this._buildVolume.x, this._buildVolume.y, this._buildVolume.z) * FRUSTUM_PADDING;
     }
-    return 500;
+    return DEFAULT_FRUSTUM_SIZE;
   }
 
   /** @internal */
