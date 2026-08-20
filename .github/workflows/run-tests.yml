@@ -20,6 +20,52 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    strategy:
+      fail-fast: false
+      matrix:
+        # test against the min and max supported three.js versions (see #308)
+        include:
+          - three-version: 0.166.1
+            types-version: 0.166.0
+          - three-version: 0.167.1
+            types-version: 0.167.2
+          - three-version: 0.168.0
+            types-version: 0.168.0
+          - three-version: 0.169.0
+            types-version: 0.169.0
+          - three-version: 0.170.0
+            types-version: 0.170.0
+          - three-version: 0.171.0
+            types-version: 0.171.0
+          - three-version: 0.172.0
+            types-version: 0.172.0
+          - three-version: 0.173.0
+            types-version: 0.173.0
+          - three-version: 0.174.0
+            types-version: 0.174.0
+          - three-version: 0.175.0
+            types-version: 0.175.0
+          - three-version: 0.176.0
+            types-version: 0.176.0
+          - three-version: 0.177.0
+            types-version: 0.177.0
+          - three-version: 0.178.0
+            types-version: 0.178.1
+          - three-version: 0.179.1
+            types-version: 0.179.0
+          - three-version: 0.180.0
+            types-version: 0.180.0
+          - three-version: 0.181.2
+            types-version: 0.181.0
+          - three-version: 0.182.0
+            types-version: 0.182.0
+          - three-version: 0.183.2
+            types-version: 0.183.1
+          - three-version: 0.184.0
+            types-version: 0.184.1
+          - three-version: 0.185.1
+            types-version: 0.185.4
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,6 +73,8 @@ jobs:
           node-version: '22.x'
           cache: "npm"
       - run: npm ci
+      - name: Install three.js ${{ matrix.three-version }}
+        run: npm install three@${{ matrix.three-version }} @types/three@${{ matrix.types-version }} --no-save
       - run: npm run build
       - run: npm run test
       - run: npm run typeCheck
