@@ -242,6 +242,11 @@ export const app = (window.app = createApp({
 
       watchEffect(() => {
         if (!preview) return;
+        preview.sceneManager.orthographic = settings.value.orthographic;
+      });
+
+      watchEffect(() => {
+        if (!preview) return;
         preview.sceneManager.extrusionColor =
           settings.value.colors.length === 1 ? settings.value.colors[0] : settings.value.colors;
       });
