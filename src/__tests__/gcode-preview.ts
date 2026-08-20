@@ -67,9 +67,15 @@ describe('GCodePreview', () => {
     // Setup mocks
     // vitest v4 requires function keyword (not arrow functions) in mockImplementation
     // for mocked constructors — arrow functions cannot be called with `new`.
-    vi.mocked(Job).mockImplementation(function () { return mockJob; } as never);
-    vi.mocked(Interpreter).mockImplementation(function () { return mockInterpreter; } as never);
-    vi.mocked(SceneManager).mockImplementation(function () { return mockSceneManager; } as never);
+    vi.mocked(Job).mockImplementation(function () {
+      return mockJob;
+    } as never);
+    vi.mocked(Interpreter).mockImplementation(function () {
+      return mockInterpreter;
+    } as never);
+    vi.mocked(SceneManager).mockImplementation(function () {
+      return mockSceneManager;
+    } as never);
     vi.mocked(Parser).mockImplementation(function () {
       return {
         parseGCode: vi.fn().mockReturnValue({
@@ -78,7 +84,9 @@ describe('GCodePreview', () => {
         metadata: { thumbnails: {} }
       };
     } as never);
-    vi.mocked(DevGUI).mockImplementation(function () { return mockDevGui; } as never);
+    vi.mocked(DevGUI).mockImplementation(function () {
+      return mockDevGui;
+    } as never);
     vi.mocked(Stats).mockImplementation(function () {
       return {
         update: vi.fn(),
@@ -289,7 +297,9 @@ describe('GCodePreview', () => {
 
       // Create new mock for second DevGUI instance
       const newMockDevGui = { reset: vi.fn(), destroy: vi.fn() };
-      vi.mocked(DevGUI).mockImplementationOnce(function () { return newMockDevGui; } as never);
+      vi.mocked(DevGUI).mockImplementationOnce(function () {
+        return newMockDevGui;
+      } as never);
 
       preview.devMode = false;
 
