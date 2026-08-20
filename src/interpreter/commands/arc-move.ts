@@ -1,6 +1,7 @@
 import { PathType } from '../../path';
 import { ArcTessellator, ArcTessellatorOptions } from '../../arc-tessellator';
 import type { CommandHandler } from '../../interpreter';
+import { resolvePosition } from './resolve-position';
 
 /**
  * Builds an arc move handler (G2/G3) around its own tessellator
@@ -19,6 +20,10 @@ export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler
     const { state } = job;
     // Starting position for the arc, with any un-homed axis assumed at the origin.
     const from = job.resolvePosition();
+    const relative = state.positioning === 'relative';
+    const targetX = resolvePosition(x, state.x, relative);
+    const targetY = resolvePosition(y, state.y, relative);
+    const targetZ = resolvePosition(z, state.z, relative);
 
     const cw = command.gcode === 'g2';
     let currentPath = job.inprogressPath;
@@ -40,7 +45,7 @@ export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler
     // the state update below, so no separate endpoint emission is needed.
     arcTessellator.tessellate(
       from,
-      { cw, x, y, z, i, j, r },
+      { cw, x: targetX, y: targetY, z: targetZ, i, j, r },
       (px, py, pz) => {
         currentPath.addPoint(px, py, pz);
         if (pathType === PathType.Extrusion) {
@@ -50,13 +55,12 @@ export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler
       state.units
     );
 
-    // `??` not `||`: an arc ending on X0, Y0 or Z0 used to silently keep the previous
-    // coordinate. Safe now that the parser drops non-finite params -- `||` was also
-    // rejecting NaN here by accident, which `??` does not do. An axis the command
-    // omits keeps its previous (possibly unknown) value, preserving isHomed semantics.
-    state.x = x ?? state.x;
-    state.y = y ?? state.y;
-    state.z = z ?? state.z;
+    // An axis the command omits keeps its previous (possibly unknown) value,
+    // preserving isHomed semantics: resolvePosition returns the current
+    // coordinate untouched when the command carries no value for the axis.
+    state.x = targetX;
+    state.y = targetY;
+    state.z = targetZ;
   };
 };
 

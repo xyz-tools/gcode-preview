@@ -1,6 +1,7 @@
 import { test, expect, describe } from 'vitest';
-import { Parser } from '../../../parser/gcode-parser';
+import { GCodeCommand, Parser } from '../../../parser/gcode-parser';
 import { Interpreter } from '../../../interpreter';
+import { arcMove } from '../../../interpreter/commands';
 import { Job } from '../../../job';
 import { PathType } from '../../../path';
 
@@ -92,5 +93,27 @@ describe('arcMove (G2/G3)', () => {
     // start-of-path point + endpoint only, no interior segments
     expect(points.length).toEqual(2);
     expect(points[points.length - 1]).toMatchObject({ x: 10.0125, y: 10.4998 });
+  });
+
+  test('relative positioning applies to arc endpoints', () => {
+    const command = new GCodeCommand('G2 X10 Y0 Z5 I5 J0', 'g2', {
+      x: 10,
+      y: 0,
+      z: 5,
+      i: 5,
+      j: 0
+    });
+    const job = new Job();
+    job.state.x = 10;
+    job.state.y = 20;
+    job.state.z = 30;
+    job.state.positioning = 'relative';
+
+    arcMove(command, job);
+
+    expect(job.state.x).toEqual(20);
+    expect(job.state.y).toEqual(20);
+    expect(job.state.z).toEqual(35);
+    expect(job.inprogressPath?.vertices.slice(-3)).toEqual([20, 20, 35]);
   });
 });
