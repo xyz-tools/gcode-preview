@@ -211,7 +211,7 @@
                   <label for="drawBuildVolume">Render build volume</label>
                   <input type="checkbox" v-model="settings.drawBuildVolume" />
                 </div>
-                <div :class="{'has-text-grey' : !settings.drawBuildVolume}">
+                <div v-if="settings.buildVolume" :class="{'has-text-grey' : !settings.drawBuildVolume}">
                   <div class="controls">
                     <label for="buildVolumeX">Build volume (x)&nbsp;</label>
                     <input type="number" v-model="settings.buildVolume.x" step=10 :disabled="!settings.drawBuildVolume" />
