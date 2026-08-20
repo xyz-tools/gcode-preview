@@ -633,7 +633,6 @@ export class SceneManager {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.target.copy(oldTarget);
     if (value) {
-      this.controls.enableRotate = false;
       this.controls.screenSpacePanning = true;
     }
     this.controls.update();
