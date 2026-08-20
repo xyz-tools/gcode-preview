@@ -19,6 +19,7 @@ import {
   Euler,
   Group,
   Material,
+  OrthographicCamera,
   PerspectiveCamera,
   Plane,
   REVISION,
@@ -32,6 +33,15 @@ import {
 } from 'three';
 
 export type BuildVolumeDef = Pick<BuildVolume, 'x' | 'y' | 'z' | 'smallGrid'>;
+
+// Orthographic camera constants
+const PERSPECTIVE_FOV = 25;
+const PERSPECTIVE_NEAR = 1;
+const PERSPECTIVE_FAR = 5000;
+const ORTHO_NEAR = 0.1;
+const ORTHO_FAR = 10000;
+const FRUSTUM_PADDING = 1.2; // 20% margin around model/volume
+const DEFAULT_FRUSTUM_SIZE = 500; // fallback when no model or build volume is loaded
 
 export type SceneManagerOptions = {
   /** Build volume dimensions */
@@ -76,6 +86,8 @@ export type SceneManagerOptions = {
   renderTubes?: boolean;
   /** Color for the bounding box. If undefined, the bounding box is not rendered. */
   boundingBoxColor?: ColorRepresentation;
+  /** Use an orthographic (flat, no perspective distortion) camera instead of the default perspective camera */
+  orthographic?: boolean;
 };
 
 /**
@@ -84,8 +96,8 @@ export type SceneManagerOptions = {
 export class SceneManager {
   /** Three.js scene */
   scene: Scene;
-  /** Three.js perspective camera */
-  camera: PerspectiveCamera;
+  /** Three.js camera (perspective or orthographic) */
+  camera: PerspectiveCamera | OrthographicCamera;
   /** Three.js WebGL renderer */
   renderer: WebGLRenderer & {
     info: {
@@ -248,7 +260,7 @@ export class SceneManager {
     });
 
     this.renderer.localClippingEnabled = true;
-    this.camera = new PerspectiveCamera(25, this.canvas.offsetWidth / this.canvas.offsetHeight, 1, 5000);
+    this.camera = this.createCamera(opts.orthographic ?? false);
     this.camera.position.fromArray(this.initialCameraPosition);
     this.resize();
 
@@ -625,6 +637,52 @@ export class SceneManager {
     return lines as unknown as [LineSegments2];
   }
 
+  get orthographic(): boolean {
+    return this.camera instanceof OrthographicCamera;
+  }
+
+  set orthographic(value: boolean) {
+    if (value === this.orthographic) return;
+
+    const oldPosition = this.camera.position.clone();
+    const oldTarget = this.controls.target.clone();
+
+    this.camera = this.createCamera(value);
+    this.camera.position.copy(oldPosition);
+
+    this.controls.dispose();
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.target.copy(oldTarget);
+    if (value) {
+      this.controls.screenSpacePanning = true;
+    }
+    this.controls.update();
+
+    this.resize();
+  }
+
+  private createCamera(orthographic: boolean): PerspectiveCamera | OrthographicCamera {
+    const aspect = this.canvas.offsetWidth / this.canvas.offsetHeight;
+    if (orthographic) {
+      const frustumSize = this.getOrthoFrustumSize();
+      const halfH = frustumSize / 2;
+      const halfW = halfH * aspect;
+      return new OrthographicCamera(-halfW, halfW, halfH, -halfH, ORTHO_NEAR, ORTHO_FAR);
+    }
+    return new PerspectiveCamera(PERSPECTIVE_FOV, aspect, PERSPECTIVE_NEAR, PERSPECTIVE_FAR);
+  }
+
+  private getOrthoFrustumSize(): number {
+    if (this.job?.boundingBox?.isValid) {
+      const size = this.job.boundingBox.size;
+      return Math.max(size.x, size.y, size.z) * FRUSTUM_PADDING;
+    }
+    if (this._buildVolume) {
+      return Math.max(this._buildVolume.x, this._buildVolume.y, this._buildVolume.z) * FRUSTUM_PADDING;
+    }
+    return DEFAULT_FRUSTUM_SIZE;
+  }
+
   /** @internal */
   /**
    * Animation loop that continuously renders the scene
@@ -817,7 +875,19 @@ export class SceneManager {
 
   resize(): void {
     const [w, h] = [this.canvas.offsetWidth, this.canvas.offsetHeight];
-    this.camera.aspect = w / h;
+    const aspect = w / h;
+
+    if (this.camera instanceof OrthographicCamera) {
+      const frustumSize = this.getOrthoFrustumSize();
+      const halfH = frustumSize / 2;
+      const halfW = halfH * aspect;
+      this.camera.left = -halfW;
+      this.camera.right = halfW;
+      this.camera.top = halfH;
+      this.camera.bottom = -halfH;
+    } else {
+      this.camera.aspect = aspect;
+    }
     this.camera.updateProjectionMatrix();
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setSize(w, h, false);

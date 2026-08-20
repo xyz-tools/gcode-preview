@@ -29,5 +29,6 @@ export const defaultSettings = {
   highlightLastSegment: false,
   lastSegmentColor: null,
   drawBuildVolume: true,
-  backgroundColor: '#141414'
+  backgroundColor: '#141414',
+  orthographic: false
 };

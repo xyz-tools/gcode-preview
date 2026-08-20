@@ -66,6 +66,7 @@
               <li :class="{ 'bulma-is-active': activeTab == 'travel' }"><a @click="selectTab('travel')">Travel</a></li>
               <li :class="{ 'bulma-is-active': activeTab == 'extrusion' }"><a @click="selectTab('extrusion')">Extrusion</a></li>
               <li :class="{ 'bulma-is-active': activeTab == 'build-volume' }"><a @click="selectTab('build-volume')">Build volume</a></li>
+              <li :class="{ 'bulma-is-active': activeTab == 'camera' }"><a @click="selectTab('camera')">Camera</a></li>
             </ul>
           </div>  
           <div class="is-size-7">
@@ -210,7 +211,7 @@
                   <label for="drawBuildVolume">Render build volume</label>
                   <input type="checkbox" v-model="settings.drawBuildVolume" />
                 </div>
-                <div :class="{'has-text-grey' : !settings.drawBuildVolume}">
+                <div v-if="settings.buildVolume" :class="{'has-text-grey' : !settings.drawBuildVolume}">
                   <div class="controls">
                     <label for="buildVolumeX">Build volume (x)&nbsp;</label>
                     <input type="number" v-model="settings.buildVolume.x" step=10 :disabled="!settings.drawBuildVolume" />
@@ -239,6 +240,14 @@
                 <div class="controls">
                   <label for="bbx-color">Bounding box color</label>
                   <input id="bbx-color" type="color" v-model="settings.boundingBoxColor" />
+                </div>
+              </section>
+            </div>
+            <div class="panel" v-cloak v-show="activeTab == 'camera'">
+              <section>
+                <div class="controls">
+                  <label for="orthographic">Orthographic camera</label>
+                  <input type="checkbox" id="orthographic" v-model="settings.orthographic" />
                 </div>
               </section>
             </div>

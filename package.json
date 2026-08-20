@@ -23,7 +23,7 @@
     "concurrently": "^9.2.0",
     "copyfiles": "^2.4.1",
     "eslint": "^8.57.1",
-    "happy-dom": "^18.0.1",
+    "happy-dom": "^20.0.0",
     "live-server": "^1.2.1 <1.2.2",
     "prettier": "^3.6.2",
     "rollup": "^4.44.2",
@@ -31,7 +31,7 @@
     "rollup-plugin-esbuild": "^6.2.1",
     "rollup-plugin-typescript2": "^0.36.0",
     "typedoc": "^0.28.7",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.0"
   },
   "scripts": {
     "dev": "concurrently -n BUILD,SERVER -c bold.white.bgGreen,bold.white.bgBlue 'npm run dev:watch' 'npm run live-server'",
