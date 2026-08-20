@@ -65,20 +65,34 @@ describe('GCodePreview', () => {
     };
 
     // Setup mocks
-    vi.mocked(Job).mockImplementation(() => mockJob);
-    vi.mocked(Interpreter).mockImplementation(() => mockInterpreter);
-    vi.mocked(SceneManager).mockImplementation(() => mockSceneManager);
-    vi.mocked(Parser).mockImplementation(() => ({
-      parseGCode: vi.fn().mockReturnValue({
-        commands: ['G0 X0 Y0', 'G1 X10 Y10']
-      }),
-      metadata: { thumbnails: {} }
-    }));
-    vi.mocked(DevGUI).mockImplementation(() => mockDevGui);
-    vi.mocked(Stats).mockImplementation(() => ({
-      update: vi.fn(),
-      dom: document.createElement('div')
-    }));
+    // vitest v4 requires function keyword (not arrow functions) in mockImplementation
+    // for mocked constructors — arrow functions cannot be called with `new`.
+    vi.mocked(Job).mockImplementation(function () {
+      return mockJob;
+    } as never);
+    vi.mocked(Interpreter).mockImplementation(function () {
+      return mockInterpreter;
+    } as never);
+    vi.mocked(SceneManager).mockImplementation(function () {
+      return mockSceneManager;
+    } as never);
+    vi.mocked(Parser).mockImplementation(function () {
+      return {
+        parseGCode: vi.fn().mockReturnValue({
+          commands: ['G0 X0 Y0', 'G1 X10 Y10']
+        }),
+        metadata: { thumbnails: {} }
+      };
+    } as never);
+    vi.mocked(DevGUI).mockImplementation(function () {
+      return mockDevGui;
+    } as never);
+    vi.mocked(Stats).mockImplementation(function () {
+      return {
+        update: vi.fn(),
+        dom: document.createElement('div')
+      };
+    } as never);
   });
 
   afterEach(() => {
@@ -283,7 +297,9 @@ describe('GCodePreview', () => {
 
       // Create new mock for second DevGUI instance
       const newMockDevGui = { reset: vi.fn(), destroy: vi.fn() };
-      vi.mocked(DevGUI).mockImplementationOnce(() => newMockDevGui);
+      vi.mocked(DevGUI).mockImplementationOnce(function () {
+        return newMockDevGui;
+      } as never);
 
       preview.devMode = false;
 
