@@ -11,7 +11,7 @@ export class NonApplicableIndexer extends Error {}
  * @remarks
  * Indexers organize paths into different structures (layers, tools, etc.)
  */
-export class Indexer {
+export abstract class Indexer {
   /** The indexes being managed by this indexer */
   protected indexes: unknown;
 
@@ -28,10 +28,7 @@ export class Indexer {
    * @param path - Path to sort
    * @throws Error if not implemented in subclass
    */
-  sortIn(path: Path): void {
-    path;
-    throw new Error('Method not implemented.');
-  }
+  abstract sortIn(path: Path): void;
 }
 
 /**
@@ -39,7 +36,7 @@ export class Indexer {
  */
 export class TravelTypeIndexer extends Indexer {
   /** Indexes containing arrays of paths for each travel type */
-  protected declare indexes: Record<string, Path[]>;
+  declare protected indexes: Record<string, Path[]>;
 
   /**
    * Creates a new TravelTypeIndexer
@@ -65,9 +62,9 @@ export class TravelTypeIndexer extends Indexer {
 /**
  * Error thrown when attempting to index a non-planar path
  */
-export class NonPlanarPathError extends NonApplicableIndexer {
+export class NonPlanarExtrusionError extends NonApplicableIndexer {
   constructor() {
-    super("Non-planar paths can't be indexed by layer");
+    super('Non-planar extrusions cannot be indexed by layer');
   }
 }
 
@@ -79,7 +76,7 @@ export class LayersIndexer extends Indexer {
   static readonly DEFAULT_TOLERANCE = 0.05;
 
   /** Array of layers being managed */
-  protected declare indexes: Layer[];
+  declare protected indexes: Layer[];
 
   /** Tolerance for layer height differences */
   private tolerance: number;
@@ -104,29 +101,29 @@ export class LayersIndexer extends Indexer {
       path.travelType === PathType.Extrusion &&
       path.vertices.some((_, i, arr) => i > 3 && i % 3 === 2 && Math.abs(arr[i] - arr[i - 3]) > this.tolerance)
     ) {
-      throw new NonPlanarPathError();
+      throw new NonPlanarExtrusionError();
     }
 
-    if (this.indexes[this.indexes.length - 1] === undefined) {
-      this.createLayer(path.vertices[2]);
-    }
+    // new layers are only created when extruding
+    if (path.travelType === PathType.Extrusion) {
+      const newZ = path.vertices[2];
+      const lastZ = this.lastLayer?.z;
 
-    if (
-      path.travelType === PathType.Extrusion &&
-      this.lastLayer().paths.some((p) => p.travelType === PathType.Extrusion)
-    ) {
-      if (path.vertices[2] - (this.lastLayer().z || 0) > this.tolerance) {
-        this.createLayer(path.vertices[2]);
+      // either this is the first extrusion path
+      // or this is an extrusion path that is higher than the last layer
+      if (!this.lastLayer || newZ - lastZ > this.tolerance) {
+        this.createLayerAt(newZ);
       }
     }
-    this.lastLayer().paths.push(path);
+
+    this.lastLayer?.paths.push(path);
   }
 
   /**
    * Gets the last layer in the indexes
    * @returns The most recent layer
    */
-  private lastLayer(): Layer {
+  private get lastLayer(): Layer {
     return this.indexes[this.indexes.length - 1];
   }
 
@@ -134,10 +131,10 @@ export class LayersIndexer extends Indexer {
    * Creates a new layer at the specified Z height
    * @param z - Z height for the new layer
    */
-  private createLayer(z: number): void {
-    const layerNumber = this.indexes.length;
-    const height = z - (this.lastLayer()?.z || 0);
-    this.indexes.push(new Layer(this.indexes.length, [], layerNumber, height, z));
+  private createLayerAt(z: number): void {
+    const lastZ = this.lastLayer?.z || 0;
+    const height = z - lastZ;
+    this.indexes.push(new Layer(z, height));
   }
 }
 
@@ -146,7 +143,7 @@ export class LayersIndexer extends Indexer {
  */
 export class ToolIndexer extends Indexer {
   /** 2D array of paths indexed by tool number */
-  protected declare indexes: Path[][];
+  declare protected indexes: Path[][];
 
   /**
    * Creates a new ToolIndexer
@@ -162,7 +159,6 @@ export class ToolIndexer extends Indexer {
    */
   sortIn(path: Path): void {
     if (path.travelType === PathType.Extrusion) {
-      this.indexes;
       this.indexes[path.tool] = this.indexes[path.tool] || [];
       if (this.indexes[path.tool] === undefined) {
         this.indexes[path.tool] = [];

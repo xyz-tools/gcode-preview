@@ -1,9 +1,10 @@
 import { createApp, ref, watch, onMounted, watchEffect } from 'vue';
 import { presets } from './presets.js';
-import * as GCodePreview from 'gcode-preview';
+import { GCodePreview } from 'gcode-preview';
 import { defaultSettings } from './default-settings.js';
+import { parseIntOrDefault } from './utils.js';
 
-const defaultPreset = 'benchy';
+const defaultPreset = 'benchy'; // default preset to load
 const preferDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
 const initialBackgroundColor = preferDarkMode.matches ? '#141414' : '#eee';
 const statsContainer = () => document.querySelector('.sidebar');
@@ -45,14 +46,11 @@ export const app = (window.app = createApp({
 
     // Update UI with current preview settings
     const updateUI = async () => {
+      const { parser, sceneManager, countLayers } = preview;
       const {
-        parser,
-        countLayers,
-        extrusionColor,
         topLayerColor,
         lastSegmentColor,
         buildVolume,
-        backgroundColor,
         singleLayerMode,
         renderTravel,
         travelColor,
@@ -60,8 +58,10 @@ export const app = (window.app = createApp({
         lineWidth,
         renderTubes,
         extrusionWidth,
-        boundingBoxColor
-      } = preview;
+        boundingBoxColor,
+        extrusionColor,
+        backgroundColor
+      } = sceneManager;
       const { thumbnails } = parser.metadata;
 
       // thumbnail.value = thumbnails['220x124']?.src;
@@ -76,7 +76,7 @@ export const app = (window.app = createApp({
       const currentSettings = {
         startLayer: 1,
         enableStartLayer: false,
-        maxLayer: countLayers,
+        maxLayer: countLayers || 1000,
         endLayer: countLayers,
         enableEndLayer: false,
         singleLayerMode,
@@ -96,9 +96,9 @@ export const app = (window.app = createApp({
         backgroundColor: '#' + backgroundColor.getHexString(),
         boundingBoxColor
       };
-      console.debug('Current settings:', currentSettings);
+      console.debug('app settings:', currentSettings);
       Object.assign(settings.value, currentSettings);
-      preview.endLayer = countLayers;
+      sceneManager.endLayer = countLayers;
 
       applyDevMode(enableDevMode.value);
     };
@@ -113,15 +113,15 @@ export const app = (window.app = createApp({
       const gcodeStream = response.body.pipeThrough(new TextDecoderStream());
 
       const prevDevMode = preview.devMode;
-      preview.clear();
+      // preview.clear();
       preview.devMode = prevDevMode;
 
-      await preview.processGCode(gcodeStream, { render: false }); // rendering will be done reactively
+      await preview.processGCodeStream(gcodeStream, { render: false }); // rendering will be done reactively
     };
 
     const render = async () => {
       if (loadProgressive.value && preview.job.layers !== null) {
-        await preview.renderAnimated();
+        await preview.sceneManager.renderAnimated();
       } else {
         preview.render();
       }
@@ -141,6 +141,9 @@ export const app = (window.app = createApp({
         backgroundColor: initialBackgroundColor
       };
 
+      // update UI state
+      drawBoundingBox.value = options.boundingBoxColor !== undefined;
+
       // reset previous state
       const lilGuiElement = document.querySelector('.lil-gui');
       if (lilGuiElement) document.body.removeChild(lilGuiElement);
@@ -149,11 +152,11 @@ export const app = (window.app = createApp({
       if (defaultSettings.devMode) defaultSettings.devMode.statsContainer = statsContainer();
       preview?.dispose();
 
-      window['_preview'] = preview = new GCodePreview.init(options);
+      window['_preview'] = preview = new GCodePreview(options);
 
       // resize preview on canvas resize (TODO: move to GCodePreview)
       if (observer) observer.disconnect();
-      observer = new ResizeObserver(() => preview.resize());
+      observer = new ResizeObserver(() => preview.sceneManager.resize());
       observer.observe(canvas);
 
       applyDevMode(enableDevMode.value); // HACK: force dev mode to update UI
@@ -174,46 +177,47 @@ export const app = (window.app = createApp({
       await selectPreset(defaultPreset);
 
       watchEffect(() => {
-        preview.backgroundColor = settings.value.backgroundColor;
+        if (!preview) return;
+        preview.sceneManager.backgroundColor = settings.value.backgroundColor;
 
-        if (preview.buildVolume && settings.value.drawBuildVolume) {
-          preview.buildVolume.smallGrid = settings.value.buildVolume.smallGrid;
-          preview.buildVolume.x = +settings.value.buildVolume.x;
-          preview.buildVolume.y = +settings.value.buildVolume.y;
-          preview.buildVolume.z = +settings.value.buildVolume.z;
+        if (preview.sceneManager.buildVolume && settings.value.drawBuildVolume) {
+          preview.sceneManager.buildVolume.smallGrid = settings.value.buildVolume.smallGrid;
+          preview.sceneManager.buildVolume.x = +settings.value.buildVolume.x;
+          preview.sceneManager.buildVolume.y = +settings.value.buildVolume.y;
+          preview.sceneManager.buildVolume.z = +settings.value.buildVolume.z;
         }
 
-        if (!preview.buildVolume && settings.value.drawBuildVolume) {
-          preview.buildVolume = {
+        if (!preview.sceneManager.buildVolume && settings.value.drawBuildVolume) {
+          preview.sceneManager.buildVolume = {
             x: +settings.value.buildVolume.x,
             y: +settings.value.buildVolume.y,
             z: +settings.value.buildVolume.z,
             smallGrid: settings.value.buildVolume.smallGrid
           };
-        } else if (preview.buildVolume && !settings.value.drawBuildVolume) {
-          preview.buildVolume = undefined;
+        } else if (preview.sceneManager.buildVolume && !settings.value.drawBuildVolume) {
+          preview.sceneManager.buildVolume = undefined;
         }
-        preview.boundingBoxColor = drawBoundingBox.value ? settings.value.boundingBoxColor ?? 'magenta' : undefined;
+        preview.sceneManager.boundingBoxColor = drawBoundingBox.value
+          ? (settings.value.boundingBoxColor ?? 'magenta')
+          : undefined;
       });
 
       watchEffect(() => {
-        preview.buildVolume = settings.value.drawBuildVolume ? settings.value.buildVolume : undefined;
-        if (preview.buildVolume) {
-          preview.buildVolume.x = +settings.value.buildVolume.x;
-          preview.buildVolume.y = +settings.value.buildVolume.y;
-          preview.buildVolume.z = +settings.value.buildVolume.z;
-        }
+        if (!preview) return;
+        preview.sceneManager.renderTravel = settings.value.renderTravel;
+        preview.sceneManager.travelColor = settings.value.travelColor;
+        preview.sceneManager.lineWidth = +settings.value.lineWidth;
 
-        preview.renderTravel = settings.value.renderTravel;
-        preview.travelColor = settings.value.travelColor;
-        preview.lineWidth = +settings.value.lineWidth;
+        preview.sceneManager.renderExtrusion = settings.value.renderExtrusion;
+        preview.sceneManager.renderTubes = settings.value.renderTubes;
+        preview.sceneManager.extrusionWidth = +settings.value.extrusionWidth;
 
-        preview.renderExtrusion = settings.value.renderExtrusion;
-        preview.renderTubes = settings.value.renderTubes;
-        preview.extrusionWidth = +settings.value.extrusionWidth;
-
-        preview.topLayerColor = settings.value.highlightTopLayer ? settings.value.topLayerColor : undefined;
-        preview.lastSegmentColor = settings.value.highlightLastSegment ? settings.value.lastSegmentColor : undefined;
+        preview.sceneManager.topLayerColor = settings.value.highlightTopLayer
+          ? settings.value.topLayerColor
+          : undefined;
+        preview.sceneManager.lastSegmentColor = settings.value.highlightLastSegment
+          ? settings.value.lastSegmentColor
+          : undefined;
 
         // run render after settings have been applied
         // this is needed to prevent reactivity attaching the render function
@@ -223,16 +227,28 @@ export const app = (window.app = createApp({
       });
 
       watchEffect(() => {
-        preview.startLayer = settings.value.enableStartLayer ? +settings.value.startLayer : undefined;
-        preview.endLayer = settings.value.enableEndLayer ? +settings.value.endLayer : undefined;
+        if (!preview) return;
+        const startLayer = parseIntOrDefault(settings.value.startLayer, undefined);
+        const endLayer = parseIntOrDefault(settings.value.endLayer, undefined);
+
+        preview.sceneManager.startLayer = settings.value.enableStartLayer ? startLayer : undefined;
+        preview.sceneManager.endLayer = settings.value.enableEndLayer ? endLayer : undefined;
       });
 
       watchEffect(() => {
-        preview.singleLayerMode = settings.value.singleLayerMode;
+        if (!preview) return;
+        preview.sceneManager.singleLayerMode = settings.value.singleLayerMode;
       });
 
       watchEffect(() => {
-        preview.extrusionColor = settings.value.colors.length === 1 ? settings.value.colors[0] : settings.value.colors;
+        if (!preview) return;
+        preview.sceneManager.orthographic = settings.value.orthographic;
+      });
+
+      watchEffect(() => {
+        if (!preview) return;
+        preview.sceneManager.extrusionColor =
+          settings.value.colors.length === 1 ? settings.value.colors[0] : settings.value.colors;
       });
     });
 

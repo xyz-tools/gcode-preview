@@ -33,9 +33,9 @@ Click to see the [full-fledged demo](https://gcode-preview.web.app/):
 ### Quick start
 
 ```  
-  import * as GCodePreview from 'gcode-preview';
+  import { GCodePreview } from 'gcode-preview';
 
-  const preview = GCodePreview.init({
+  const preview = new GCodePreview({
       canvas: document.querySelector('canvas'),
       extrusionColor: 'hotpink'
   });
@@ -51,15 +51,15 @@ Check the full API documentation at https://gcode-preview.web.app/docs
 ### Vue.js / React / Svelte integration
 <img src="https://vuejs.org/logo.svg" height="40px" />
 
- There's a [Vue.js example](https://github.com/remcoder/gcode-preview/tree/develop/vue-demo) that has a [Vue component](https://github.com/remcoder/gcode-preview/blob/develop/vue-demo/src/components/GCodePreview.vue) to wrap the library.
+ There's a [Vue.js example](https://github.com/xyz-tools/gcode-preview-examples) that has a [Vue component](https://github.com/xyz-tools/gcode-preview-examples/blob/main/GCodePreview.vue) to wrap the library.
 
  <img src="https://reactjs.org/favicon.ico" height="42px"/>
  
- @Zeng95 provided a [React & Typescript example](https://github.com/remcoder/gcode-preview/tree/develop/react-typescript-demo) that has a [React component](https://github.com/remcoder/gcode-preview/blob/develop/react-typescript-demo/src/components/GCodePreview.tsx) to wrap the library.
+ @Zeng95 provided a [React & Typescript example](https://github.com/xyz-tools/gcode-preview-react) that has a [React component](https://github.com/xyz-tools/gcode-preview-react/blob/main/src/components/GCodePreview.tsx) to wrap the library.
  
  <img src='https://svelte.dev/favicon.png' height='42px' />
  
- There is a [Svelte example](https://github.com/remcoder/gcode-preview/tree/develop/svelte-demo) with a [Svelte component](https://github.com/remcoder/gcode-preview/blob/develop/svelte-demo/src/lib/GCodePreview.svelte).
+ There is a [Svelte example](https://github.com/xyz-tools/gcode-preview-svelte) with a [Svelte component](https://github.com/xyz-tools/gcode-preview-svelte/blob/main/src/lib/GCodePreview.svelte).
 
 ## Feature description
 
@@ -153,16 +153,15 @@ For working on production builds you can use:
 If you have found a bug or if have an idea for a feature, don't hesitate to [create an issue on GitHub](https://github.com/remcoder/gcode-preview/issues/new) or [talk to us on Discord](https://discord.gg/w2bsGRE6S4).
 
 ## Contributing
-It would be great if you want to help! Maybe you'd like to help out with:
+Want to help out? We are open to your ideas and always willing to get you started! [talk to us on Discord](https://discord.gg/w2bsGRE6S4).
 
- - testing GCode Preview with a variety of gcode files, from different slicers
- - making GCode Preview suitable for different printer types, like Deltas, Belt printers, IDEX, etc.
- - please report any bugs you find and add as much detail as possible, or even better, a screenshot
- - even better yet: send in a pull request :-)
- - apart from the main code, lots of improvements can still be made in:
-   - documentation
+ - maybe there is an [open issue](https://github.com/xyz-tools/gcode-preview/issues?q=is%3Aissue%20state%3Aopen%20-label%3Ademo%20-label%3A3.1%2B%20-label%3Ablocked%20-label%3Arefactor) that appeals to you?
+ - other things that are always helpful:
+   - testing different gcode files, from different slicers
+   - reporting bugs! Screenshot == ❤️
+   - making GCode Preview suitable for different printer types, like Deltas, Belt printers, IDEX, etc. Even CNC machines
+   - documentation & examples
    - unit tests
-   - examples
 
 ## Contributors 
 - ❤️ Thank you @sophiedeziel for rendering extrusion as tubes.

@@ -1,20 +1,15 @@
 import { Path } from './path';
 import { State } from './state';
 import { Layer } from './layer';
-import { TravelTypeIndexer, LayersIndexer, ToolIndexer, Indexer, NonApplicableIndexer } from './indexers';
+import {
+  TravelTypeIndexer,
+  LayersIndexer,
+  ToolIndexer,
+  Indexer,
+  NonApplicableIndexer,
+  NonPlanarExtrusionError
+} from './indexers';
 import { BoundingBox } from './bounding-box';
-
-/**
- * Represents the current state of the print job
- * @remarks
- * Tracks the current position, extrusion state, active tool, and units
- */
-
-/**
- * Represents a single layer in the print job
- * @remarks
- * Contains information about the layer number, paths, height, and Z position
- */
 
 /**
  * Represents a complete print job containing paths, layers, and state
@@ -135,11 +130,19 @@ export class Job {
   }
 
   /**
-   * Checks if the job contains planar layers
+   * Checks if the job contains planar extrusion layers
    * @returns True if the job contains at least one layer, false otherwise
    */
-  isPlanar(): boolean {
+  get isPlanar(): boolean {
     return this.layers.length > 0;
+  }
+
+  /**
+   * Gets the total number of layers in the job
+   * @returns Number of layers
+   */
+  get countLayers(): number {
+    return this.layers.length;
   }
 
   /**
@@ -159,9 +162,12 @@ export class Job {
           throw e; // If the error is not a NonApplicableIndexer, it will be thrown.
         }
 
-        console.warn('Non-planar path detected; clearing layer index');
-        this._layers = [];
+        if (e instanceof NonPlanarExtrusionError) {
+          console.warn('Non-planar path detected; clearing layer index');
+          this._layers = [];
+        }
 
+        // Remove the indexer that cannot handle this path
         const i = this.indexers.indexOf(indexer);
         this.indexers.splice(i, 1);
       }

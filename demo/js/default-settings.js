@@ -15,9 +15,8 @@ export const defaultSettings = {
     buildVolume: true,
     devHelpers: true
   },
-  startLayer: 1,
+  startLayer: undefined, // number | undefined
   endLayer: 1,
-  maxLayer: 1000000, // Infinity doesn't work
   singleLayerMode: false,
   renderTravel: false,
   travelColor: 'red',
@@ -30,5 +29,6 @@ export const defaultSettings = {
   highlightLastSegment: false,
   lastSegmentColor: null,
   drawBuildVolume: true,
-  backgroundColor: '#141414'
+  backgroundColor: '#141414',
+  orthographic: false
 };

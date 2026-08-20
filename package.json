@@ -1,6 +1,6 @@
 {
   "name": "gcode-preview",
-  "version": "3.0.0-alpha.3",
+  "version": "3.0.0-alpha.4",
   "description": "Preview a 3d print from a gcode file",
   "author": "remcoder@gmail.com",
   "license": "MIT",
@@ -15,23 +15,23 @@
   ],
   "types": "dist/gcode-preview.d.ts",
   "devDependencies": {
-    "@rollup/plugin-node-resolve": "15",
-    "@types/node": "^18.19.33",
-    "@types/three": "0.177.0",
-    "@typescript-eslint/eslint-plugin": "^7.0.1",
-    "@typescript-eslint/parser": "^7.0.1",
-    "concurrently": "^9.0.1",
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@types/node": "^24.0.10",
+    "@types/three": "0.178.0",
+    "@typescript-eslint/eslint-plugin": "^8.36.0",
+    "@typescript-eslint/parser": "^8.36.0",
+    "concurrently": "^9.2.0",
     "copyfiles": "^2.4.1",
-    "eslint": "^8.56.0",
-    "happy-dom": "^15.10.2",
-    "live-server": "1.2.1",
-    "prettier": "^3.0.3",
-    "rollup": "^4.24.0",
-    "rollup-plugin-dts": "^6.1.1",
-    "rollup-plugin-esbuild": "^6.1.1",
-    "rollup-plugin-typescript2": "^0.34.0",
-    "typedoc": "^0.26.3",
-    "vitest": "^3.1.4"
+    "eslint": "^8.57.1",
+    "happy-dom": "^20.0.0",
+    "live-server": "^1.2.1 <1.2.2",
+    "prettier": "^3.6.2",
+    "rollup": "^4.44.2",
+    "rollup-plugin-dts": "^6.2.1",
+    "rollup-plugin-esbuild": "^6.2.1",
+    "rollup-plugin-typescript2": "^0.36.0",
+    "typedoc": "^0.28.7",
+    "vitest": "^4.1.0"
   },
   "scripts": {
     "dev": "concurrently -n BUILD,SERVER -c bold.white.bgGreen,bold.white.bgBlue 'npm run dev:watch' 'npm run live-server'",
@@ -43,7 +43,8 @@
     "live-server": "live-server demo --watch=.,js,../dist --mount=/lib:node_modules --mount=/dist:dist",
     "typeCheck": "tsc --noEmit",
     "lint": "prettier --check . && eslint -c .eslintrc.js .",
-    "lint:fix": "eslint -c .eslintrc.js . --fix",
+    "lint:fix": "npm run prettier:fix && npm run eslint:fix",
+    "eslint:fix": "eslint -c .eslintrc.js . --fix",
     "prettier:fix": "prettier --plugin-search-dir . --write .",
     "test": "vitest run",
     "test:watch": "vitest --watch",
@@ -56,11 +57,10 @@
     "deploy:preview": "live-server demo",
     "typedoc": "typedoc",
     "typedoc:watch": "typedoc --watch",
-    "check": "npm run typeCheck && npm run lint && npm run test"
+    "check": "npm run test && npm run typeCheck && npm run lint && echo '😅 All checks passed!'"
   },
   "dependencies": {
     "lil-gui": "^0.20.0",
-    "three": "0.177.0"
+    "three": "0.178.0"
   }
 }
- 
