@@ -183,7 +183,7 @@ class DevGUI {
     parser.add(this.gcodePreview.job.state, 'y').listen();
     parser.add(this.gcodePreview.job.state, 'z').listen();
     parser.add(this.gcodePreview.job.paths, 'length').name('paths.count').listen();
-    parser.add(this.gcodePreview.parser.lines, 'length').name('lines.count').listen();
+    parser.add(this.gcodePreview.parser, 'lineCount').name('lines.count').listen();
   }
 
   /**

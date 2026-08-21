@@ -15,6 +15,13 @@ type LibOptions = {
   minLayerThreshold?: number;
   /** Enable drag and drop file handling */
   droppable?: boolean;
+  /**
+   * Keep the parsed G-code source on `preview.parser.lines`.
+   * @remarks
+   * Off by default. Nothing in the library reads the source back, and holding
+   * it costs several megabytes on a large file.
+   */
+  keepLines?: boolean;
 };
 
 export type GCodePreviewOptions = LibOptions & SceneManagerOptions;
@@ -70,9 +77,14 @@ export class GCodePreview {
   /** The G-code parser instance */
   get parser(): Parser {
     if (!this._parser) {
-      this._parser = new Parser();
+      this._parser = this.createParser();
     }
     return this._parser;
+  }
+
+  /** Builds a parser carrying the preview's parsing options. */
+  private createParser(): Parser {
+    return new Parser({ keepLines: this.opts?.keepLines });
   }
 
   /**
@@ -99,7 +111,7 @@ export class GCodePreview {
    */
   constructor(opts: GCodePreviewOptions) {
     this.opts = opts;
-    this._parser = new Parser();
+    this._parser = this.createParser();
     this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
     this.stats = this.devMode ? new Stats() : undefined;
     this._sceneManager = new SceneManager(this.opts, this.job, () => this.stats?.update());
@@ -113,7 +125,7 @@ export class GCodePreview {
    * Clears the preview and resets the parser, sceneManager, gui and job
    */
   clear(): void {
-    this._parser = new Parser();
+    this._parser = this.createParser();
     this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
     this.sceneManager.clear();
     this.sceneManager.job = this.job;
