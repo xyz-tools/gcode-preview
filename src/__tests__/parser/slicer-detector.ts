@@ -62,7 +62,7 @@ test('parseSlicerMetadata parses PrusaSlicer metadata', () => {
     createCommand('G1 X0 Y0 Z0.3 E1')
   ];
 
-  const result = parseSlicerMetadata(commands);
+  const result = parseSlicerMetadata(commands, detectSlicer(commands));
 
   expect(result.slicerName).toBe('PrusaSlicer');
   expect(result.layers).toHaveLength(1);
@@ -77,7 +77,7 @@ test('parseSlicerMetadata parses PrusaSlicer metadata', () => {
 test('parseSlicerMetadata parses Cura metadata', () => {
   const commands = [createCommand(';LAYER:0', 'LAYER:0'), createCommand('G1 X0 Y0 Z0.3 E1', undefined, { z: 0.3 })];
 
-  const result = parseSlicerMetadata(commands);
+  const result = parseSlicerMetadata(commands, detectSlicer(commands));
 
   expect(result.slicerName).toBe('Cura');
   expect(result.layers).toHaveLength(1);

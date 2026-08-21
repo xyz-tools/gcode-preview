@@ -141,6 +141,7 @@ export class GCodePreview {
   processGCode(gcode: string | string[]): void {
     // Parse the gcode using our managed parser
     const { commands, metadata } = this.parser.parseGCode(gcode);
+    this.job.metadata = metadata;
 
     // Pass the parsed commands to the sceneManager
     this.interpreter.execute(commands, this.job);
@@ -164,6 +165,7 @@ export class GCodePreview {
       await this.readStream(gcode);
     } else {
       const { commands, metadata } = this.parser.parseGCode(gcode);
+      this.job.metadata = metadata;
       this.interpreter.execute(commands, this.job);
     }
 

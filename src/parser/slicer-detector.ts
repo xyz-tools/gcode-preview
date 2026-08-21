@@ -38,7 +38,10 @@ export function detectSlicer(commands: GCodeCommand[]): SlicerMetadataParser | n
  * @param commands - Array of gcode commands
  * @returns Parsed metadata result with layers and detected slicer name
  */
-export function parseSlicerMetadata(commands: GCodeCommand[], parser: SlicerMetadataParser): SlicerMetadataResult {
+export function parseSlicerMetadata(
+  commands: GCodeCommand[],
+  parser: SlicerMetadataParser | null
+): SlicerMetadataResult {
   if (!parser) {
     return { layers: [] };
   }

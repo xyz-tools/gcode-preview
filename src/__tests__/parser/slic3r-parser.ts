@@ -48,7 +48,7 @@ describe('Slic3rMetadataParser', () => {
     it('should parse single layer with move to next layer format', () => {
       const commands: GCodeCommand[] = [
         { comment: '; move to next layer (1)' },
-        { gcode: 'G1 X10 Y20 Z0.2 E1', parameters: { X: 10, Y: 20, Z: 0.2, E: 1 } }
+        { gcode: 'G1 X10 Y20 Z0.2 E1', params: { x: 10, y: 20, z: 0.2, e: 1 } }
       ];
 
       const result = parser.parseLayerMetadata(commands);
@@ -81,11 +81,11 @@ describe('Slic3rMetadataParser', () => {
     it('should parse multiple layers and calculate heights', () => {
       const commands: GCodeCommand[] = [
         { comment: '; move to next layer (0)' },
-        { gcode: 'G1 X10 Y20 Z0.2', parameters: { X: 10, Y: 20, Z: 0.2 } },
+        { gcode: 'G1 X10 Y20 Z0.2', params: { x: 10, y: 20, z: 0.2 } },
         { comment: '; move to next layer (1)' },
-        { gcode: 'G1 X20 Y30 Z0.4', parameters: { X: 20, Y: 30, Z: 0.4 } },
+        { gcode: 'G1 X20 Y30 Z0.4', params: { x: 20, y: 30, z: 0.4 } },
         { comment: '; move to next layer (2)' },
-        { gcode: 'G1 X30 Y40 Z0.6', parameters: { X: 30, Y: 40, Z: 0.6 } }
+        { gcode: 'G1 X30 Y40 Z0.6', params: { x: 30, y: 40, z: 0.6 } }
       ];
 
       const result = parser.parseLayerMetadata(commands);
@@ -156,7 +156,7 @@ describe('Slic3rMetadataParser', () => {
         { comment: '; move to next layer (1)' },
         { gcode: 'G1 F1800' },
         { gcode: 'G1 X0 Y0' },
-        { gcode: 'G1 Z0.25', parameters: { Z: 0.25 } }, // Z found here
+        { gcode: 'G1 Z0.25', params: { z: 0.25 } }, // Z found here
         { gcode: 'G1 X10 Y10' }
       ];
 
@@ -229,7 +229,7 @@ describe('Slic3rMetadataParser', () => {
         { comment: '; layer_z = 0.2' },
         { gcode: 'G1 F1800' },
         { comment: '; move to next layer (1)' },
-        { gcode: 'G1 Z0.4', parameters: { Z: 0.4 } }
+        { gcode: 'G1 Z0.4', params: { z: 0.4 } }
       ];
 
       const result = parser.parseLayerMetadata(commands);
@@ -252,7 +252,7 @@ describe('Slic3rMetadataParser', () => {
       const commands: GCodeCommand[] = [
         { comment: '; move to next layer (1)' },
         ...Array(12).fill({ gcode: 'G1 X0 Y0' }), // 12 commands without Z
-        { gcode: 'G1 Z0.2', parameters: { Z: 0.2 } } // Z too far away
+        { gcode: 'G1 Z0.2', params: { z: 0.2 } } // Z too far away
       ];
 
       const result = parser.parseLayerMetadata(commands);

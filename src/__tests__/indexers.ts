@@ -153,3 +153,35 @@ test('LayersMetadataIndexer creates initial layer for unmatched paths when no la
   expect(layers[0].height).toBe(0.2); // Default height
   expect(layers[0].paths).toContain(unmatchedPath);
 });
+
+test('LayersMetadataIndexer.hasMetadata reflects available metadata', () => {
+  expect(new LayersMetadataIndexer([], []).hasMetadata).toBe(false);
+  expect(new LayersMetadataIndexer([], [{ layerIndex: 0, z: 0.3, lineIndex: 0 }]).hasMetadata).toBe(true);
+});
+
+test('LayersMetadataIndexer.setLayerMetadata switches from fallback to metadata mode', () => {
+  const layers: Layer[] = [];
+  const indexer = new LayersMetadataIndexer(layers, []);
+
+  expect(indexer.hasMetadata).toBe(false);
+
+  indexer.setLayerMetadata([
+    { layerIndex: 0, z: 0.3, height: 0.3, lineIndex: 0 },
+    { layerIndex: 1, z: 0.6, height: 0.3, lineIndex: 5 }
+  ]);
+
+  expect(indexer.hasMetadata).toBe(true);
+
+  indexer.sortIn(createPath(0.3));
+  indexer.sortIn(createPath(0.6));
+
+  expect(layers).toHaveLength(2);
+  expect(layers[0].z).toBe(0.3);
+  expect(layers[1].z).toBe(0.6);
+});
+
+test('LayersMetadataIndexer.setLayerMetadata tolerates null/undefined', () => {
+  const indexer = new LayersMetadataIndexer([], [{ layerIndex: 0, z: 0.3, lineIndex: 0 }]);
+  indexer.setLayerMetadata(undefined as unknown as LayerMetadata[]);
+  expect(indexer.hasMetadata).toBe(false);
+});

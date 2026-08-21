@@ -12,20 +12,6 @@ export class Slic3rMetadataParser extends SlicerMetadataParser {
     /Slic3r PE/i
   ];
 
-  canParse(commands: GCodeCommand[]): boolean {
-    // Look for any of the identification patterns in comments
-    for (const command of commands) {
-      if (command.comment) {
-        for (const pattern of this.identificationPatterns) {
-          if (pattern.test(command.comment)) {
-            return true;
-          }
-        }
-      }
-    }
-    return false;
-  }
-
   parseLayerMetadata(commands: GCodeCommand[]): LayerMetadata[] {
     const layers: LayerMetadata[] = [];
     let hasMoveToNextLayer = false;
@@ -54,8 +40,8 @@ export class Slic3rMetadataParser extends SlicerMetadataParser {
           const nextCommand = commands[j];
 
           // Check for Z in G-code command (e.g., "G1 Z0.3")
-          if (nextCommand.gcode && nextCommand.parameters?.Z !== undefined) {
-            z = nextCommand.parameters.Z;
+          if (nextCommand.params?.z !== undefined) {
+            z = nextCommand.params.z;
             break;
           }
 

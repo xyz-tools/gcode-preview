@@ -10,6 +10,7 @@ import {
   NonPlanarExtrusionError
 } from './indexers';
 import { BoundingBox } from './bounding-box';
+import { Metadata } from './parser/gcode-parser';
 
 /**
  * Represents a complete print job containing paths, layers, and state
@@ -32,9 +33,12 @@ export class Job {
   private _toolPaths: Path[][] = [];
   /** Indexers for organizing paths */
   private indexers: Indexer[];
+  /** Layer indexer, retained so metadata can be applied after construction */
+  private layersIndexer: LayersMetadataIndexer;
   /** Current in-progress path */
   inprogressPath: Path | undefined;
   public boundingBox: BoundingBox = new BoundingBox();
+  private _metadata: Metadata | undefined;
 
   /**
    * Creates a new Job instance
@@ -44,11 +48,33 @@ export class Job {
    */
   constructor(opts: { state?: State; minLayerThreshold?: number } = {}) {
     this.state = opts.state || State.initial;
+    this.layersIndexer = new LayersMetadataIndexer(this._layers, [], opts.minLayerThreshold);
     this.indexers = [
       new TravelTypeIndexer({ travel: this.travelPaths, extrusion: this.extrusionPaths }),
-      new LayersMetadataIndexer(this._layers, [], opts.minLayerThreshold),
+      this.layersIndexer,
       new ToolIndexer(this._toolPaths)
     ];
+  }
+
+  /**
+   * Gets the slicer metadata (thumbnails, layer metadata, slicer name) for this job
+   * @returns The metadata, or undefined if none has been set
+   */
+  get metadata(): Metadata | undefined {
+    return this._metadata;
+  }
+
+  /**
+   * Sets the slicer metadata and forwards layer metadata to the layer indexer
+   * @param metadata - Parsed slicer metadata
+   * @remarks
+   * Must be set before paths are indexed (i.e. before executing commands) so the
+   * layer indexer can use slicer-provided layer boundaries instead of the
+   * tolerance-based fallback.
+   */
+  set metadata(metadata: Metadata | undefined) {
+    this._metadata = metadata;
+    this.layersIndexer.setLayerMetadata(metadata?.layerMetadata ?? []);
   }
 
   /**

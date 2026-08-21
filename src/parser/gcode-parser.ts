@@ -1,6 +1,6 @@
 import { Thumbnail } from '../thumbnail';
-import { LayerMetadata } from './metadata-parser-base';
-import { parseSlicerMetadata } from './slicer-detector';
+import { LayerMetadata, SlicerMetadataParser } from './metadata-parser-base';
+import { detectSlicer, parseSlicerMetadata } from './slicer-detector';
 
 /**
  * Parameters for G-code commands used in 3D printing.
@@ -161,6 +161,8 @@ export class Parser {
    */
   lines: string[] = [];
 
+  private metadataParser: SlicerMetadataParser | null = null;
+
   /**
    * How many lines have been parsed, counting every call.
    * @remarks
@@ -220,8 +222,12 @@ export class Parser {
       this.metadata.thumbnails[key] = value;
     }
 
-    // Extract layer metadata from slicer comments
-    const slicerMetadata = parseSlicerMetadata(comments);
+    // Extract layer metadata from slicer comments. Pass the full command list
+    // (not just comments) so parsers that read Z from G-code moves work.
+    if (!this.metadataParser) {
+      this.metadataParser = detectSlicer(commands);
+    }
+    const slicerMetadata = parseSlicerMetadata(commands, this.metadataParser);
     if (slicerMetadata.layers.length > 0) {
       this.metadata.layerMetadata = slicerMetadata.layers;
       this.metadata.slicerName = slicerMetadata.slicerName;

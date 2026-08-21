@@ -17,20 +17,6 @@ export class PrusaFamilyMetadataParser extends SlicerMetadataParser {
     /Bambu Lab/i
   ];
 
-  canParse(commands: GCodeCommand[]): boolean {
-    // Look for any of the identification patterns in comments
-    for (const command of commands) {
-      if (command.comment) {
-        for (const pattern of this.identificationPatterns) {
-          if (pattern.test(command.comment)) {
-            return true;
-          }
-        }
-      }
-    }
-    return false;
-  }
-
   parseLayerMetadata(commands: GCodeCommand[]): LayerMetadata[] {
     const layers: LayerMetadata[] = [];
     let currentLayer: Partial<LayerMetadata> = {};
