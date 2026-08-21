@@ -720,7 +720,7 @@ export class SceneManager {
    * Sets up the group's orientation and position based on build volume dimensions.
    * If no build volume is defined, uses a default position.
    */
-  private createGroup(name: string) : Group {
+  private createGroup(name: string): Group {
     const group = new Group();
     group.name = name;
     group.quaternion.setFromEuler(new Euler(-Math.PI / 2, 0, 0));
@@ -967,7 +967,7 @@ export class SceneManager {
    * @param color - Color to use for the tubes
    */
   private renderPathsAsTubes(paths: Path[], color: Color): void {
-    console.log('rendering '+paths.length+' paths as tubes');
+    console.log('rendering ' + paths.length + ' paths as tubes');
 
     // use a random color instead of the default extrusion color
     // const randomColor = Math.floor(Math.random() * 16777215); // 0xFFFFFF
@@ -981,12 +981,17 @@ export class SceneManager {
     let totalExtrusionDistance = 0;
 
     paths.forEach((path) => {
-      const { geometry, extrusionDistance } = path.geometry({
-        extrusionWidthOverride: this.extrusionWidth,
-        lineHeightOverride: this.lineHeight
-      }, totalExtrusionDistance);
+      const result = path.geometry(
+        {
+          extrusionWidthOverride: this.extrusionWidth,
+          lineHeightOverride: this.lineHeight
+        },
+        totalExtrusionDistance
+      );
 
-      if (!geometry) return;
+      if (!result) return;
+
+      const { geometry, extrusionDistance } = result;
 
       console.debug(extrusionDistance, 'mm extrusion distance for path');
       totalExtrusionDistance = extrusionDistance;
@@ -1013,7 +1018,7 @@ export class SceneManager {
 
     const batchedMesh = new BatchedMesh(geometries.length, maxVertexCount, undefined, material);
     this.disposables.push(batchedMesh);
-    
+
     geometries.forEach((geometry) => {
       const geometryId = batchedMesh.addGeometry(geometry);
       // NOTE: for older versions of three.js, addInstance is not available

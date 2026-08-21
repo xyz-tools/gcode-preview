@@ -113,7 +113,7 @@ export function createColorMaterial(
       clipMaxY: { value: Infinity }
     },
     wireframe: false,
-    side: 2, // Double-sided for debugging
+    side: 2 // Double-sided for debugging
   });
 
   // Cache the material

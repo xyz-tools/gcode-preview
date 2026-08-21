@@ -107,11 +107,13 @@ export class Path {
    * @param opts.lineHeightOverride - Optional override for line height
    * @returns BufferGeometry representing the path
    */
-  geometry(opts: { 
-    extrusionWidthOverride?: number; 
-    lineHeightOverride?: number
-  },
-  extrusionDistance: number): { geometry: BufferGeometry, extrusionDistance: number } {
+  geometry(
+    opts: {
+      extrusionWidthOverride?: number;
+      lineHeightOverride?: number;
+    } = {},
+    extrusionDistance = 0
+  ): { geometry: BufferGeometry; extrusionDistance: number } {
     if (this._vertices.length < 6) {
       // a path needs at least 2 points to be valid
       console.warn('Path has less than 6 points, returning empty geometry');
@@ -128,27 +130,23 @@ export class Path {
       radialSegments
     );
 
-    
     // // Assuming you have a path and know the extrusion per segment
     // for (let i = 0; i < extrusionDistances.length; i++) {
-      //   const ringIndex = Math.floor(i / radialSegments);
-      //   extrusionDistances[i] = cumulative[ringIndex];
-      // }
-      
-      // create an array with length equal to the number of vertices
-      // and fill it with a constant value
-      const extrusionDistances = new Float32Array(geometry.attributes.position.count);
-      for (let i = 0; i < path.length; i++) {
-        extrusionDistances[i] = cumulative[i];
-      }
-      
-    geometry.setAttribute(
-      'extrusionDistance',
-      new BufferAttribute(extrusionDistances, 1)
-    );
+    //   const ringIndex = Math.floor(i / radialSegments);
+    //   extrusionDistances[i] = cumulative[ringIndex];
+    // }
+
+    // create an array with length equal to the number of vertices
+    // and fill it with a constant value
+    const extrusionDistances = new Float32Array(geometry.attributes.position.count);
+    for (let i = 0; i < path.length; i++) {
+      extrusionDistances[i] = cumulative[i];
+    }
+
+    geometry.setAttribute('extrusionDistance', new BufferAttribute(extrusionDistances, 1));
 
     return {
-      geometry : geometry,
+      geometry: geometry,
       extrusionDistance: extrusionDistance
     };
   }
@@ -175,7 +173,6 @@ export class Path {
     return this.vertices.some((_, i, arr) => i % 3 === 2 && arr[i] !== arr[2]);
   }
 }
-
 
 function computeCumulativeExtrusion(startingDistance: number, path: Vector3[]): Float32Array {
   const distances = new Float32Array(path.length + 1);
