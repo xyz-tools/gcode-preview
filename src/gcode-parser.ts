@@ -106,6 +106,14 @@ export type ParseResult = { metadata: Metadata; commands: GCodeCommand[] };
 export type Metadata = { thumbnails: Record<string, Thumbnail> };
 
 /**
+ * Whether a character code is an ASCII letter, which is what opens a G-code word.
+ * @param code - Result of charCodeAt
+ */
+function isAlphaCode(code: number): boolean {
+  return (code >= 97 && code <= 122) || (code >= 65 && code <= 90);
+}
+
+/**
  * A G-code parser that processes G-code commands and extracts metadata.
  *
  * @remarks
@@ -185,58 +193,47 @@ export class Parser {
    */
   parseCommand(line: string, keepComments = true): GCodeCommand | null {
     const input = line.trim();
-    const splitted = input.split(';');
-    const cmd = splitted[0];
-    const comment = (keepComments && splitted[1]) || undefined;
+    const firstSemicolon = input.indexOf(';');
+    const cmd = firstSemicolon < 0 ? input : input.slice(0, firstSemicolon);
 
-    const parts = cmd
-      .split(/([a-zA-Z])/g)
-      .slice(1)
-      .map((s) => s.trim());
+    let comment: string | undefined;
+    if (keepComments && firstSemicolon >= 0) {
+      // only the span up to the next semicolon, matching the previous split(';')[1]
+      const nextSemicolon = input.indexOf(';', firstSemicolon + 1);
+      const text = nextSemicolon < 0 ? input.slice(firstSemicolon + 1) : input.slice(firstSemicolon + 1, nextSemicolon);
+      comment = text || undefined;
+    }
 
-    const gcode = !parts.length ? '' : `${parts[0]?.toLowerCase()}${Number(parts[1])}`;
-    const params = this.parseParams(parts.slice(2));
-    return new GCodeCommand(line, gcode, params, comment);
-  }
+    let gcode = '';
+    const params: GCodeParameters = {};
+    let isFirstWord = true;
 
-  /**
-   * Checks if a character is an alphabetic letter (A-Z or a-z).
-   *
-   * @param char - Single character to check
-   * @returns True if character is a letter, false otherwise
-   * @private
-   */
-  private isAlpha(char: string): boolean {
-    const code = char.charCodeAt(0);
-    return (code >= 97 && code <= 122) || (code >= 65 && code <= 90);
-  }
-
-  /**
-   * Parses G-code parameters from an array of parameter strings.
-   *
-   * @param params - Array of parameter strings (alternating between parameter letters and values)
-   * @returns Object containing parsed parameters with their values
-   * @private
-   *
-   * @remarks
-   * Parameters in G-code are letter-value pairs (e.g., X100 Y200).
-   * This method processes these pairs and converts values to numbers.
-   * It alternates through the array since parameters come in pairs:
-   * - Even indices contain parameter letters (X, Y, Z, etc.)
-   * - Odd indices contain the corresponding values
-   */
-  private parseParams(params: string[]): GCodeParameters {
-    return params.reduce((acc: GCodeParameters, cur: string, idx: number, array) => {
-      // alternate bc we're processing in pairs
-      if (idx % 2 == 0) return acc;
-
-      const key = array[idx - 1].toLowerCase();
-      if (this.isAlpha(key)) {
-        acc[key] = parseFloat(cur);
+    // Walk the line once. Each letter opens a word whose value runs to the next
+    // letter, which is the same split the previous regex produced -- without
+    // building an array of every fragment and a trimmed copy of each one.
+    let i = 0;
+    while (i < cmd.length) {
+      if (!isAlphaCode(cmd.charCodeAt(i))) {
+        i++;
+        continue;
       }
 
-      return acc;
-    }, {});
+      const letter = cmd[i];
+      let end = i + 1;
+      while (end < cmd.length && !isAlphaCode(cmd.charCodeAt(end))) end++;
+      const value = cmd.slice(i + 1, end).trim();
+
+      if (isFirstWord) {
+        gcode = letter.toLowerCase() + Number(value);
+        isFirstWord = false;
+      } else {
+        params[letter.toLowerCase()] = parseFloat(value);
+      }
+
+      i = end;
+    }
+
+    return new GCodeCommand(line, gcode, params, comment);
   }
 
   /**

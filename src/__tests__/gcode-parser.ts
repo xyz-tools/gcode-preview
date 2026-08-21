@@ -136,3 +136,77 @@ test('gcode commands without gcode should result in a command with empty string 
   const cmd = parser.parseCommand(gcode) as GCodeCommand;
   expect(cmd.gcode).toEqual('');
 });
+
+describe('parseCommand tokenizing', () => {
+  const parse = (line: string) => new Parser().parseCommand(line) as GCodeCommand;
+
+  test('reads a command and its parameters', () => {
+    const cmd = parse('G1 X100.5 Y-20 E0.04 F1200');
+    expect(cmd.gcode).toEqual('g1');
+    expect(cmd.params).toEqual({ x: 100.5, y: -20, e: 0.04, f: 1200 });
+  });
+
+  test('lower-cases the command and the parameter letters', () => {
+    const cmd = parse('G28 X0');
+    expect(cmd.gcode).toEqual('g28');
+    expect(cmd.params.x).toEqual(0);
+  });
+
+  test('keeps a fractional command number', () => {
+    expect(parse('G28.1 X0').gcode).toEqual('g28.1');
+  });
+
+  test('tolerates missing whitespace between words', () => {
+    const cmd = parse('G1X10Y20');
+    expect(cmd.gcode).toEqual('g1');
+    expect(cmd.params).toEqual({ x: 10, y: 20 });
+  });
+
+  test('keeps the src line verbatim', () => {
+    const line = '  G1 X1 ; move  ';
+    expect(parse(line).src).toEqual(line);
+  });
+
+  describe('comments', () => {
+    test('splits the comment off the command', () => {
+      const cmd = parse('G1 X1 ; move right');
+      expect(cmd.gcode).toEqual('g1');
+      expect(cmd.params.x).toEqual(1);
+      expect(cmd.comment).toEqual(' move right');
+    });
+
+    test('stops the comment at a second semicolon', () => {
+      expect(parse('G1 X1 ; first ; second').comment).toEqual(' first ');
+    });
+
+    test('treats an empty comment as absent', () => {
+      expect(parse('G1 X1 ;').comment).toBeUndefined();
+    });
+
+    test('parses no command from a comment-only line', () => {
+      const cmd = parse('; just a comment');
+      expect(cmd.gcode).toEqual('');
+      expect(cmd.params).toEqual({});
+      expect(cmd.comment).toEqual(' just a comment');
+    });
+
+    test('drops the comment when asked to', () => {
+      expect(new Parser().parseCommand('G1 X1 ; move', false)?.comment).toBeUndefined();
+    });
+  });
+
+  test('produces an empty command for a blank line', () => {
+    const cmd = parse('   ');
+    expect(cmd.gcode).toEqual('');
+    expect(cmd.params).toEqual({});
+  });
+
+  test('treats letters in free text as parameters, as it always has', () => {
+    // M117 style messages have no value after each letter, so each becomes NaN.
+    // Preserved deliberately: the previous regex split behaved the same way.
+    const cmd = parse('M117 Hi');
+    expect(cmd.gcode).toEqual('m117');
+    expect(Object.keys(cmd.params)).toEqual(['h', 'i']);
+    expect(cmd.params.h).toBeNaN();
+  });
+});
