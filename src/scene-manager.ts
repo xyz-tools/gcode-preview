@@ -143,8 +143,11 @@ export class SceneManager {
   private _boundingBoxColor?: Color;
 
   // rendering
-  /** Group containing all rendered paths */
+  /** Group containing all extruded paths */
   private group?: Group;
+  /** Group containing all travel paths */
+  private travelGroup?: Group;
+
   /** Disposable resources */
   private disposables: Disposable[] = [];
   /** Default extrusion color */
@@ -904,10 +907,14 @@ export class SceneManager {
     if (this.renderExtrusion) {
       this.job.toolPaths.forEach((toolPaths, index) => {
         const color = Array.isArray(this._extrusionColor) ? this._extrusionColor[index] : this._extrusionColor;
+        const slicedToolPaths = toolPaths.slice(this.renderPathIndex, endPathNumber);
+        if (slicedToolPaths.length === 0) {
+          return;
+        }
         if (this.renderTubes) {
-          this.renderPathsAsTubes(toolPaths.slice(this.renderPathIndex, endPathNumber), color);
+          this.renderPathsAsTubes(slicedToolPaths, color);
         } else {
-          this.renderPathsAsLines(toolPaths.slice(this.renderPathIndex, endPathNumber), color);
+          this.renderPathsAsLines(slicedToolPaths, color);
         }
       });
     }
@@ -960,20 +967,34 @@ export class SceneManager {
    * @param color - Color to use for the tubes
    */
   private renderPathsAsTubes(paths: Path[], color: Color): void {
+    console.log('rendering ' + paths.length + ' paths as tubes');
+
+    // use a random color instead of the default extrusion color
+    // const randomColor = Math.floor(Math.random() * 16777215); // 0xFFFFFF
+    // this._extrusionColor = new Color(randomColor);
     const colorNumber = Number(color.getHex());
     const geometries: BufferGeometry[] = [];
 
     const material = createColorMaterial(colorNumber, this.ambientLight, this.directionalLight, this.brightness);
 
     this.materials.push(material);
+    let totalExtrusionDistance = 0;
 
     paths.forEach((path) => {
-      const geometry = path.geometry({
-        extrusionWidthOverride: this.extrusionWidth,
-        lineHeightOverride: this.lineHeight
-      });
+      const result = path.geometry(
+        {
+          extrusionWidthOverride: this.extrusionWidth,
+          lineHeightOverride: this.lineHeight
+        },
+        totalExtrusionDistance
+      );
 
-      if (!geometry) return;
+      if (!result) return;
+
+      const { geometry, extrusionDistance } = result;
+
+      console.debug(extrusionDistance, 'mm extrusion distance for path');
+      totalExtrusionDistance = extrusionDistance;
 
       this.disposables.push(geometry);
       geometries.push(geometry);
@@ -992,6 +1013,7 @@ export class SceneManager {
    * @returns Batched mesh instance
    */
   private createBatchMesh(geometries: BufferGeometry[], material: Material): BatchedMesh {
+    console.debug('creating batched mesh with', geometries.length, 'geometries');
     const maxVertexCount = geometries.reduce((acc, geometry) => geometry.attributes.position.count * 3 + acc, 0);
 
     const batchedMesh = new BatchedMesh(geometries.length, maxVertexCount, undefined, material);

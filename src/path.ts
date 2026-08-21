@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import { BufferGeometry, Vector3 } from 'three';
+import { BufferAttribute, BufferGeometry, Vector3 } from 'three';
 import { ExtrusionGeometry } from './extrusion-geometry';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 
@@ -105,21 +105,51 @@ export class Path {
    * @param opts - Geometry options
    * @param opts.extrusionWidthOverride - Optional override for extrusion width
    * @param opts.lineHeightOverride - Optional override for line height
-   * @returns BufferGeometry representing the path
+   * @param extrusionDistance - Cumulative extrusion distance before this path
+   * @returns The geometry and the cumulative extrusion distance, or null if the path is invalid
    */
-  geometry(opts: { extrusionWidthOverride?: number; lineHeightOverride?: number } = {}): BufferGeometry {
+  geometry(
+    opts: {
+      extrusionWidthOverride?: number;
+      lineHeightOverride?: number;
+    } = {},
+    extrusionDistance = 0
+  ): { geometry: BufferGeometry; extrusionDistance: number } | null {
     if (this._vertices.length < 6) {
       // a path needs at least 2 points to be valid
       console.warn('Path has less than 6 points, returning empty geometry');
       return null;
     }
+    const path = this.path();
+    const cumulative = computeCumulativeExtrusion(extrusionDistance, path);
 
-    return new ExtrusionGeometry(
-      this.path(),
+    const radialSegments = 4;
+    const geometry = new ExtrusionGeometry(
+      path,
       opts.extrusionWidthOverride ?? this.extrusionWidth,
       opts.lineHeightOverride ?? this.lineHeight,
-      4
+      radialSegments
     );
+
+    // // Assuming you have a path and know the extrusion per segment
+    // for (let i = 0; i < extrusionDistances.length; i++) {
+    //   const ringIndex = Math.floor(i / radialSegments);
+    //   extrusionDistances[i] = cumulative[ringIndex];
+    // }
+
+    // create an array with length equal to the number of vertices
+    // and fill it with a constant value
+    const extrusionDistances = new Float32Array(geometry.attributes.position.count);
+    for (let i = 0; i < path.length; i++) {
+      extrusionDistances[i] = cumulative[i];
+    }
+
+    geometry.setAttribute('extrusionDistance', new BufferAttribute(extrusionDistances, 1));
+
+    return {
+      geometry: geometry,
+      extrusionDistance: extrusionDistance
+    };
   }
 
   /**
@@ -143,4 +173,18 @@ export class Path {
   hasVerticalMoves(): boolean {
     return this.vertices.some((_, i, arr) => i % 3 === 2 && arr[i] !== arr[2]);
   }
+}
+
+function computeCumulativeExtrusion(startingDistance: number, path: Vector3[]): Float32Array {
+  const distances = new Float32Array(path.length + 1);
+  let total = startingDistance;
+
+  distances[0] = total; // Start with the initial extrusion distance
+  for (let i = 1; i < path.length; i++) {
+    const dist = path[i].distanceTo(path[i - 1]);
+    total += dist;
+    distances[i] = total;
+  }
+
+  return distances;
 }

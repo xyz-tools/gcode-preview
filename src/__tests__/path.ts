@@ -70,12 +70,13 @@ describe('.geometry', () => {
     path.addPoint(0, 0, 0);
     path.addPoint(1, 2, 3);
 
-    const result = path.geometry() as ExtrusionGeometry;
+    const result = path.geometry();
 
     expect(result).not.toBeNull();
-    expect(result).toBeInstanceOf(ExtrusionGeometry);
-    expect(result.parameters.points.length).toEqual(2);
-    expect(result.parameters.closed).toEqual(false);
+    const geometry = result.geometry as ExtrusionGeometry;
+    expect(geometry).toBeInstanceOf(ExtrusionGeometry);
+    expect(geometry.parameters.points.length).toEqual(2);
+    expect(geometry.parameters.closed).toEqual(false);
   });
 
   test('returns an ExtrusionGeometry with the path extrusion width', () => {
@@ -84,9 +85,10 @@ describe('.geometry', () => {
     path.addPoint(0, 0, 0);
     path.addPoint(1, 2, 3);
 
-    const result = path.geometry() as ExtrusionGeometry;
+    const result = path.geometry();
+    const geometry = result.geometry as ExtrusionGeometry;
 
-    expect(result.parameters.lineWidth).toEqual(9);
+    expect(geometry.parameters.lineWidth).toEqual(9);
   });
 
   test('returns an ExtrusionGeometry with the path line height', () => {
@@ -95,9 +97,10 @@ describe('.geometry', () => {
     path.addPoint(0, 0, 0);
     path.addPoint(1, 2, 3);
 
-    const result = path.geometry() as ExtrusionGeometry;
+    const result = path.geometry();
+    const geometry = result.geometry as ExtrusionGeometry;
 
-    expect(result.parameters.lineHeight).toEqual(5);
+    expect(geometry.parameters.lineHeight).toEqual(5);
   });
 
   test('returns an ExtrusionGeometry with the extrusionWidthOverride when passed', () => {
@@ -106,9 +109,10 @@ describe('.geometry', () => {
     path.addPoint(0, 0, 0);
     path.addPoint(1, 2, 3);
 
-    const result = path.geometry({ extrusionWidthOverride: 2 }) as ExtrusionGeometry;
+    const result = path.geometry({ extrusionWidthOverride: 2 });
+    const geometry = result.geometry as ExtrusionGeometry;
 
-    expect(result.parameters.lineWidth).toEqual(2);
+    expect(geometry.parameters.lineWidth).toEqual(2);
   });
 
   test('returns an ExtrusionGeometry with the lineHeightOverride when passed', () => {
@@ -117,9 +121,10 @@ describe('.geometry', () => {
     path.addPoint(0, 0, 0);
     path.addPoint(1, 2, 3);
 
-    const result = path.geometry({ lineHeightOverride: 7 }) as ExtrusionGeometry;
+    const result = path.geometry({ lineHeightOverride: 7 });
+    const geometry = result.geometry as ExtrusionGeometry;
 
-    expect(result.parameters.lineHeight).toEqual(7);
+    expect(geometry.parameters.lineHeight).toEqual(7);
   });
 
   test('returns null if there are 0 vertices', () => {
