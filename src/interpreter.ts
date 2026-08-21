@@ -1,12 +1,8 @@
 import { Path, PathType } from './path';
 import { GCodeCommand } from './gcode-parser';
 import { Job } from './job';
-import { EventsDispatcher } from './events-dispatcher';
 
 type Method = (..._args: unknown[]) => unknown;
-export enum InterpreterEvent {
-  JOB_UPDATED = 'jobUpdated'
-}
 
 /**
  * Interprets and executes G-code commands, updating the job state accordingly
@@ -17,7 +13,7 @@ export enum InterpreterEvent {
  * including linear moves (G0/G1), arcs (G2/G3), unit changes (G20/G21), and tool selection.
  */
 export class Interpreter {
-  [key: string]: EventsDispatcher | Method;
+  [key: string]: Method;
 
   // TODO: maybe these props should move to the Job class
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -44,13 +40,6 @@ export class Interpreter {
   // @ts-ignore
   public extrusionDistance = 0;
 
-  private eventsDispatcher: EventsDispatcher;
-
-  constructor(eventsDispatcher?: EventsDispatcher) {
-    this.eventsDispatcher = eventsDispatcher ?? new EventsDispatcher();
-    console.log(this.eventsDispatcher);
-  }
-
   /**
    * Executes an array of G-code commands, updating the provided job
    * @param commands - Array of GCodeCommand objects to execute
@@ -69,7 +58,6 @@ export class Interpreter {
       }
     });
     job.finishPath();
-    this.eventsDispatcher.emit(InterpreterEvent.JOB_UPDATED, job);
 
     return job;
   }

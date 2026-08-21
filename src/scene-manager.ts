@@ -18,18 +18,6 @@ import {
   MathUtils,
   LineBasicMaterial
 } from 'three';
-import { EventsDispatcher } from './events-dispatcher';
-
-/**
- * Notifications the scene emits to consumers.
- * @remarks
- * Property changes are not events: a setter calls into the ObjectsManager, which
- * decides whether the change can be applied in place or needs new geometry.
- */
-export enum SceneManagerEvent {
-  ANIMATION_COMPLETE = 'animationComplete',
-  FRAME_RENDERED = 'frameRendered'
-}
 
 export type BuildVolumeDef = Pick<BuildVolume, 'x' | 'y' | 'z' | 'smallGrid'>;
 
@@ -158,7 +146,8 @@ export class SceneManager {
   private _wireframe = false;
   /** Whether to preserve drawing buffer */
   private preserveDrawingBuffer = false;
-  private eventsDispatcher: EventsDispatcher = new EventsDispatcher();
+  /** Called after every rendered frame, for consumers that track render stats */
+  onFrameRendered?: () => void;
   private objectsManager: ObjectsManager;
 
   /**
@@ -166,7 +155,7 @@ export class SceneManager {
    * @param opts - Configuration options
    * @throws Error if no canvas element is provided
    */
-  constructor(opts: SceneManagerOptions, job: Job, eventsDispatcher?: EventsDispatcher) {
+  constructor(opts: SceneManagerOptions, job: Job) {
     this.job = job;
     this.scene = new Scene();
     this.objectsManager = this.createObjectsManager(opts.lineWidth ?? 1, opts.lineHeight, opts.extrusionWidth);
@@ -193,7 +182,6 @@ export class SceneManager {
     this._renderExtrusion = opts.renderExtrusion ?? this._renderExtrusion;
     this._renderTravel = opts.renderTravel ?? this._renderTravel;
     this.objectsManager.renderTubes = opts.renderTubes ?? this.objectsManager.renderTubes;
-    this.eventsDispatcher = eventsDispatcher ?? this.eventsDispatcher;
 
     if (opts.boundingBoxColor !== undefined) {
       this._boundingBoxColor = new Color(opts.boundingBoxColor);
@@ -624,7 +612,7 @@ export class SceneManager {
     this.animationFrameId = requestAnimationFrame(() => this.animate());
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
-    this.eventsDispatcher.emit(SceneManagerEvent.FRAME_RENDERED, null);
+    this.onFrameRendered?.();
   }
 
   /**
@@ -696,7 +684,7 @@ export class SceneManager {
     return new Promise((resolve) => {
       const loop = () => {
         if (this.renderPathIndex >= this.job.paths.length - 1) {
-          this.eventsDispatcher.emit(SceneManagerEvent.ANIMATION_COMPLETE, [this._buildVolume]);
+          // the returned promise is the completion signal
           resolve();
         } else {
           this.renderFrame(pathCount);

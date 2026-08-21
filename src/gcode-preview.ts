@@ -1,8 +1,7 @@
-import { SceneManager, SceneManagerOptions, SceneManagerEvent } from './scene-manager';
+import { SceneManager, SceneManagerOptions } from './scene-manager';
 import { GCodeCommand, Parser } from './gcode-parser';
-import { Interpreter, InterpreterEvent } from './interpreter';
+import { Interpreter } from './interpreter';
 import { Job } from './job';
-import { CallbackFunction, EventsDispatcher } from './events-dispatcher';
 import { DevGUI, type DevModeOptions } from './dev-gui';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { makeDroppable } from './extra/dom-utils';
@@ -27,16 +26,6 @@ type LibOptions = {
 };
 
 export type GCodePreviewOptions = LibOptions & SceneManagerOptions;
-enum GCodePreviewEvent {
-  STREAM_READ_END = 'streamReadEnd'
-}
-export const EventName = {
-  ...SceneManagerEvent,
-  ...InterpreterEvent,
-  ...GCodePreviewEvent
-};
-
-export type EventNameType = (typeof EventName)[keyof typeof EventName];
 
 /**
  * Main G-code preview class that orchestrates rendering and parsing
@@ -59,7 +48,10 @@ export type EventNameType = (typeof EventName)[keyof typeof EventName];
  * ```
  */
 export class GCodePreview {
-  private eventsDispatcher = new EventsDispatcher();
+  /** Called whenever parsed commands have been folded into the job */
+  onJobUpdated?: (job: Job) => void;
+  /** Called once a streamed G-code file has been read to the end */
+  onStreamEnd?: () => void;
   /** Job containing parsed G-code data */
   job: Job;
   /** The WebGL sceneManager instance for direct access to rendering properties */
@@ -82,9 +74,17 @@ export class GCodePreview {
   /** The WebGL sceneManager instance for direct access to rendering properties */
   get sceneManager(): SceneManager {
     if (!this._sceneManager) {
-      this._sceneManager = new SceneManager(this.opts, this.job, this.eventsDispatcher);
+      this._sceneManager = this.createSceneManager();
     }
     return this._sceneManager;
+  }
+
+  /** Builds a SceneManager wired to feed the stats display. */
+  private createSceneManager(): SceneManager {
+    const sceneManager = new SceneManager(this.opts, this.job);
+    sceneManager.onFrameRendered = () => this.stats?.update();
+
+    return sceneManager;
   }
 
   /** The G-code parser instance */
@@ -127,11 +127,9 @@ export class GCodePreview {
     this._parser = this.createParser();
     this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
     this.stats = this.devMode ? new Stats() : undefined;
-    this._sceneManager = new SceneManager(this.opts, this.job, this.eventsDispatcher);
+    this._sceneManager = this.createSceneManager();
     this.devMode = opts?.devMode;
-    this.interpreter = new Interpreter(this.eventsDispatcher);
-
-    this.eventsDispatcher.addEventListener(EventName.FRAME_RENDERED, () => this.stats?.update());
+    this.interpreter = new Interpreter();
 
     this.initStats();
     this.initGui();
@@ -159,7 +157,7 @@ export class GCodePreview {
     const { commands } = this.parser.parseGCode(gcode);
 
     // Pass the parsed commands to the sceneManager
-    this.interpreter.execute(commands, this.job);
+    this.executeCommands(commands);
 
     // Render the result
     this.sceneManager.renderAnimated();
@@ -180,7 +178,7 @@ export class GCodePreview {
       await this.readStream(gcode);
     } else {
       const { commands } = this.parser.parseGCode(gcode);
-      this.interpreter.execute(commands, this.job);
+      this.executeCommands(commands);
     }
 
     if (!this.job.isPlanar) {
@@ -213,11 +211,20 @@ export class GCodePreview {
       const { commands } = this.parser.parseGCode(split.complete);
 
       // we'll execute the commands immediately, for now
-      this.interpreter.execute(commands, this.job);
+      this.executeCommands(commands);
     } while (!result.done);
 
     console.debug('total read from stream', Math.floor(size / 1024), 'kB');
-    this.eventsDispatcher.emit(EventName.STREAM_READ_END, null);
+    this.onStreamEnd?.();
+  }
+
+  /**
+   * Folds parsed commands into the job and announces the result.
+   * @param commands - Parsed G-code commands
+   */
+  private executeCommands(commands: GCodeCommand[]): void {
+    this.interpreter.execute(commands, this.job);
+    this.onJobUpdated?.(this.job);
   }
 
   /**
@@ -234,15 +241,6 @@ export class GCodePreview {
     this.stats?.end();
     this.stats?.dom?.remove();
     this.stats = undefined;
-  }
-
-  /**
-   * Adds an event listener for triggering callbacks on specific events
-   * @param type - Event type to listen for
-   * @param listener - Callback function to invoke when the event occurs
-   */
-  addEventListener(type: EventNameType | EventNameType[], listener: CallbackFunction): void {
-    this.eventsDispatcher.addEventListener(type, listener);
   }
 
   /**
@@ -280,4 +278,4 @@ export class GCodePreview {
  * This class provides a simple interface for rendering G-code previews.
  * Most properties and methods are available through the `sceneManager` property.
  */
-export { SceneManager, SceneManagerEvent, DevModeOptions, GCodeCommand, Parser };
+export { SceneManager, DevModeOptions, GCodeCommand, Parser };

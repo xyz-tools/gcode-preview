@@ -32,7 +32,6 @@ vi.mock('three', async (importOriginal) => {
 
 import { SceneManager, type SceneManagerOptions } from '../scene-manager';
 import { ObjectsManager } from '../objects-manager';
-import { EventsDispatcher } from '../events-dispatcher';
 import { Job } from '../job';
 import { Path, PathType } from '../path';
 import { Color, Group } from 'three';
@@ -438,16 +437,25 @@ describe('SceneManager properties', () => {
       fresh.dispose();
     });
 
-    test('announces completion', async () => {
-      const dispatcher = new EventsDispatcher();
-      const listener = vi.fn();
-      dispatcher.addEventListener('animationComplete', listener);
-      const fresh = createSceneManager({ eventsDispatcher: dispatcher });
+    test('resolves once every path has been drawn', async () => {
+      const fresh = createSceneManager();
+      let settled = false;
 
-      await fresh.renderAnimated(1);
+      await fresh.renderAnimated(1).then(() => {
+        settled = true;
+      });
 
-      expect(listener).toHaveBeenCalled();
+      expect(settled).toBe(true);
       fresh.dispose();
+    });
+
+    test('reports each rendered frame through onFrameRendered', () => {
+      const onFrameRendered = vi.fn();
+      sceneManager.onFrameRendered = onFrameRendered;
+
+      sceneManager.animate();
+
+      expect(onFrameRendered).toHaveBeenCalled();
     });
   });
 
@@ -550,14 +558,12 @@ function travelGroup(sceneManager: SceneManager): Group {
   return sceneManager.scene.children.find((child) => child.name === 'Travel Moves') as Group;
 }
 
-function createSceneManager(
-  opts: Partial<SceneManagerOptions> & { eventsDispatcher?: EventsDispatcher; job?: Job } = {}
-): SceneManager {
+function createSceneManager(opts: Partial<SceneManagerOptions> & { job?: Job } = {}): SceneManager {
   const canvas = document.createElement('canvas');
   Object.defineProperty(canvas, 'offsetWidth', { value: 800 });
   Object.defineProperty(canvas, 'offsetHeight', { value: 600 });
 
-  const { eventsDispatcher, job, ...sceneOptions } = opts;
+  const { job, ...sceneOptions } = opts;
 
   return new SceneManager(
     {
@@ -567,8 +573,7 @@ function createSceneManager(
       renderTravel: false,
       ...sceneOptions
     },
-    job ?? createJob(),
-    eventsDispatcher
+    job ?? createJob()
   );
 }
 

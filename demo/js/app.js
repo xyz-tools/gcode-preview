@@ -128,9 +128,8 @@ export const app = (window.app = createApp({
       observer.observe(canvas);
 
       // to update the layer count and the thumbnail when available
-      preview.addEventListener(['jobUpdated', 'streamReadEnd'], () => {
-        updateUI();
-      });
+      preview.onJobUpdated = () => updateUI();
+      preview.onStreamEnd = () => updateUI();
 
       watchEffect(() => {
         preview.sceneManager.backgroundColor = settings.value.backgroundColor;
