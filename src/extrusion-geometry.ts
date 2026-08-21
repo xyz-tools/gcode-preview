@@ -65,6 +65,18 @@ class ExtrusionGeometry extends BufferGeometry {
     const uvCount = points.length * ringSize;
     const indexCount = Math.max(0, points.length - 1) * radialSegments * 6;
 
+    // The ring of sines and cosines depends only on j, which runs from 0 to
+    // radialSegments, so it is the same for every point on the path. Computing
+    // it once keeps a large model from making a million trig calls to produce a
+    // handful of distinct values.
+    const ringSin = new Float64Array(radialSegments + 1);
+    const ringCos = new Float64Array(radialSegments + 1);
+    for (let j = 0; j <= radialSegments; j++) {
+      const angle = (j / radialSegments) * Math.PI * 2;
+      ringSin[j] = Math.sin(angle);
+      ringCos[j] = -Math.cos(angle);
+    }
+
     const vertices = new Float32Array(vertexCount * 3);
     const normals = new Float32Array(vertexCount * 3);
     const uvs = new Float32Array(uvCount * 2);
@@ -127,9 +139,8 @@ class ExtrusionGeometry extends BufferGeometry {
       // generate points around the tangent
 
       for (let j = 0; j <= radialSegments; j++) {
-        const v = (j / radialSegments) * Math.PI * 2;
-        const sin = Math.sin(v);
-        const cos = -Math.cos(v);
+        const sin = ringSin[j];
+        const cos = ringCos[j];
 
         // normal
         normal.x = cos * N.x + sin * B.x;
