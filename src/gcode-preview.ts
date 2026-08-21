@@ -1,5 +1,5 @@
 import { SceneManager, SceneManagerOptions } from './scene-manager';
-import { GCodeCommand, Parser } from './gcode-parser';
+import { GCodeCommand, Parser } from './parser/gcode-parser';
 import { Interpreter } from './interpreter';
 import { Job } from './job';
 import { DevGUI, type DevModeOptions } from './dev-gui';

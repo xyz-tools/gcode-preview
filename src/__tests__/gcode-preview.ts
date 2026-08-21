@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GCodePreview } from '../gcode-preview';
 import { SceneManager } from '../scene-manager';
-import { Parser } from '../gcode-parser';
+import { Parser } from '../parser/gcode-parser';
 import { DevGUI } from '../dev-gui';
 import { Job } from '../job';
 import { Interpreter } from '../interpreter';
@@ -10,7 +10,7 @@ import { makeDroppable } from '../extra/dom-utils';
 
 // Mock the dependencies
 vi.mock('../scene-manager');
-vi.mock('../gcode-parser');
+vi.mock('../parser/gcode-parser');
 vi.mock('../dev-gui');
 vi.mock('../job');
 vi.mock('../interpreter');

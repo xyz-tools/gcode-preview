@@ -47,7 +47,7 @@ export class Slic3rMetadataParser extends SlicerMetadataParser {
 
           // Check for Z in comment (e.g., "; layer_z = 0.3") - handle malformed values
           if (nextCommand.comment) {
-            const zMatch = nextCommand.comment.match(/layer_z = ([^\s;]+)/i);
+            const zMatch = nextCommand.comment.match(/layer_z = ([-\d.]+)/i);
             if (zMatch) {
               z = parseFloat(zMatch[1]);
               break;
@@ -70,7 +70,7 @@ export class Slic3rMetadataParser extends SlicerMetadataParser {
       }
 
       // Alternative format: "; layer_z = 0.3" without explicit layer number - only if no move to next layer format
-      const zOnlyMatch = command.comment.match(/layer_z = ([^\s;]+)/i);
+      const zOnlyMatch = command.comment.match(/layer_z = ([-\d.]+)/i);
       if (zOnlyMatch && !hasMoveToNextLayer) {
         const z = parseFloat(zOnlyMatch[1]);
 

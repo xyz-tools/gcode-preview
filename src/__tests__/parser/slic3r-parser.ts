@@ -211,15 +211,14 @@ describe('Slic3rMetadataParser', () => {
     });
 
     it('should handle malformed layer comments gracefully', () => {
+      // Non-digit layer numbers are rejected by the strict \d+ regex to prevent ReDoS
       const commands: GCodeCommand[] = [
         { comment: '; move to next layer (invalid)' },
         { comment: '; layer_z = invalid' }
       ];
 
       const result = parser.parseLayerMetadata(commands);
-      expect(result).toHaveLength(1);
-      expect(result[0].layerIndex).toBeNaN(); // parseInt('invalid') = NaN
-      expect(result[0].z).toBeNaN(); // parseFloat('invalid') = NaN
+      expect(result).toHaveLength(0); // Neither matches \d+ pattern
     });
 
     it('should handle typical Slic3r format', () => {

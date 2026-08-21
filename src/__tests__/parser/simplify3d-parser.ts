@@ -159,14 +159,12 @@ describe('Simplify3DMetadataParser', () => {
     });
 
     it('should handle malformed layer comments gracefully', () => {
+      // Non-digit layer numbers and non-numeric Z values are rejected by the strict regex
+      // to prevent ReDoS — only well-formed comments are matched
       const commands: GCodeCommand[] = [{ comment: '; layer invalid, Z = 0.2' }, { comment: '; layer 1, Z = invalid' }];
 
       const result = parser.parseLayerMetadata(commands);
-      expect(result).toHaveLength(2); // Both match the relaxed regex
-      expect(result[0].layerIndex).toBeNaN(); // parseInt('invalid') = NaN
-      expect(result[0].z).toBe(0.2); // parseFloat('0.2') = 0.2
-      expect(result[1].layerIndex).toBe(1); // parseInt('1') = 1
-      expect(result[1].z).toBeNaN(); // parseFloat('invalid') = NaN
+      expect(result).toHaveLength(0); // Neither matches \d+ / [-\d.]+ patterns
     });
 
     it('should handle typical Simplify3D header format', () => {
