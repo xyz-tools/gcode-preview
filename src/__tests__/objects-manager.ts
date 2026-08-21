@@ -139,6 +139,49 @@ describe('ObjectsManager', () => {
 
       expect(objectsManager.extrusionsGroup.children.length).toBe(1);
     });
+
+    describe('vertex packing', () => {
+      test('emits one segment per pair of consecutive points', () => {
+        // 3 points -> 2 segments -> 12 floats
+        objectsManager.renderExtrusionLines([createTestPath()], new Color(0x00ff00));
+
+        expect(positionsOf(objectsManager.extrusionsGroup.children[0] as LineSegments2)).toHaveLength(12);
+      });
+
+      test('packs several paths back to back', () => {
+        objectsManager.renderExtrusionLines([createTestPath(), createTestPath()], new Color(0x00ff00));
+
+        expect(positionsOf(objectsManager.extrusionsGroup.children[0] as LineSegments2)).toHaveLength(24);
+      });
+
+      test('offsets each point below the nozzle height', () => {
+        const manager = new ObjectsManager(new Scene(), 0.4, 0.2);
+        const path = new Path(PathType.Extrusion, 0.6, 0.2, 0);
+        path.addPoint(1, 2, 3);
+        path.addPoint(4, 5, 6);
+
+        manager.renderExtrusionLines([path], new Color(0x00ff00));
+
+        // y drops by 0.1, z drops by half the line height
+        const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
+        expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9]));
+      });
+
+      test('produces an empty buffer for a path too short to make a segment', () => {
+        const tooShort = new Path(PathType.Extrusion, 0.6, 0.2, 0);
+        tooShort.addPoint(0, 0, 0);
+
+        objectsManager.renderExtrusionLines([tooShort], new Color(0x00ff00));
+
+        expect(positionsOf(objectsManager.extrusionsGroup.children[0] as LineSegments2)).toHaveLength(0);
+      });
+
+      test('hands three.js a Float32Array so it does not have to convert one', () => {
+        objectsManager.renderExtrusionLines([createTestPath()], new Color(0x00ff00));
+
+        expect(positionsOf(objectsManager.extrusionsGroup.children[0] as LineSegments2)).toBeInstanceOf(Float32Array);
+      });
+    });
   });
 
   describe('renderExtrusionTubes', () => {
@@ -488,6 +531,11 @@ describe('ObjectsManager', () => {
     });
   });
 });
+
+/** The flat position buffer three.js interleaves the segment endpoints into. */
+function positionsOf(lines: LineSegments2): Float32Array {
+  return lines.geometry.attributes.instanceStart.data.array as Float32Array;
+}
 
 function createTestPath(): Path {
   const path = new Path(PathType.Extrusion, 0.6, 0.2, 0);
