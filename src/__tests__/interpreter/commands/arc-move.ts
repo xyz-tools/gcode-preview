@@ -136,4 +136,24 @@ describe('arcMove (G2/G3)', () => {
     expect(zPositions[zPositions.length - 1]).toEqual(0);
     expect(zPositions.every((z, index) => index === 0 || z <= zPositions[index - 1])).toBe(true);
   });
+
+  test('helical arcs interpolate Z monotonically toward the endpoint', () => {
+    const command = new GCodeCommand('G3 X10 Y0 Z5 I5 J0', 'g3', {
+      x: 10,
+      y: 0,
+      z: 5,
+      i: 5,
+      j: 0
+    });
+    const job = new Job();
+    job.state.z = 2;
+
+    arcMove(command, job);
+
+    const vertices = job.inprogressPath?.vertices ?? [];
+    const zPositions = vertices.filter((_value, index) => index % 3 === 2);
+    expect(job.state.z).toEqual(5);
+    expect(zPositions[zPositions.length - 1]).toEqual(5);
+    expect(zPositions.every((z, index) => index === 0 || z >= zPositions[index - 1])).toBe(true);
+  });
 });
