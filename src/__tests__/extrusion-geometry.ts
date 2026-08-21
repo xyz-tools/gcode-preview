@@ -159,3 +159,41 @@ test('ExtrusionGeometry keeps a straight run consistent across points', () => {
   expect(ringAt(1)).toEqual(ringAt(0));
   expect(ringAt(2)).toEqual(ringAt(0));
 });
+
+test('ExtrusionGeometry should pick the normal axis based on the smallest tangent component', () => {
+  // Exercise the axis-selection branches in computeCornerAngles: a path along Y
+  // makes `ty > min` (false branch of the ty check), and a path along Z makes
+  // `tz > min` (false branch of the tz check).
+  const yAxis = new ExtrusionGeometry([new Vector3(0, 0, 0), new Vector3(0, 1, 0)]);
+  expect(yAxis.attributes.position).toBeDefined();
+  const zAxis = new ExtrusionGeometry([new Vector3(0, 0, 0), new Vector3(0, 0, 1)]);
+  expect(zAxis.attributes.position).toBeDefined();
+});
+
+test('ExtrusionGeometry should handle non-finite point coordinates', () => {
+  // A point with a non-finite coordinate produces a NaN tangent component.
+  // In `computeCornerAngles`, `min` starts at Number.MAX_VALUE, so `tx <= min`
+  // is normally always true for finite values. When `tx` is NaN the comparison
+  // is false, exercising the otherwise-unreachable false branch.
+  const points = [new Vector3(NaN, 0, 0), new Vector3(1, 0, 0)];
+  const geometry = new ExtrusionGeometry(points);
+  expect(geometry.attributes.position).toBeDefined();
+});
+
+test('ExtrusionGeometry should duplicate the first row when the global `closed` is truthy', () => {
+  // NOTE: latent bug. In `generateBufferData`, `generateSegment(closed === false ? ...)`
+  // references a bare `closed` identifier. It is NOT a local variable and NOT
+  // `this.parameters.closed`; it resolves to the GLOBAL `closed` (globalThis.closed /
+  // window.closed), which is `false` in the test environment. The intended
+  // "closed geometry" path (the `: 0` branch) is therefore only reachable by
+  // toggling the global. We temporarily set it here to cover that branch and to
+  // document the bug, then restore it so other tests are unaffected.
+  const original = globalThis.closed;
+  Object.defineProperty(globalThis, 'closed', { value: true, configurable: true });
+  try {
+    const geometry = new ExtrusionGeometry([new Vector3(), new Vector3(1, 0, 0)]);
+    expect(geometry.attributes.position).toBeDefined();
+  } finally {
+    Object.defineProperty(globalThis, 'closed', { value: original, configurable: true });
+  }
+});

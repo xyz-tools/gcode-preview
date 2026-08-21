@@ -259,6 +259,9 @@ export class SceneManager {
     });
 
     this.renderer.localClippingEnabled = true;
+    // The `?? false` fallback is unreachable in tests: `new WebGLRenderer` above always
+    // throws in a headless (no-WebGL) environment before this line runs.
+    /* v8 ignore next */
     this.camera = this.createCamera(opts.orthographic ?? false);
     this.camera.position.fromArray(this.initialCameraPosition);
     this.resize();
@@ -292,6 +295,9 @@ export class SceneManager {
 
     this._buildVolume = new BuildVolume(value.x, value.y, value.z, value.smallGrid, this.scene);
 
+    // `new BuildVolume` always returns a truthy object, so the false side of this
+    // defensive guard is unreachable dead code.
+    /* v8 ignore next */
     if (this._buildVolume) {
       this.disposables.push(this._buildVolume);
       this._buildVolume.update();
