@@ -105,7 +105,8 @@ export class Path {
    * @param opts - Geometry options
    * @param opts.extrusionWidthOverride - Optional override for extrusion width
    * @param opts.lineHeightOverride - Optional override for line height
-   * @returns BufferGeometry representing the path
+   * @param extrusionDistance - Cumulative extrusion distance before this path
+   * @returns The geometry and the cumulative extrusion distance, or null if the path is invalid
    */
   geometry(
     opts: {
@@ -113,7 +114,7 @@ export class Path {
       lineHeightOverride?: number;
     } = {},
     extrusionDistance = 0
-  ): { geometry: BufferGeometry; extrusionDistance: number } {
+  ): { geometry: BufferGeometry; extrusionDistance: number } | null {
     if (this._vertices.length < 6) {
       // a path needs at least 2 points to be valid
       console.warn('Path has less than 6 points, returning empty geometry');
