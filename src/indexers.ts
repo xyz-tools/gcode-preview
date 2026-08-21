@@ -105,10 +105,7 @@ export class LayersIndexer extends Indexer {
    * @throws NonPlanarPathError if path is non-planar
    */
   sortIn(path: Path): void {
-    if (
-      path.travelType === PathType.Extrusion &&
-      LayersIndexer.hasNonPlanarVertex(path.vertices, this.tolerance)
-    ) {
+    if (path.travelType === PathType.Extrusion && LayersIndexer.hasNonPlanarVertex(path.vertices, this.tolerance)) {
       throw new NonPlanarExtrusionError();
     }
 

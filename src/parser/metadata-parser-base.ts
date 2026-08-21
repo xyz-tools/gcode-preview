@@ -44,12 +44,8 @@ export abstract class SlicerMetadataParser {
    * @returns True if this parser can handle the gcode
    */
   canParse(commentCommands: GCodeCommand[], maxLines = 200): boolean {
-    const sample = commentCommands.length > maxLines
-      ? commentCommands.slice(0, maxLines)
-      : commentCommands;
-    return this.identificationPatterns.some((pattern) =>
-      sample.some((cmd) => pattern.test(cmd.comment!))
-    );
+    const sample = commentCommands.length > maxLines ? commentCommands.slice(0, maxLines) : commentCommands;
+    return this.identificationPatterns.some((pattern) => sample.some((cmd) => pattern.test(cmd.comment!)));
   }
 
   /**

@@ -209,11 +209,7 @@ describe('PrusaFamilyMetadataParser', () => {
     });
 
     it('should handle negative Z values', () => {
-      const commands: GCodeCommand[] = [
-        { comment: 'LAYER_CHANGE' },
-        { comment: 'Z:-0.1' },
-        { comment: 'HEIGHT:0.2' }
-      ];
+      const commands: GCodeCommand[] = [{ comment: 'LAYER_CHANGE' }, { comment: 'Z:-0.1' }, { comment: 'HEIGHT:0.2' }];
 
       const result = parser.parseLayerMetadata(commands);
       expect(result).toHaveLength(1);

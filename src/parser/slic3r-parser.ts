@@ -42,10 +42,7 @@ export class Slic3rMetadataParser extends SlicerMetadataParser {
         }
 
         const prev = layers[layers.length - 1];
-        const height =
-          prev?.z !== undefined && z !== undefined
-            ? Math.round((z - prev.z) * 10000) / 10000
-            : undefined;
+        const height = prev?.z !== undefined && z !== undefined ? Math.round((z - prev.z) * 10000) / 10000 : undefined;
         layers.push({ layerIndex, z, height, lineIndex: i });
         continue;
       }
@@ -56,8 +53,7 @@ export class Slic3rMetadataParser extends SlicerMetadataParser {
           hasMoveToNextLayer = false;
           const z = parseFloat(zMatch[1]);
           const prev = layers[layers.length - 1];
-          const height =
-            prev?.z !== undefined ? Math.round((z - prev.z) * 10000) / 10000 : undefined;
+          const height = prev?.z !== undefined ? Math.round((z - prev.z) * 10000) / 10000 : undefined;
           layers.push({ layerIndex: layers.length, z, height, lineIndex: i });
         }
       }

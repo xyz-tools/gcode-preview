@@ -25,8 +25,7 @@ export class Simplify3DMetadataParser extends SlicerMetadataParser {
         const layerIndex = parseInt(standard[1]);
         const z = parseFloat(standard[2]);
         const prev = layers[layers.length - 1];
-        const height =
-          prev?.z !== undefined ? Math.round((z - prev.z) * 10000) / 10000 : undefined;
+        const height = prev?.z !== undefined ? Math.round((z - prev.z) * 10000) / 10000 : undefined;
         layers.push({ layerIndex, z, height, lineIndex: i });
         continue;
       }
@@ -37,8 +36,7 @@ export class Simplify3DMetadataParser extends SlicerMetadataParser {
           formatLocked = 'alt';
           const z = parseFloat(alt[1]);
           const prev = layers[layers.length - 1];
-          const height =
-            prev?.z !== undefined ? Math.round((z - prev.z) * 10000) / 10000 : undefined;
+          const height = prev?.z !== undefined ? Math.round((z - prev.z) * 10000) / 10000 : undefined;
           layers.push({ layerIndex: layers.length, z, height, lineIndex: i });
         }
       }
