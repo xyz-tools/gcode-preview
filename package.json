@@ -17,10 +17,10 @@
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^16.0.1",
     "@types/node": "^24.0.10",
-    "@types/three": "0.178.0",
-    "@webgpu/types": "^0.1.64",
+    "@types/three": "^0.185.4",
     "@typescript-eslint/eslint-plugin": "^8.36.0",
     "@typescript-eslint/parser": "^8.36.0",
+    "@webgpu/types": "^0.1.64",
     "concurrently": "^9.2.0",
     "copyfiles": "^2.4.1",
     "eslint": "^8.57.1",
