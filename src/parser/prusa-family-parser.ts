@@ -19,64 +19,63 @@ export class PrusaFamilyMetadataParser extends SlicerMetadataParser {
 
   parseLayerMetadata(commands: GCodeCommand[]): LayerMetadata[] {
     const layers: LayerMetadata[] = [];
-    let currentLayer: Partial<LayerMetadata> = {};
-    let layerIndex = 0;
+    let currentZ: number | undefined;
+    let currentHeight: number | undefined;
+    let currentLineIndex = -1;
+    let currentExplicitLayerIndex: number | undefined;
+    let autoLayerIndex = 0;
+    let inLayerChange = false;
+
+    const pushCurrentLayer = (): void => {
+      if (currentLineIndex < 0) return;
+      layers.push({
+        layerIndex: currentExplicitLayerIndex ?? autoLayerIndex,
+        z: currentZ,
+        height: currentHeight,
+        lineIndex: currentLineIndex
+      });
+      autoLayerIndex++;
+    };
 
     for (let i = 0; i < commands.length; i++) {
-      const command = commands[i];
+      const comment = commands[i].comment;
+      if (!comment) continue;
 
-      if (!command.comment) continue;
-
-      // Detect layer change - only actual LAYER_CHANGE, not BEFORE_ or AFTER_
       if (
-        command.comment.includes('LAYER_CHANGE') &&
-        !command.comment.includes('BEFORE_LAYER_CHANGE') &&
-        !command.comment.includes('AFTER_LAYER_CHANGE')
+        comment.includes('LAYER_CHANGE') &&
+        !comment.includes('BEFORE_LAYER_CHANGE') &&
+        !comment.includes('AFTER_LAYER_CHANGE')
       ) {
-        // If we have a previous layer, save it
-        if (Object.keys(currentLayer).length > 0) {
-          layers.push({
-            layerIndex: currentLayer.layerIndex ?? layerIndex,
-            z: currentLayer.z,
-            height: currentLayer.height,
-            lineIndex: currentLayer.lineIndex ?? i
-          });
-          layerIndex++;
-        }
-
-        // Start new layer
-        currentLayer = { lineIndex: i };
+        pushCurrentLayer();
+        currentLineIndex = i;
+        currentZ = undefined;
+        currentHeight = undefined;
+        currentExplicitLayerIndex = undefined;
+        inLayerChange = true;
+        continue;
       }
 
-      // Extract Z position - format: ";Z:0.2"
-      const zMatch = command.comment.match(/Z:([^\s;]+)/);
-      if (zMatch) {
-        currentLayer.z = parseFloat(zMatch[1]);
+      if (!inLayerChange) continue;
+
+      if (comment.startsWith('Z:')) {
+        const val = parseFloat(comment.slice(2));
+        if (!isNaN(val)) currentZ = val;
+        continue;
       }
 
-      // Extract height - format: ";HEIGHT:0.2"
-      const heightMatch = command.comment.match(/HEIGHT:([^\s;]+)/);
-      if (heightMatch) {
-        currentLayer.height = parseFloat(heightMatch[1]);
+      if (comment.startsWith('HEIGHT:')) {
+        const val = parseFloat(comment.slice(7));
+        if (!isNaN(val)) currentHeight = val;
+        continue;
       }
 
-      // Extract layer index if explicitly mentioned - format: ";LAYER:5"
-      const layerMatch = command.comment.match(/LAYER:(\d+)/);
+      const layerMatch = comment.match(/^LAYER:(\d+)/);
       if (layerMatch) {
-        currentLayer.layerIndex = parseInt(layerMatch[1]);
+        currentExplicitLayerIndex = parseInt(layerMatch[1]);
       }
     }
 
-    // Don't forget the last layer!
-    if (Object.keys(currentLayer).length > 0) {
-      layers.push({
-        layerIndex: currentLayer.layerIndex ?? layerIndex,
-        z: currentLayer.z,
-        height: currentLayer.height,
-        lineIndex: currentLayer.lineIndex ?? commands.length - 1
-      });
-    }
-
+    pushCurrentLayer();
     return layers;
   }
 }

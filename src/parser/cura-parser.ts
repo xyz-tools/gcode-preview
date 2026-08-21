@@ -12,7 +12,7 @@ import { SlicerMetadataParser, LayerMetadata } from './metadata-parser-base';
 export class CuraMetadataParser extends SlicerMetadataParser {
   readonly slicerName = 'Cura';
 
-  readonly identificationPatterns = [/LAYER:\d+/, /Cura_SteamEngine/i, /Generated with Cura/i, /CURA_/i];
+  readonly identificationPatterns = [/^LAYER:\d+/, /Cura_SteamEngine/i, /Generated with Cura/i, /CURA_/i];
 
   /**
    * Parses layer metadata from Cura comments
@@ -28,7 +28,7 @@ export class CuraMetadataParser extends SlicerMetadataParser {
       const comment = command.comment.trim();
 
       // Check for layer marker
-      const layerMatch = comment.match(/LAYER:(\d+)/);
+      const layerMatch = comment.match(/^LAYER:(\d+)/);
       if (layerMatch) {
         const layerIndex = parseInt(layerMatch[1], 10);
 

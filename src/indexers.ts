@@ -92,6 +92,13 @@ export class LayersIndexer extends Indexer {
     this.tolerance = tolerance;
   }
 
+  private static hasNonPlanarVertex(vertices: number[], tolerance: number): boolean {
+    for (let i = 5; i < vertices.length; i += 3) {
+      if (Math.abs(vertices[i] - vertices[i - 3]) > tolerance) return true;
+    }
+    return false;
+  }
+
   /**
    * Sorts a path into the appropriate layer
    * @param path - Path to sort
@@ -100,7 +107,7 @@ export class LayersIndexer extends Indexer {
   sortIn(path: Path): void {
     if (
       path.travelType === PathType.Extrusion &&
-      path.vertices.some((_, i, arr) => i > 3 && i % 3 === 2 && Math.abs(arr[i] - arr[i - 3]) > this.tolerance)
+      LayersIndexer.hasNonPlanarVertex(path.vertices, this.tolerance)
     ) {
       throw new NonPlanarExtrusionError();
     }
@@ -161,9 +168,6 @@ export class ToolIndexer extends Indexer {
   sortIn(path: Path): void {
     if (path.travelType === PathType.Extrusion) {
       this.indexes[path.tool] = this.indexes[path.tool] || [];
-      if (this.indexes[path.tool] === undefined) {
-        this.indexes[path.tool] = [];
-      }
       this.indexes[path.tool].push(path);
     }
   }

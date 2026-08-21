@@ -23,13 +23,12 @@ const AVAILABLE_PARSERS: SlicerMetadataParser[] = [
  * @returns The detected parser, or null if no parser can handle the gcode
  */
 export function detectSlicer(commands: GCodeCommand[]): SlicerMetadataParser | null {
-  // Try each parser in order of confidence
+  const commentCommands = commands.filter((cmd) => cmd.comment);
   for (const parser of AVAILABLE_PARSERS) {
-    if (parser.canParse(commands)) {
+    if (parser.canParse(commentCommands)) {
       return parser;
     }
   }
-
   return null;
 }
 

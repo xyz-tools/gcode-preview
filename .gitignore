@@ -13,3 +13,5 @@ docs
 
 # Test coverage
 coverage
+
+*.bench.ts
