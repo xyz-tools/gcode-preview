@@ -18,7 +18,7 @@ export class Slic3rMetadataParser extends SlicerMetadataParser {
 
     // First pass: check if we have move to next layer format
     for (const command of commands) {
-      if (command.comment && /move to next layer \([^)]+\)/i.test(command.comment)) {
+      if (command.comment && /move to next layer \(\d+\)/i.test(command.comment)) {
         hasMoveToNextLayer = true;
         break;
       }
@@ -30,7 +30,7 @@ export class Slic3rMetadataParser extends SlicerMetadataParser {
       if (!command.comment) continue;
 
       // Detect layer format: "; move to next layer (1)" - handle malformed layer numbers
-      const layerMatch = command.comment.match(/move to next layer \(([^)]+)\)/i);
+      const layerMatch = command.comment.match(/move to next layer \((\d+)\)/i);
       if (layerMatch) {
         const layerIndex = parseInt(layerMatch[1]);
 
