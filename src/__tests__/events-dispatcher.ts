@@ -1,5 +1,5 @@
 import { test, expect, describe, vi } from 'vitest';
-import { EventsDispatcher, CallbackFunction } from '../events-dispatcher';
+import { EventsDispatcher } from '../events-dispatcher';
 
 describe('EventsDispatcher', () => {
   describe('addEventListener', () => {

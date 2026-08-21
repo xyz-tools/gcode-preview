@@ -1,4 +1,3 @@
-import { LineBox } from './helpers/line-box';
 import { Path } from './path';
 import { type Disposable } from './helpers/three-utils';
 
@@ -20,15 +19,18 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { createColorMaterial } from './helpers/colorMaterial';
 
+/** Called when a change invalidated the existing geometry and the scene has to be redrawn. */
+export type RebuildRequest = () => void;
+
 export class ObjectsManager {
   extrusionsGroup: Group;
   travelMovesGroup: Group;
-  boundingBox: LineBox;
   scene: Scene;
   disposables: Disposable[] = [];
+  /** Clipping planes for the current layer range, applied to every line material we create */
   clippingPlanes: Plane[] = [];
 
-  // shader material
+  /** Shader materials used for tube rendering, indexed by tool */
   materials: ShaderMaterial[] = [];
   ambientLight = 0.4;
   directionalLight = 1.3;
@@ -36,12 +38,27 @@ export class ObjectsManager {
 
   lineWidth: number;
   lineHeight: number;
+  /** Width of extruded material. Undefined means each path uses its own width. */
+  extrusionWidth?: number;
+  renderTubes = false;
 
-  extrusionWidth = 0.6;
+  /** How long to coalesce geometry rebuilds for, in ms */
+  static readonly rebuildDebounce = 100;
 
-  private renderedPaths: Path[] = [];
+  private renderedPaths = new Set<Path>();
+  private onRebuildNeeded?: RebuildRequest;
+  private rebuildTimeout?: ReturnType<typeof setTimeout>;
+  /** Current layer range, kept so materials created later start out clipped correctly */
+  private clipMinZ?: number;
+  private clipMaxZ?: number;
 
-  constructor(scene: Scene, lineWidth: number, lineHeight = 0.2, extrusionWidth = 0.6) {
+  constructor(
+    scene: Scene,
+    lineWidth: number,
+    lineHeight = 0.2,
+    extrusionWidth?: number,
+    onRebuildNeeded?: RebuildRequest
+  ) {
     this.scene = scene;
     this.extrusionsGroup = this.createGroup('Extrusions');
     this.travelMovesGroup = this.createGroup('Travel Moves');
@@ -49,49 +66,209 @@ export class ObjectsManager {
     this.scene.add(this.travelMovesGroup);
 
     this.lineWidth = lineWidth;
-    this.lineHeight = lineHeight ?? 0.2;
+    this.lineHeight = lineHeight;
     this.extrusionWidth = extrusionWidth;
-    this.clippingPlanes = this.createClippingPlanes(lineWidth, lineHeight);
+    this.onRebuildNeeded = onRebuildNeeded;
   }
 
-  hideTravels() {
-    this.travelMovesGroup.visible = false;
+  // --- visibility: a boolean flip, no geometry work ---------------------------
+
+  setTravelsVisible(visible: boolean) {
+    this.travelMovesGroup.visible = visible;
   }
 
-  showTravels() {
-    this.travelMovesGroup.visible = true;
+  setExtrusionsVisible(visible: boolean) {
+    this.extrusionsGroup.visible = visible;
   }
 
-  hideExtrusions() {
-    this.extrusionsGroup.visible = false;
+  // --- appearance: mutate materials in place, no geometry work ----------------
+
+  /**
+   * Recolors the extrusions belonging to one tool.
+   * @param color - New color
+   * @param toolIndex - Tool to recolor, defaulting to the first
+   */
+  setExtrusionColor(color: Color, toolIndex = 0) {
+    const material = this.materials[toolIndex];
+    if (material?.uniforms) {
+      material.uniforms.uColor.value = color;
+    }
+
+    this.extrusionLinesForTool(toolIndex).forEach((line) => {
+      (line.material as LineMaterial).color.set(color);
+    });
   }
 
-  showExtrusions() {
-    this.extrusionsGroup.visible = true;
+  setTravelColor(color: Color) {
+    this.travelMovesGroup.children.forEach((child) => {
+      if (child instanceof LineSegments2) {
+        (child.material as LineMaterial).color.set(color);
+      }
+    });
   }
+
+  setAmbientLight(value: number) {
+    this.ambientLight = value;
+    this.updateUniform('ambient', value);
+  }
+
+  setDirectionalLight(value: number) {
+    this.directionalLight = value;
+    this.updateUniform('directional', value);
+  }
+
+  setBrightness(value: number) {
+    this.brightness = value;
+    this.updateUniform('brightness', value);
+  }
+
+  // --- dimensions: baked into the buffers, so these need a rebuild ------------
+
+  setLineWidth(value: number) {
+    if (value === this.lineWidth) return;
+    this.lineWidth = value;
+    this.requestRebuild();
+  }
+
+  setLineHeight(value: number) {
+    if (value === this.lineHeight) return;
+    this.lineHeight = value;
+    this.requestRebuild();
+  }
+
+  setExtrusionWidth(value: number | undefined) {
+    if (value === this.extrusionWidth) return;
+    this.extrusionWidth = value;
+    this.requestRebuild();
+  }
+
+  setRenderTubes(value: boolean) {
+    if (value === this.renderTubes) return;
+    this.renderTubes = value;
+    this.requestRebuild();
+  }
+
+  // --- rendering --------------------------------------------------------------
 
   renderTravelLines(paths: Path[], color: Color) {
-    const unrenderedPaths = paths.filter((p) => !this.renderedPaths.includes(p));
-    const line = this.renderPathsAsLines(unrenderedPaths, color);
-    this.travelMovesGroup.add(line);
-    this.renderedPaths.push(...unrenderedPaths);
+    const unrenderedPaths = this.takeUnrendered(paths);
+    if (unrenderedPaths.length === 0) return;
+
+    this.travelMovesGroup.add(this.renderPathsAsLines(unrenderedPaths, color));
   }
 
-  renderExtrusionLines(paths: Path[], color: Color) {
-    const unrenderedPaths = paths.filter((p) => !this.renderedPaths.includes(p));
-    const line = this.renderPathsAsLines(unrenderedPaths, color);
-    this.extrusionsGroup.add(line);
-    this.renderedPaths.push(...unrenderedPaths);
+  /**
+   * Renders extrusions in whichever representation is currently selected.
+   */
+  renderExtrusions(paths: Path[], color: Color, toolIndex = 0) {
+    if (this.renderTubes) {
+      this.renderExtrusionTubes(paths, color, toolIndex);
+    } else {
+      this.renderExtrusionLines(paths, color, toolIndex);
+    }
   }
 
-  renderExtrusionTubes(paths: Path[], color: Color) {
-    const unrenderedPaths = paths.filter((p) => !this.renderedPaths.includes(p));
-    const tubes = this.renderPathsAsTubes(unrenderedPaths, color);
+  renderExtrusionLines(paths: Path[], color: Color, toolIndex = 0) {
+    const unrenderedPaths = this.takeUnrendered(paths);
+    if (unrenderedPaths.length === 0) return;
+
+    const lines = this.renderPathsAsLines(unrenderedPaths, color);
+    lines.userData.toolIndex = toolIndex;
+    this.extrusionsGroup.add(lines);
+  }
+
+  renderExtrusionTubes(paths: Path[], color: Color, toolIndex = 0) {
+    const unrenderedPaths = this.takeUnrendered(paths);
+    if (unrenderedPaths.length === 0) return;
+
+    const tubes = this.renderPathsAsTubes(unrenderedPaths, color, toolIndex);
+    tubes.userData.toolIndex = toolIndex;
     this.extrusionsGroup.add(tubes);
-    this.renderedPaths.push(...unrenderedPaths);
+  }
+
+  /**
+   * Empties both groups and forgets which paths have been rendered, so the next
+   * render call rebuilds everything from scratch.
+   * @remarks
+   * Used when a change invalidates existing geometry (new job, tubes/lines swap,
+   * line dimensions). Cheap property changes should mutate in place instead.
+   */
+  reset() {
+    this.disposables.forEach((d) => d.dispose());
+    this.disposables = [];
+    this.materials = [];
+    this.renderedPaths.clear();
+    this.extrusionsGroup.clear();
+    this.travelMovesGroup.clear();
+  }
+
+  /**
+   * Returns the paths that have not been rendered yet, marking them as rendered.
+   * @remarks
+   * Progressive rendering calls the render methods repeatedly with overlapping
+   * slices; this keeps each path to exactly one draw.
+   */
+  private takeUnrendered(paths: Path[]): Path[] {
+    const unrendered = paths.filter((p) => !this.renderedPaths.has(p));
+    unrendered.forEach((p) => this.renderedPaths.add(p));
+    return unrendered;
+  }
+
+  /**
+   * Schedules a rebuild, coalescing bursts of changes into a single redraw.
+   * @remarks
+   * Dragging a slider fires a change per pixel; without this each one would
+   * discard and rebuild every geometry in the scene.
+   */
+  private requestRebuild() {
+    if (this.rebuildTimeout) clearTimeout(this.rebuildTimeout);
+
+    this.rebuildTimeout = setTimeout(() => {
+      this.rebuildTimeout = undefined;
+      this.reset();
+      this.onRebuildNeeded?.();
+    }, ObjectsManager.rebuildDebounce);
+  }
+
+  private updateUniform(name: string, value: number) {
+    this.materials.forEach((material) => {
+      if (material.uniforms[name]) {
+        material.uniforms[name].value = value;
+      }
+    });
+  }
+
+  private extrusionLinesForTool(toolIndex: number): LineSegments2[] {
+    return this.extrusionsGroup.children.filter(
+      (child): child is LineSegments2 => child instanceof LineSegments2 && child.userData.toolIndex === toolIndex
+    );
+  }
+
+  /**
+   * Returns the shader material for a tool, creating it on first use.
+   * @remarks
+   * Progressive rendering calls into here once per frame per tool; caching keeps
+   * one material per tool so recoloring has a single place to write to.
+   */
+  private getOrCreateToolMaterial(toolIndex: number, color: Color): ShaderMaterial {
+    let material = this.materials[toolIndex];
+
+    if (!material) {
+      material = createColorMaterial(Number(color.getHex()), this.ambientLight, this.directionalLight, this.brightness);
+      // a material created after the layer range was set still has to respect it
+      if (this.clipMinZ !== undefined) material.uniforms.clipMinY.value = this.clipMinZ;
+      if (this.clipMaxZ !== undefined) material.uniforms.clipMaxY.value = this.clipMaxZ;
+
+      this.materials[toolIndex] = material;
+      this.disposables.push(material);
+    }
+
+    return material;
   }
 
   dispose() {
+    if (this.rebuildTimeout) clearTimeout(this.rebuildTimeout);
+    this.rebuildTimeout = undefined;
     this.extrusionsGroup.removeFromParent();
     this.travelMovesGroup.removeFromParent();
     this.disposables.forEach((d) => d.dispose());
@@ -99,15 +276,18 @@ export class ObjectsManager {
   }
 
   updateClippingPlanes(minZ: number, maxZ: number) {
+    this.clipMinZ = minZ;
+    this.clipMaxZ = maxZ;
+    this.clippingPlanes = this.createClippingPlanes(minZ, maxZ);
     this.updateClippingPlanesForShaderMaterials(minZ, maxZ);
-    this.updateLineClipping(minZ, maxZ);
+    this.updateLineClipping();
   }
 
   private renderPathsAsLines(paths: Path[], color: Color): LineSegments2 {
-    console.log('rendering lines', paths.length);
     const material = new LineMaterial({
       color: Number(color.getHex()),
-      linewidth: this.lineWidth
+      linewidth: this.lineWidth,
+      clippingPlanes: this.clippingPlanes
     });
 
     // lines need to be offset.
@@ -134,14 +314,9 @@ export class ObjectsManager {
    * @param paths - Array of paths to render
    * @param color - Color to use for the tubes
    */
-  private renderPathsAsTubes(paths: Path[], color: Color): BatchedMesh {
-    console.log('rendering tubes', paths.length);
-    const colorNumber = Number(color.getHex());
+  private renderPathsAsTubes(paths: Path[], color: Color, toolIndex: number): BatchedMesh {
     const geometries: BufferGeometry[] = [];
-
-    const material = createColorMaterial(colorNumber, this.ambientLight, this.directionalLight, this.brightness);
-
-    this.materials.push(material);
+    const material = this.getOrCreateToolMaterial(toolIndex, color);
 
     paths.forEach((path) => {
       const geometry = path.geometry({
@@ -155,9 +330,7 @@ export class ObjectsManager {
       geometries.push(geometry);
     });
 
-    const batchedMesh = this.createBatchMesh(geometries, material);
-    this.disposables.push(material);
-    return batchedMesh;
+    return this.createBatchMesh(geometries, material);
   }
 
   /**
@@ -204,20 +377,14 @@ export class ObjectsManager {
   }
 
   /**
-   * Updates the clipping planes for all `LineSegments2` objects in the scene.
-   * This method filters the scene's children to find instances of `LineSegments2`,
-   * then applies the clipping planes to their materials.
-   *
-   * @param minZ - The minimum Z value for the clipping plane.
-   * @param maxZ - The maximum Z value for the clipping plane.
+   * Applies the current clipping planes to every `LineSegments2` in the scene.
    */
-  private updateLineClipping(minZ: number | undefined, maxZ: number | undefined) {
+  private updateLineClipping() {
     // TODO: apply clipping selectively to travels lines and extrusion lines
     // and/or use a clipping group
     this.scene.traverse((obj) => {
       if (obj instanceof LineSegments2) {
-        const material = obj.material as LineMaterial;
-        material.clippingPlanes = this.createClippingPlanes(minZ, maxZ);
+        (obj.material as LineMaterial).clippingPlanes = this.clippingPlanes;
       }
     });
   }

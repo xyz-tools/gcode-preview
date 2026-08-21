@@ -6,46 +6,27 @@ import { LineBox } from './helpers/line-box';
 
 import { Job } from './job';
 import { ObjectsManager } from './objects-manager';
-import { createColorMaterial } from './helpers/colorMaterial';
 
 import {
   Color,
   ColorRepresentation,
-  Euler,
-  Group,
   OrthographicCamera,
   PerspectiveCamera,
   REVISION,
   Scene,
   WebGLRenderer,
   MathUtils,
-  LineBasicMaterial,
-  Object3D
+  LineBasicMaterial
 } from 'three';
 import { EventsDispatcher } from './events-dispatcher';
 
+/**
+ * Notifications the scene emits to consumers.
+ * @remarks
+ * Property changes are not events: a setter calls into the ObjectsManager, which
+ * decides whether the change can be applied in place or needs new geometry.
+ */
 export enum SceneManagerEvent {
-  BUILD_VOLUME_CHANGE = 'buildVolumeChange',
-  EXTRUSION_COLOR_CHANGE = 'extrusionColorChange',
-  BACKGROUND_COLOR_CHANGE = 'backgroundColorChange',
-  TRAVEL_COLOR_CHANGE = 'travelColorChange',
-  TOP_LAYER_COLOR_CHANGE = 'topLayerColorChange',
-  LAST_SEGMENT_COLOR_CHANGE = 'lastSegmentColorChange',
-  BOUNDING_BOX_COLOR_CHANGE = 'boundingBoxColorChange',
-  RENDER_EXTRUSION_CHANGE = 'renderExtrusionChange',
-  RENDER_TRAVEL_CHANGE = 'renderTravelChange',
-  RENDER_TUBES_CHANGE = 'renderTubesChange',
-  SINGLE_LAYER_MODE_CHANGE = 'singleLayerModeChange',
-  LINE_WIDTH_CHANGE = 'lineWidthChange',
-  START_LAYER_CHANGE = 'startLayerChange',
-  END_LAYER_CHANGE = 'endLayerChange',
-  AMBIENT_LIGHT_CHANGE = 'ambientLightChange',
-  DIRECTIONAL_LIGHT_CHANGE = 'directionalLightChange',
-  BRIGHTNESS_CHANGE = 'brightnessChange',
-  BOUNDING_BOX_MESH_CHANGE = 'boundingBoxMeshChange',
-  LINE_HEIGHT_CHANGE = 'lineHeightChange',
-  EXTRUSION_WIDTH_CHANGE = 'extrusionWidthChange',
-  DISABLE_GRADIENT_CHANGE = 'disableGradientChange',
   ANIMATION_COMPLETE = 'animationComplete',
   FRAME_RENDERED = 'frameRendered'
 }
@@ -127,8 +108,6 @@ export class SceneManager {
   private _renderExtrusion = true;
   /** Whether to render travel moves */
   private _renderTravel = false;
-  /** Whether to render paths as 3D tubes */
-  private _renderTubes = false;
   /** First layer to render (1-based index) */
   private _startLayer?: number;
   /** Last layer to render (1-based index) */
@@ -182,8 +161,6 @@ export class SceneManager {
   private eventsDispatcher: EventsDispatcher = new EventsDispatcher();
   private objectsManager: ObjectsManager;
 
-  private _renderTimeout: ReturnType<typeof setTimeout>;
-
   /**
    * Creates a new SceneManager instance
    * @param opts - Configuration options
@@ -192,8 +169,7 @@ export class SceneManager {
   constructor(opts: SceneManagerOptions, job: Job, eventsDispatcher?: EventsDispatcher) {
     this.job = job;
     this.scene = new Scene();
-    this.objectsManager = new ObjectsManager(this.scene, opts.lineWidth ?? 1, opts.lineHeight, opts.extrusionWidth);
-    this.disposables.push(this.objectsManager);
+    this.objectsManager = this.createObjectsManager(opts.lineWidth ?? 1, opts.lineHeight, opts.extrusionWidth);
     this.scene.background = this._backgroundColor;
     if (opts.backgroundColor !== undefined) {
       this.backgroundColor = new Color(opts.backgroundColor);
@@ -212,9 +188,11 @@ export class SceneManager {
       this.disposables.push(this._buildVolume);
     }
     this.initialCameraPosition = opts.initialCameraPosition ?? this.initialCameraPosition;
-    this.renderExtrusion = opts.renderExtrusion ?? this.renderExtrusion;
-    this.renderTravel = opts.renderTravel ?? this.renderTravel;
-    this.renderTubes = opts.renderTubes ?? this.renderTubes;
+    // assign the backing fields directly: the setters would draw the scene before
+    // the colors below have been applied, and initScene() draws it once anyway
+    this._renderExtrusion = opts.renderExtrusion ?? this._renderExtrusion;
+    this._renderTravel = opts.renderTravel ?? this._renderTravel;
+    this.objectsManager.renderTubes = opts.renderTubes ?? this.objectsManager.renderTubes;
     this.eventsDispatcher = eventsDispatcher ?? this.eventsDispatcher;
 
     if (opts.boundingBoxColor !== undefined) {
@@ -263,9 +241,21 @@ export class SceneManager {
 
     this.initScene();
     this.animate();
-    this.eventsDispatcher.addEventListener(SceneManagerEvent.ANIMATION_COMPLETE, () => {
-      this.setRerenderListeners();
+  }
+
+  /**
+   * Builds an ObjectsManager wired to rebuild the scene when geometry is invalidated.
+   * @remarks
+   * The manager decides *whether* a change needs new geometry; this callback is
+   * how it asks for the paths to be walked again.
+   */
+  private createObjectsManager(lineWidth: number, lineHeight?: number, extrusionWidth?: number): ObjectsManager {
+    const manager = new ObjectsManager(this.scene, lineWidth, lineHeight, extrusionWidth, () => {
+      if (this.job) this.render();
     });
+    this.disposables.push(manager);
+
+    return manager;
   }
 
   /**
@@ -292,7 +282,6 @@ export class SceneManager {
         this._buildVolume.update();
       }
     }
-    this.eventsDispatcher.emit(SceneManagerEvent.BUILD_VOLUME_CHANGE, this._buildVolume);
   }
 
   /**
@@ -309,38 +298,13 @@ export class SceneManager {
    */
   set extrusionColor(value: number | string | Color | ColorRepresentation[]) {
     if (Array.isArray(value)) {
-      this._extrusionColor = [];
-      // loop over the object and convert all colors to Color
-      for (const [index, color] of value.entries()) {
-        this._extrusionColor[index] = new Color(color);
-        if (!this.objectsManager.materials[index]) {
-          this.objectsManager.materials[index] = createColorMaterial(
-            this._extrusionColor[index].getHex(),
-            this.objectsManager.ambientLight,
-            this.objectsManager.directionalLight,
-            this.objectsManager.brightness
-          );
-        }
-        const material = this.objectsManager.materials[index];
-        if (material && material.uniforms) {
-          material.uniforms.uColor.value = this._extrusionColor[index];
-        }
-      }
+      this._extrusionColor = value.map((color) => new Color(color));
+      this._extrusionColor.forEach((color, index) => this.objectsManager.setExtrusionColor(color, index));
       return;
     }
 
     this._extrusionColor = new Color(value);
-    if (!this.objectsManager.materials[0]) {
-      this.objectsManager.materials[0] = createColorMaterial(
-        this._extrusionColor.getHex(),
-        this.objectsManager.ambientLight,
-        this.objectsManager.directionalLight,
-        this.objectsManager.brightness
-      );
-    }
-
-    this.objectsManager.materials[0].uniforms.uColor.value = this._extrusionColor;
-    this.eventsDispatcher.emit(SceneManagerEvent.EXTRUSION_COLOR_CHANGE, this._extrusionColor);
+    this.objectsManager.setExtrusionColor(this._extrusionColor);
   }
 
   /**
@@ -358,7 +322,6 @@ export class SceneManager {
   set backgroundColor(value: number | string | Color) {
     this._backgroundColor = new Color(value);
     this.scene.background = this._backgroundColor;
-    this.eventsDispatcher.emit(SceneManagerEvent.BACKGROUND_COLOR_CHANGE, this._backgroundColor);
   }
 
   /**
@@ -375,7 +338,7 @@ export class SceneManager {
    */
   set travelColor(value: number | string | Color) {
     this._travelColor = new Color(value);
-    this.eventsDispatcher.emit(SceneManagerEvent.TRAVEL_COLOR_CHANGE, this._travelColor);
+    this.objectsManager.setTravelColor(this._travelColor);
   }
 
   /**
@@ -392,7 +355,6 @@ export class SceneManager {
    */
   set topLayerColor(value: ColorRepresentation | undefined) {
     this._topLayerColor = value !== undefined ? new Color(value) : undefined;
-    this.eventsDispatcher.emit(SceneManagerEvent.TOP_LAYER_COLOR_CHANGE, this._topLayerColor);
   }
 
   /**
@@ -409,7 +371,6 @@ export class SceneManager {
    */
   set lastSegmentColor(value: ColorRepresentation | undefined) {
     this._lastSegmentColor = value !== undefined ? new Color(value) : undefined;
-    this.eventsDispatcher.emit(SceneManagerEvent.LAST_SEGMENT_COLOR_CHANGE, this._lastSegmentColor);
   }
 
   /**
@@ -428,8 +389,6 @@ export class SceneManager {
     this._boundingBoxColor = value !== undefined ? new Color(value) : undefined;
 
     this.renderBoundingBox();
-
-    this.eventsDispatcher.emit(SceneManagerEvent.BOUNDING_BOX_COLOR_CHANGE, this._boundingBoxColor);
   }
 
   /**
@@ -452,7 +411,6 @@ export class SceneManager {
     }
 
     this.updateClippingPlanes();
-    this.eventsDispatcher.emit(SceneManagerEvent.START_LAYER_CHANGE, [this._startLayer]);
   }
 
   get renderExtrusion(): boolean {
@@ -460,7 +418,8 @@ export class SceneManager {
   }
   set renderExtrusion(value: boolean) {
     this._renderExtrusion = value;
-    this.eventsDispatcher.emit(SceneManagerEvent.RENDER_EXTRUSION_CHANGE, [this._renderExtrusion]);
+    this.objectsManager.setExtrusionsVisible(value);
+    if (value) this.renderMissingPaths();
   }
 
   get renderTravel(): boolean {
@@ -468,15 +427,15 @@ export class SceneManager {
   }
   set renderTravel(value: boolean) {
     this._renderTravel = value;
-    this.eventsDispatcher.emit(SceneManagerEvent.RENDER_TRAVEL_CHANGE, this._renderTravel);
+    this.objectsManager.setTravelsVisible(value);
+    if (value) this.renderMissingPaths();
   }
 
   get renderTubes(): boolean {
-    return this._renderTubes;
+    return this.objectsManager.renderTubes;
   }
   set renderTubes(value: boolean) {
-    this._renderTubes = value;
-    this.eventsDispatcher.emit(SceneManagerEvent.RENDER_TUBES_CHANGE, this._renderTubes);
+    this.objectsManager.setRenderTubes(value);
   }
 
   get boundingBoxMesh(): LineBox | undefined {
@@ -484,31 +443,27 @@ export class SceneManager {
   }
   set boundingBoxMesh(value: LineBox | undefined) {
     this._boundingBoxMesh = value;
-    this.eventsDispatcher.emit(SceneManagerEvent.BOUNDING_BOX_MESH_CHANGE, this._boundingBoxMesh);
   }
 
   get lineWidth(): number | undefined {
     return this.objectsManager.lineWidth;
   }
   set lineWidth(value: number | undefined) {
-    this.objectsManager.lineWidth = value;
-    this.eventsDispatcher.emit(SceneManagerEvent.LINE_WIDTH_CHANGE, this.objectsManager.lineWidth);
+    this.objectsManager.setLineWidth(value);
   }
 
   get lineHeight(): number {
     return this.objectsManager.lineHeight;
   }
   set lineHeight(value: number) {
-    this.objectsManager.lineHeight = value;
-    this.eventsDispatcher.emit(SceneManagerEvent.LINE_HEIGHT_CHANGE, this.objectsManager.lineHeight);
+    this.objectsManager.setLineHeight(value);
   }
 
   get extrusionWidth(): number | undefined {
     return this.objectsManager.extrusionWidth;
   }
   set extrusionWidth(value: number | undefined) {
-    this.objectsManager.extrusionWidth = value;
-    this.eventsDispatcher.emit(SceneManagerEvent.EXTRUSION_WIDTH_CHANGE, this.objectsManager.extrusionWidth);
+    this.objectsManager.setExtrusionWidth(value);
   }
 
   get disableGradient(): boolean {
@@ -516,7 +471,6 @@ export class SceneManager {
   }
   set disableGradient(value: boolean) {
     this._disableGradient = value;
-    this.eventsDispatcher.emit(SceneManagerEvent.DISABLE_GRADIENT_CHANGE, this._disableGradient);
   }
 
   /**
@@ -589,43 +543,30 @@ export class SceneManager {
     } else {
       this._startLayer = this.prevStartLayer;
     }
-    this.eventsDispatcher.emit(SceneManagerEvent.SINGLE_LAYER_MODE_CHANGE, [this._singleLayerMode]);
+
+    // the visible range moved, so the clipping planes have to follow
+    this.updateClippingPlanes();
   }
 
   get ambientLight(): number {
     return this.objectsManager.ambientLight;
   }
   set ambientLight(value: number) {
-    this.objectsManager.ambientLight = value;
-
-    // update material uniforms
-    this.objectsManager.materials.forEach((material) => {
-      material.uniforms.ambient.value = value;
-    });
+    this.objectsManager.setAmbientLight(value);
   }
 
   get directionalLight(): number {
     return this.objectsManager.directionalLight;
   }
   set directionalLight(value: number) {
-    this.objectsManager.directionalLight = value;
-
-    // update material uniforms
-    this.objectsManager.materials.forEach((material) => {
-      material.uniforms.directional.value = value;
-    });
+    this.objectsManager.setDirectionalLight(value);
   }
 
   get brightness(): number {
     return this.objectsManager.brightness;
   }
   set brightness(value: number) {
-    this.objectsManager.brightness = value;
-
-    // update material uniforms
-    this.objectsManager.materials.forEach((material) => {
-      material.uniforms.brightness.value = value;
-    });
+    this.objectsManager.setBrightness(value);
   }
 
   get orthographic(): boolean {
@@ -707,25 +648,11 @@ export class SceneManager {
 
   /** Resets the scene by clearing all existing objects and re-initializing
    * @remarks
-   * Disposes of all materials and geometries, removes all children from the main group,
-   * and calls initScene to set up a fresh scene.
+   * Discards every path currently in the scene along with its geometries and
+   * materials, then calls initScene to rebuild from the job.
    */
   private resetScene() {
-    // this.objectsManager.materials = [];
-
-    // Recursively remove all children from the main group and their descendants from the scene
-    const removeRecursively = (object: Object3D) => {
-      while (object.children.length > 0) {
-        const child = object.children[0];
-        if ((child as Group).children && (child as Group).children.length > 0) {
-          removeRecursively(child as Group);
-        }
-        object.remove(child);
-        this.scene.remove(child);
-      }
-    };
-    // removeRecursively(this.scene);
-
+    this.objectsManager.reset();
     this.initScene();
   }
 
@@ -826,15 +753,20 @@ export class SceneManager {
 
   // reset parser & processing state
   clear(): void {
+    // read the dimensions off the outgoing manager before it is torn down
+    const { lineWidth, lineHeight, extrusionWidth } = this.objectsManager;
+
     this.startLayer = undefined;
     this.endLayer = Infinity;
     this._singleLayerMode = false;
     this.job = undefined;
     this.scene.remove(this.boundingBoxMesh);
     this.boundingBoxMesh = undefined;
+
+    // drop the old manager from disposables too, or dispose() would revisit it
+    this.disposables = this.disposables.filter((d) => d !== this.objectsManager);
     this.objectsManager.dispose();
-    this.objectsManager = new ObjectsManager(this.scene, this.lineWidth, this.lineHeight, this.extrusionWidth);
-    this.disposables.push(this.objectsManager);
+    this.objectsManager = this.createObjectsManager(lineWidth, lineHeight, extrusionWidth);
   }
 
   resize(): void {
@@ -878,31 +810,40 @@ export class SceneManager {
    * Renders paths between the current render index and specified end index
    * @param endPathNumber - End index of paths to render (default: Infinity)
    */
+  /**
+   * Builds any paths that have not been drawn yet, across the whole job.
+   * @remarks
+   * Turning a category back on reveals paths that were skipped while it was off,
+   * and those can sit anywhere in the job — not just past renderPathIndex, which
+   * indexes the combined path list rather than travels or a single tool. The
+   * ObjectsManager skips whatever it has already drawn, so this stays cheap.
+   */
+  private renderMissingPaths(): void {
+    if (!this.job) return;
+
+    const resumeFrom = this.renderPathIndex;
+    this.renderPathIndex = 0;
+    this.renderPaths();
+    this.renderPathIndex = resumeFrom;
+  }
+
   private renderPaths(endPathNumber: number = Infinity): void {
-    if (this.renderTravel) {
+    this.objectsManager.setTravelsVisible(this._renderTravel);
+    if (this._renderTravel) {
       this.objectsManager.renderTravelLines(
         this.job.travels.slice(this.renderPathIndex, endPathNumber),
         this._travelColor
       );
-      this.objectsManager.showTravels();
-    } else {
-      this.objectsManager.hideTravels();
     }
 
-    if (this.renderExtrusion && this.job?.toolPaths.length > 0) {
+    this.objectsManager.setExtrusionsVisible(this._renderExtrusion);
+    if (this._renderExtrusion && this.job?.toolPaths.length > 0) {
       this.job.toolPaths.forEach((toolPaths, index) => {
         const color = Array.isArray(this._extrusionColor)
           ? (this._extrusionColor[index] ?? this.fallbackExtrusionColor(index))
           : this._extrusionColor;
-        if (this.renderTubes) {
-          this.objectsManager.renderExtrusionTubes(toolPaths.slice(this.renderPathIndex, endPathNumber), color);
-        } else {
-          this.objectsManager.renderExtrusionLines(toolPaths.slice(this.renderPathIndex, endPathNumber), color);
-        }
+        this.objectsManager.renderExtrusions(toolPaths.slice(this.renderPathIndex, endPathNumber), color, index);
       });
-      this.objectsManager.showExtrusions();
-    } else {
-      this.objectsManager.hideExtrusions();
     }
   }
 
@@ -921,30 +862,6 @@ export class SceneManager {
     }
     const colors = this._extrusionColor as Color[];
     return colors[colors.length - 1] ?? SceneManager.defaultExtrusionColor;
-  }
-
-  private setRerenderListeners() {
-    const eventsRequiringRerender = [
-      SceneManagerEvent.BACKGROUND_COLOR_CHANGE,
-      SceneManagerEvent.BUILD_VOLUME_CHANGE,
-      SceneManagerEvent.EXTRUSION_COLOR_CHANGE,
-      SceneManagerEvent.LINE_WIDTH_CHANGE,
-      SceneManagerEvent.RENDER_TUBES_CHANGE,
-      SceneManagerEvent.BOUNDING_BOX_COLOR_CHANGE,
-      SceneManagerEvent.SINGLE_LAYER_MODE_CHANGE,
-      SceneManagerEvent.TRAVEL_COLOR_CHANGE,
-      SceneManagerEvent.RENDER_EXTRUSION_CHANGE,
-      SceneManagerEvent.TOP_LAYER_COLOR_CHANGE,
-      SceneManagerEvent.LAST_SEGMENT_COLOR_CHANGE,
-      SceneManagerEvent.RENDER_TRAVEL_CHANGE
-    ];
-    const rerenderDebounce = 100;
-    this.eventsDispatcher.addEventListener(eventsRequiringRerender, () => {
-      if (this._renderTimeout) clearTimeout(this._renderTimeout);
-      this._renderTimeout = setTimeout(() => {
-        this.render();
-      }, rerenderDebounce);
-    });
   }
 
   saveCamera() {
