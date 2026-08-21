@@ -97,6 +97,20 @@ describe('.execute', () => {
     expect(job.paths[0].vertices[7]).toEqual(command2.params.y);
     expect(job.paths[0].vertices[8]).toEqual(command2.params.z);
   });
+
+  test('switches positioning modes in parsed G-code', () => {
+    const parser = new Parser();
+    const interpreter = new Interpreter();
+    const { commands } = parser.parseGCode(['G0 X10 Y10 Z10', 'G91', 'G1 X2 Y-3 Z1', 'G90', 'G1 X4 Y5 Z6']);
+
+    const result = interpreter.execute(commands);
+
+    expect(result.state.x).toEqual(4);
+    expect(result.state.y).toEqual(5);
+    expect(result.state.z).toEqual(6);
+    expect(result.state.positioning).toEqual('absolute');
+    expect(result.paths[0].vertices).toEqual([0, 0, 0, 10, 10, 10, 12, 7, 11, 4, 5, 6]);
+  });
 });
 
 describe('handler registry', () => {

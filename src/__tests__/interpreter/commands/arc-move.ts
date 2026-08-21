@@ -116,4 +116,24 @@ describe('arcMove (G2/G3)', () => {
     expect(job.state.z).toEqual(35);
     expect(job.inprogressPath?.vertices.slice(-3)).toEqual([20, 20, 35]);
   });
+
+  test('absolute arcs can target Z0 and interpolate toward it', () => {
+    const command = new GCodeCommand('G2 X10 Y0 Z0 I5 J0', 'g2', {
+      x: 10,
+      y: 0,
+      z: 0,
+      i: 5,
+      j: 0
+    });
+    const job = new Job();
+    job.state.z = 5;
+
+    arcMove(command, job);
+
+    const vertices = job.inprogressPath?.vertices ?? [];
+    const zPositions = vertices.filter((_value, index) => index % 3 === 2);
+    expect(job.state.z).toEqual(0);
+    expect(zPositions[zPositions.length - 1]).toEqual(0);
+    expect(zPositions.every((z, index) => index === 0 || z <= zPositions[index - 1])).toBe(true);
+  });
 });
