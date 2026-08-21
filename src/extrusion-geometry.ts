@@ -56,6 +56,17 @@ class ExtrusionGeometry extends BufferGeometry {
     const normal = new Vector3();
     const uv = new Vector2();
 
+    // Scratch vectors for computeCornerAngles. It runs once per point, and
+    // allocating a fresh set each time means hundreds of thousands of short
+    // lived Vector3 on a real model. Every one is fully overwritten before use,
+    // and generateSegment consumes the result before the next call, so they are
+    // safe to share.
+    const tangent = new Vector3();
+    const cornerNormal = new Vector3();
+    const cornerBinormal = new Vector3();
+    const cross = new Vector3();
+    const nextDirection = new Vector3();
+
     // buffers, sized up front from the path topology so they are filled in
     // place. Growing plain arrays and letting three.js copy them into typed
     // arrays afterwards costs both the repeated growth and the copy.
@@ -203,21 +214,28 @@ class ExtrusionGeometry extends BufferGeometry {
 
     /**
      * Computes the corner angles (position, normal, binormal) for a segment
+     *
+     * Note: the returned N/B vectors are shared scratch — consume them before
+     * the next call; do not store references.
      * @param i - Index of the segment
      * @returns Array containing position, normal and binormal vectors
      */
     function computeCornerAngles(i: number): Array<Vector3> {
       const P = points[i];
-      const tangent = new Vector3();
-      const N = new Vector3();
-      const B = new Vector3();
-      const vec = new Vector3();
+      const N = cornerNormal;
+      const B = cornerBinormal;
+      const vec = cross;
 
       tangent
         .copy(P)
         .sub(points[i - 1] || P)
         .normalize()
-        .add((points[i + 1] || P).clone().sub(P).normalize())
+        .add(
+          nextDirection
+            .copy(points[i + 1] || P)
+            .sub(P)
+            .normalize()
+        )
         .normalize();
 
       // Calculate the normal and binormal vectors for the segment
