@@ -52,3 +52,37 @@ test('ExtrusionGeometry should generate buffer data', () => {
   expect(geometry.attributes.normal.array.length).toBeGreaterThan(0);
   expect(geometry.attributes.uv.array.length).toBeGreaterThan(0);
 });
+
+test('ExtrusionGeometry fills its buffers exactly, with no slack', () => {
+  // The buffers are sized from the path topology before being filled, so a
+  // trailing zero would mean the size formula and the fill loop disagree.
+  const radialSegments = 6;
+  const points = [new Vector3(0, 0, 0), new Vector3(1, 0, 0), new Vector3(1, 1, 0), new Vector3(2, 1, 1)];
+  const geometry = new ExtrusionGeometry(points, 0.6, 0.2, radialSegments);
+
+  const ring = radialSegments + 1;
+  expect(geometry.attributes.position.count).toBe((points.length + 1) * ring);
+  expect(geometry.attributes.normal.count).toBe((points.length + 1) * ring);
+  expect(geometry.attributes.uv.count).toBe(points.length * ring);
+  expect(geometry.index.count).toBe((points.length - 1) * radialSegments * 6);
+
+  // last index written must be a real face, not a zero left by an oversized buffer
+  const indices = geometry.index.array;
+  expect(indices[indices.length - 1]).toBeGreaterThan(0);
+});
+
+test('ExtrusionGeometry widens its index buffer when the vertex count needs it', () => {
+  const narrow = new ExtrusionGeometry([new Vector3(0, 0, 0), new Vector3(1, 0, 0)], 0.6, 0.2, 4);
+  expect(narrow.index.array).toBeInstanceOf(Uint16Array);
+
+  // 65535 vertices is the point where 16 bit indices stop being addressable
+  const radialSegments = 4;
+  const pointsNeeded = Math.ceil(65536 / (radialSegments + 1));
+  const longPath = Array.from({ length: pointsNeeded }, (_, i) => new Vector3(i, 0, 0));
+  const wide = new ExtrusionGeometry(longPath, 0.6, 0.2, radialSegments);
+
+  expect(wide.attributes.position.count).toBeGreaterThan(65535);
+  expect(wide.index.array).toBeInstanceOf(Uint32Array);
+  // and the widest index it wrote is still addressable
+  expect(Math.max(...Array.from(wide.index.array.slice(-6)))).toBeLessThan(wide.attributes.position.count);
+});

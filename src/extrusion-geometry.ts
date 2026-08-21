@@ -1,4 +1,4 @@
-import { BufferGeometry, Float32BufferAttribute, Vector2, Vector3 } from 'three';
+import { BufferAttribute, BufferGeometry, Float32BufferAttribute, Vector2, Vector3 } from 'three';
 
 /**
  * A geometry class for extruding 3D paths into volumetric shapes
@@ -56,12 +56,26 @@ class ExtrusionGeometry extends BufferGeometry {
     const normal = new Vector3();
     const uv = new Vector2();
 
-    // buffer
+    // buffers, sized up front from the path topology so they are filled in
+    // place. Growing plain arrays and letting three.js copy them into typed
+    // arrays afterwards costs both the repeated growth and the copy.
+    const ringSize = radialSegments + 1;
+    // one ring per point, plus the closing ring generateBufferData adds
+    const vertexCount = (points.length + 1) * ringSize;
+    const uvCount = points.length * ringSize;
+    const indexCount = Math.max(0, points.length - 1) * radialSegments * 6;
 
-    const vertices: number[] = [];
-    const normals: number[] = [];
-    const uvs: number[] = [];
-    const indices: number[] = [];
+    const vertices = new Float32Array(vertexCount * 3);
+    const normals = new Float32Array(vertexCount * 3);
+    const uvs = new Float32Array(uvCount * 2);
+    // indices only ever reference this geometry's own vertices, so the widest
+    // value is vertexCount - 1
+    const indices = vertexCount > 65535 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
+
+    let vertexCursor = 0;
+    let normalCursor = 0;
+    let uvCursor = 0;
+    let indexCursor = 0;
 
     // create buffer data
 
@@ -69,7 +83,7 @@ class ExtrusionGeometry extends BufferGeometry {
 
     // build geometry
 
-    this.setIndex(indices);
+    this.setIndex(new BufferAttribute(indices, 1));
     this.setAttribute('position', new Float32BufferAttribute(vertices, 3));
     this.setAttribute('normal', new Float32BufferAttribute(normals, 3));
     this.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
@@ -123,14 +137,18 @@ class ExtrusionGeometry extends BufferGeometry {
         normal.z = cos * N.z + sin * B.z;
 
         normal.normalize();
-        normals.push(normal.x, normal.y, normal.z);
+        normals[normalCursor++] = normal.x;
+        normals[normalCursor++] = normal.y;
+        normals[normalCursor++] = normal.z;
 
         // vertex
 
         vertex.x = P.x + lineWidth * normal.x * 0.5;
         vertex.y = P.y + lineWidth * normal.y * 0.5;
         vertex.z = P.z + lineHeight * normal.z * 0.5;
-        vertices.push(vertex.x, vertex.y, vertex.z - lineHeight * 0.5);
+        vertices[vertexCursor++] = vertex.x;
+        vertices[vertexCursor++] = vertex.y;
+        vertices[vertexCursor++] = vertex.z - lineHeight * 0.5;
       }
     }
 
@@ -147,8 +165,12 @@ class ExtrusionGeometry extends BufferGeometry {
 
           // faces
 
-          indices.push(a, b, d);
-          indices.push(b, c, d);
+          indices[indexCursor++] = a;
+          indices[indexCursor++] = b;
+          indices[indexCursor++] = d;
+          indices[indexCursor++] = b;
+          indices[indexCursor++] = c;
+          indices[indexCursor++] = d;
         }
       }
     }
@@ -162,7 +184,8 @@ class ExtrusionGeometry extends BufferGeometry {
           uv.x = i / points.length;
           uv.y = j / radialSegments;
 
-          uvs.push(uv.x, uv.y);
+          uvs[uvCursor++] = uv.x;
+          uvs[uvCursor++] = uv.y;
         }
       }
     }
