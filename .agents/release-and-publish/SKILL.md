@@ -127,14 +127,17 @@ tied to what actually shipped. Past releases set the tone:
 
 Never choose the title yourself. **Read the release's changes, suggest three
 title options, then STOP and ask the user to pick one** before you finalize or
-publish anything. Give each option a different angle, e.g.:
+publish anything. Give each option a different angle, but keep the **emoji
+placement consistent across all three**: `v<version>` followed by the theme
+**flanked by the same emoji on both sides**, matching `v2.17.0 🚀 Extrusion
+geometry 🚀`. For example:
 
 - **Headline feature** — name the biggest new capability
   (`v3.1.0 🚀 Faster tubes 🚀`).
 - **Theme / mood** — a seasonal or playful hook, like the Summer Time release
-  (`v3.1.0 — Spring Cleaning 🧹`).
-- **Plain / descriptive** — understated, emoji as a light accent
-  (`v3.1.0 ✨ Performance & polish`).
+  (`v3.1.0 🧹 Spring Cleaning 🧹`).
+- **Plain / descriptive** — understated, calm emoji
+  (`v3.1.0 ✨ Performance & polish ✨`).
 
 Present the three as a numbered list, briefly note what each leans on, and
 explicitly invite the user to pick a number or remix their own. **Wait for their
