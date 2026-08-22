@@ -53,10 +53,11 @@ Continue to Step 2.
 
 ## Step 2 — Update every file that references the version
 
-Search for the old bound first so nothing is missed:
+Search for the old bound first so nothing is missed (include `.ts` — one of
+the files below is a test that hardcodes the range):
 
 ```bash
-grep -rn "0\.1[0-9][0-9]" --include="*.json" --include="*.yml" \
+grep -rn "0\.1[0-9][0-9]" --include="*.json" --include="*.yml" --include="*.ts" \
   . --exclude-dir=node_modules --exclude-dir=.git
 ```
 
@@ -86,10 +87,19 @@ Files that need updating (as of this writing):
    check npm for the precise numbers. Keep the existing older rows; this matrix
    tests the whole supported range, min to max.
 
-4. **`package-lock.json`** — regenerated automatically. Run `npm install` after
+4. **`src/__tests__/three-version.ts`** — this test asserts that
+   `package.json`'s `three` range **exactly equals** the range computed from its
+   own constants, so it must move in lockstep. Update `MAX_EXCLUSIVE_VERSION`
+   (and `MIN_VERSION` if raising the floor) to match the new bound, e.g.:
+   ```ts
+   const MAX_EXCLUSIVE_VERSION = '0.187.0';
+   ```
+   If this file and `package.json` disagree, `npm run test` fails.
+
+5. **`package-lock.json`** — regenerated automatically. Run `npm install` after
    editing `package.json` and commit the resulting lockfile change.
 
-5. **Demo bundle** (`demo/lib/three/build/*.min.js`) — copied from
+6. **Demo bundle** (`demo/lib/three/build/*.min.js`) — copied from
    `node_modules` by `npm run copy-deps` at deploy time, so there's no version
    literal to edit. Just make sure the installed `three` is the new version
    before a deploy; nothing to change in this PR.
