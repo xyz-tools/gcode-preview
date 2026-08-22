@@ -201,6 +201,21 @@ describe('parseCommand tokenizing', () => {
     expect(cmd.params).toEqual({});
   });
 
+  test('skips leading characters that are not letters', () => {
+    // The tokenizer only opens a word at a letter, so anything before the
+    // first letter (line numbers stripped of their N, checksum asterisks,
+    // stray punctuation) is passed over without producing a command or param.
+    const cmd = parse('*12 G1 X5');
+    expect(cmd.gcode).toEqual('g1');
+    expect(cmd.params).toEqual({ x: 5 });
+  });
+
+  test('parses no command or params from a line with no letters at all', () => {
+    const cmd = parse('{5}');
+    expect(cmd.gcode).toEqual('');
+    expect(cmd.params).toEqual({});
+  });
+
   test('treats letters in free text as parameters, as it always has', () => {
     // M117 style messages have no value after each letter, so each becomes NaN.
     // Preserved deliberately: the previous regex split behaved the same way.
