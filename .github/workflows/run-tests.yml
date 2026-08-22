@@ -18,6 +18,9 @@ on:
       - releases
       - v3.x
 
+permissions:
+  contents: read
+
 jobs:
   pr-check:
     if: github.event_name == 'pull_request'
