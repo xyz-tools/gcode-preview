@@ -222,6 +222,19 @@ describe('parseCommand tokenizing', () => {
       expect(cmd.params.z).toEqual(2);
     });
 
+    test('takes the leading number and drops trailing letters', () => {
+      // The tokenizer splits at the first letter, so X's value slice is '123' and the
+      // trailing letters become valueless words that are now dropped rather than stored
+      // as NaN. Lenient like the firmware: Marlin's strtod also ignores the tail.
+      const cmd = parse('G1 X123abc Y5');
+      expect(cmd.params).toEqual({ x: 123, y: 5 });
+    });
+
+    test('takes the leading number of a malformed decimal', () => {
+      const cmd = parse('G1 X1.2.3 Y5');
+      expect(cmd.params).toEqual({ x: 1.2, y: 5 });
+    });
+
     test('keeps finite values of every shape', () => {
       const cmd = parse('G1 X-0.5 Y0 Z100 E-.27245');
       expect(cmd.params).toEqual({ x: -0.5, y: 0, z: 100, e: -0.27245 });
