@@ -5,6 +5,7 @@ import { Job } from './job';
 import { DevGUI, type DevModeOptions } from './dev-gui';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { makeDroppable } from './extra/dom-utils';
+import { splitChunk } from './helpers/split-chunk';
 
 /**
  * Options for configuring the G-code preview
@@ -15,6 +16,13 @@ type LibOptions = {
   minLayerThreshold?: number;
   /** Enable drag and drop file handling */
   droppable?: boolean;
+  /**
+   * Keep the parsed G-code source on `preview.parser.lines`.
+   * @remarks
+   * Off by default. Nothing in the library reads the source back, and holding
+   * it costs several megabytes on a large file.
+   */
+  keepLines?: boolean;
 };
 
 export type GCodePreviewOptions = LibOptions & SceneManagerOptions;
@@ -70,9 +78,14 @@ export class GCodePreview {
   /** The G-code parser instance */
   get parser(): Parser {
     if (!this._parser) {
-      this._parser = new Parser();
+      this._parser = this.createParser();
     }
     return this._parser;
+  }
+
+  /** Builds a parser carrying the preview's parsing options. */
+  private createParser(): Parser {
+    return new Parser({ keepLines: this.opts?.keepLines });
   }
 
   /**
@@ -99,7 +112,7 @@ export class GCodePreview {
    */
   constructor(opts: GCodePreviewOptions) {
     this.opts = opts;
-    this._parser = new Parser();
+    this._parser = this.createParser();
     this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
     this.stats = this.devMode ? new Stats() : undefined;
     this._sceneManager = new SceneManager(this.opts, this.job, () => this.stats?.update());
@@ -113,7 +126,7 @@ export class GCodePreview {
    * Clears the preview and resets the parser, sceneManager, gui and job
    */
   clear(): void {
-    this._parser = new Parser();
+    this._parser = this.createParser();
     this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
     this.sceneManager.clear();
     this.sceneManager.job = this.job;
@@ -187,17 +200,14 @@ export class GCodePreview {
       }
       console.debug('reading from stream', Math.floor(length / 1024), 'kB');
       size += length;
-      const str = result.value;
-      const idxNewLine = str.lastIndexOf('\n');
-      const maxFullLine = str.slice(0, idxNewLine);
+      const split = splitChunk(tail, result.value);
+      tail = split.tail;
 
       // parse increments but don't render yet
-      const { commands } = this.parser.parseGCode(tail + maxFullLine);
+      const { commands } = this.parser.parseGCode(split.complete);
 
       // we'll execute the commands immediately, for now
       this.interpreter.execute(commands, this.job);
-
-      tail = str.slice(idxNewLine);
     } while (!result.done);
 
     console.debug('total read from stream', Math.floor(size / 1024), 'kB');

@@ -114,12 +114,23 @@ function isAlphaCode(code: number): boolean {
 }
 
 /**
+ * Options for configuring the parser
+ */
+export type ParserOptions = {
+  /**
+   * Keep every source line on `lines`. Off by default: a 3.5 MB file costs
+   * several megabytes to hold, and nothing in the library reads the text back.
+   */
+  keepLines?: boolean;
+};
+
+/**
  * A G-code parser that processes G-code commands and extracts metadata.
  *
  * @remarks
  * This parser handles both single-line and multi-line G-code input, extracting
  * commands, parameters, and metadata such as thumbnails. It preserves comments
- * and maintains the original source lines.
+ * and, when created with `keepLines`, retains the original source lines.
  *
  * @example
  * ```typescript
@@ -131,8 +142,38 @@ export class Parser {
   /** Metadata extracted from G-code comments, including thumbnails */
   metadata: Metadata = { thumbnails: {} };
 
-  /** Original G-code lines stored for reference */
+  /**
+   * Original G-code lines, in the order they were parsed.
+   * @remarks
+   * Only populated when the parser was created with `keepLines`. Streaming
+   * parses append to this, so it spans the whole input rather than just the
+   * most recent chunk.
+   *
+   * String input is split on `'\n'`, so input ending in a newline yields one
+   * final empty line here. That is the split's honest answer and is
+   * deliberately not filtered out.
+   */
   lines: string[] = [];
+
+  /**
+   * How many lines have been parsed, counting every call.
+   * @remarks
+   * Tracked whether or not the lines themselves are kept. Counts exactly what
+   * `lines` would hold, so a trailing newline contributes one final empty
+   * line.
+   */
+  lineCount = 0;
+
+  /** Whether to retain source lines on `lines` */
+  private readonly keepLines: boolean;
+
+  /**
+   * Creates a new Parser instance
+   * @param opts - Parser options
+   */
+  constructor(opts: ParserOptions = {}) {
+    this.keepLines = opts.keepLines ?? false;
+  }
 
   /**
    * Parses G-code input into commands and metadata
@@ -142,7 +183,8 @@ export class Parser {
    * @remarks
    * This method handles both single-line and multi-line G-code input, extracting
    * commands, parameters, and metadata such as thumbnails. It preserves comments
-   * and maintains the original source lines.
+   * and, when the parser was created with `keepLines`, appends the original
+   * source lines to `lines`.
    *
    * @example
    * ```typescript
@@ -151,8 +193,18 @@ export class Parser {
    * ```
    */
   parseGCode(input: string | string[]): ParseResult {
-    this.lines = Array.isArray(input) ? input : input.split('\n');
-    const commands = this.lines2commands(this.lines);
+    const lines = Array.isArray(input) ? input : input.split('\n');
+    this.lineCount += lines.length;
+
+    if (this.keepLines) {
+      // appended one at a time: spreading a whole file's worth of lines into
+      // push() overflows the argument limit
+      for (const line of lines) this.lines.push(line);
+    }
+
+    // only the lines from this call, so a streaming parse does not redo the
+    // chunks it has already handled
+    const commands = this.lines2commands(lines);
 
     // merge thumbs
     const thumbs = this.parseMetadata(commands.filter((cmd) => cmd.comment)).thumbnails;
