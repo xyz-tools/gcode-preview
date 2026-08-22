@@ -36,6 +36,27 @@ describe('BoundingBox', () => {
     });
   });
 
+  describe('center', () => {
+    it('returns null before any point has been added', () => {
+      const bbox = new BoundingBox();
+      expect(bbox.center).toBeNull();
+    });
+
+    it('is the per-axis midpoint of the extremes, independent of point order', () => {
+      const bbox = new BoundingBox();
+      bbox.update(30, 4, 6);
+      bbox.update(-10, 8, 0);
+      bbox.update(5, 6, 2);
+      expect(bbox.center).toMatchObject({ x: 10, y: 6, z: 3 });
+    });
+
+    it('equals the point itself when only one point has been added', () => {
+      const bbox = new BoundingBox();
+      bbox.update(7, -2, 3.5);
+      expect(bbox.center).toMatchObject({ x: 7, y: -2, z: 3.5 });
+    });
+  });
+
   describe('corners', () => {
     it('returns null before any point has been added', () => {
       const bbox = new BoundingBox();
