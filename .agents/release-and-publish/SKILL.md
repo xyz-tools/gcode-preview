@@ -139,10 +139,14 @@ geometry 🚀`. For example:
 - **Plain / descriptive** — understated, calm emoji
   (`v3.1.0 ✨ Performance & polish ✨`).
 
-Present the three as a numbered list, briefly note what each leans on, and
-explicitly invite the user to pick a number or remix their own. **Wait for their
-choice — the picked title then goes into the full-release review in Step 4, and
-nothing is published (Step 5) until the user signs off on the whole thing.**
+If your environment has a dedicated tool for presenting choices (e.g. a
+multiple-choice / option-picker tool such as `AskUserQuestion`), **use it** —
+one option per title, with a short label and the leaning as its description.
+It's a nicer UX than plain text. Otherwise, fall back to a **numbered list**,
+briefly noting what each leans on. Either way, invite the user to pick one or
+remix their own. **Wait for their choice — the picked title then goes into the
+full-release review in Step 4, and nothing is published (Step 5) until the user
+signs off on the whole thing.**
 Match the emoji to the content (🚀 perf, 🐛 fixes, 🎨 rendering, 🧹 cleanup,
 📦 deps) rather than sprinkling them randomly.
 
