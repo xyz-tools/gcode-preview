@@ -7,10 +7,7 @@ export default defineConfig({
     globals: true,
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'html', 'lcov', 'json-summary', 'json'],
-      // reportOnFailure keeps the report files around when a threshold fails,
-      // so the PR comment can show exactly what regressed.
-      reportOnFailure: true,
+      reporter: ['text', 'html', 'lcov'],
       include: ['src/**/*.ts'],
       exclude: ['src/__tests__/**'],
       // Files that have reached full coverage. These thresholds fail CI if

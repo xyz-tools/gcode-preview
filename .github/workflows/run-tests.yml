@@ -20,10 +20,6 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: read
-      pull-requests: write # let the coverage action post its PR comment
-
     strategy:
       fail-fast: false
       matrix:
@@ -81,12 +77,5 @@ jobs:
         run: npm install three@${{ matrix.three-version }} @types/three@${{ matrix.types-version }} --no-save
       - run: npm run build
       - run: npm run test:coverage
-      - name: Report coverage on the PR
-        # Coverage is identical across three.js versions, so post from a single
-        # matrix leg (the max version — keep in sync when the matrix grows).
-        # `always()` posts the comment even when a threshold fails — that is
-        # when it is most useful.
-        if: always() && github.event_name == 'pull_request' && matrix.three-version == '0.185.1'
-        uses: davelosert/vitest-coverage-report-action@v2
       - run: npm run typeCheck
       - run: npm run lint
