@@ -5,6 +5,7 @@ import { Job } from './job';
 import { DevGUI, type DevModeOptions } from './dev-gui';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { makeDroppable } from './extra/dom-utils';
+import { splitChunk } from './helpers/split-chunk';
 
 /**
  * Options for configuring the G-code preview
@@ -199,17 +200,14 @@ export class GCodePreview {
       }
       console.debug('reading from stream', Math.floor(length / 1024), 'kB');
       size += length;
-      const str = result.value;
-      const idxNewLine = str.lastIndexOf('\n');
-      const maxFullLine = str.slice(0, idxNewLine);
+      const split = splitChunk(tail, result.value);
+      tail = split.tail;
 
       // parse increments but don't render yet
-      const { commands } = this.parser.parseGCode(tail + maxFullLine);
+      const { commands } = this.parser.parseGCode(split.complete);
 
       // we'll execute the commands immediately, for now
       this.interpreter.execute(commands, this.job);
-
-      tail = str.slice(idxNewLine);
     } while (!result.done);
 
     console.debug('total read from stream', Math.floor(size / 1024), 'kB');

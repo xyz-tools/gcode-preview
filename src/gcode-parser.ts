@@ -130,7 +130,7 @@ export type ParserOptions = {
  * @remarks
  * This parser handles both single-line and multi-line G-code input, extracting
  * commands, parameters, and metadata such as thumbnails. It preserves comments
- * and maintains the original source lines.
+ * and, when created with `keepLines`, retains the original source lines.
  *
  * @example
  * ```typescript
@@ -148,13 +148,19 @@ export class Parser {
    * Only populated when the parser was created with `keepLines`. Streaming
    * parses append to this, so it spans the whole input rather than just the
    * most recent chunk.
+   *
+   * String input is split on `'\n'`, so input ending in a newline yields one
+   * final empty line here. That is the split's honest answer and is
+   * deliberately not filtered out.
    */
   lines: string[] = [];
 
   /**
    * How many lines have been parsed, counting every call.
    * @remarks
-   * Tracked whether or not the lines themselves are kept.
+   * Tracked whether or not the lines themselves are kept. Counts exactly what
+   * `lines` would hold, so a trailing newline contributes one final empty
+   * line.
    */
   lineCount = 0;
 
@@ -177,7 +183,8 @@ export class Parser {
    * @remarks
    * This method handles both single-line and multi-line G-code input, extracting
    * commands, parameters, and metadata such as thumbnails. It preserves comments
-   * and maintains the original source lines.
+   * and, when the parser was created with `keepLines`, appends the original
+   * source lines to `lines`.
    *
    * @example
    * ```typescript
