@@ -151,6 +151,8 @@ export class SceneManager {
   static readonly defaultExtrusionColor = new Color('hotpink');
   /** Current extrusion color(s) */
   private _extrusionColor: Color | Color[] = SceneManager.defaultExtrusionColor;
+  /** Tool indices already warned about missing an entry in the extrusionColor array */
+  private warnedMissingExtrusionColorIndices = new Set<number>();
   /** Animation frame ID */
   private animationFrameId?: number;
   /** Current path index for animated rendering */
@@ -900,7 +902,9 @@ export class SceneManager {
 
     if (this.renderExtrusion) {
       this.job.toolPaths.forEach((toolPaths, index) => {
-        const color = Array.isArray(this._extrusionColor) ? this._extrusionColor[index] : this._extrusionColor;
+        const color = Array.isArray(this._extrusionColor)
+          ? this._extrusionColor[index] ?? this.fallbackExtrusionColor(index)
+          : this._extrusionColor;
         if (this.renderTubes) {
           this.renderPathsAsTubes(toolPaths.slice(this.renderPathIndex, endPathNumber), color);
         } else {
@@ -908,6 +912,23 @@ export class SceneManager {
         }
       });
     }
+  }
+
+  /**
+   * Falls back to a usable color when extrusionColor is an array with no entry for a tool index
+   * @param toolIndex - Tool index missing a configured color
+   * @returns The array's last configured color, or the default extrusion color if the array is empty
+   * @remarks
+   * A gcode file can reference more tools than the caller supplied colors for (e.g. a color array
+   * sized for 2 tools rendering a 3-tool file). Warns once per tool index instead of throwing.
+   */
+  private fallbackExtrusionColor(toolIndex: number): Color {
+    if (!this.warnedMissingExtrusionColorIndices.has(toolIndex)) {
+      this.warnedMissingExtrusionColorIndices.add(toolIndex);
+      console.warn(`No extrusionColor configured for tool index ${toolIndex}, falling back to another color`);
+    }
+    const colors = this._extrusionColor as Color[];
+    return colors[colors.length - 1] ?? SceneManager.defaultExtrusionColor;
   }
 
   /**
