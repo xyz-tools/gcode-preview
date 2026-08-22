@@ -322,6 +322,13 @@ describe('SceneManager properties', () => {
 
       expect(sceneManager.buildVolume).toBeUndefined();
     });
+
+    test('render works without a build volume', () => {
+      sceneManager.buildVolume = undefined;
+
+      expect(() => sceneManager.render()).not.toThrow();
+      expect(extrusionGroup(sceneManager).children.length).toBeGreaterThan(0);
+    });
   });
 
   describe('clear', () => {
@@ -383,6 +390,17 @@ describe('SceneManager properties', () => {
       vi.advanceTimersByTime(ObjectsManager.rebuildDebounce);
 
       expect(extrusionGroup(sceneManager).children.length).toBeGreaterThan(0);
+    });
+
+    test('a rebuild request after clear does not redraw the dropped job', () => {
+      vi.useFakeTimers();
+      sceneManager.clear();
+      const spy = vi.spyOn(sceneManager, 'render');
+
+      sceneManager.lineWidth = 5;
+      vi.advanceTimersByTime(ObjectsManager.rebuildDebounce);
+
+      expect(spy).not.toHaveBeenCalled();
     });
   });
 
@@ -505,6 +523,15 @@ describe('SceneManager properties', () => {
       expect(() => new SceneManager({ buildVolume: { x: 1, y: 1, z: 1, smallGrid: true } }, createJob())).toThrow(
         'Set either opts.canvas or opts.targetId'
       );
+    });
+
+    test('throws without a build volume while centering the controls', () => {
+      // Current behavior: the constructor dereferences this._buildVolume
+      // unconditionally when aiming the controls, so a missing buildVolume
+      // option fails construction. If this starts passing, the constructor
+      // learned to handle it and this test should assert the new behavior.
+      const canvas = document.createElement('canvas');
+      expect(() => new SceneManager({ canvas }, createJob())).toThrow(TypeError);
     });
 
     test('applies every optional setting', () => {
