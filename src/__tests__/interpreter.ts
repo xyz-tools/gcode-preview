@@ -324,6 +324,7 @@ describe('malformed coordinates through the whole pipeline', () => {
   const allVertices = (job: Job) => job.paths.flatMap((path) => path.vertices);
   // The vertices the final command contributed, without the lead-in move or the
   // implicit start point at the origin.
+  const zsOf = (vertices: number[]) => vertices.filter((_, index) => index % 3 === 2);
   const tailVertices = (setup: string[], last: string) => {
     const before = allVertices(run(setup.join('\n'))).length;
     return allVertices(run([...setup, last].join('\n'))).slice(before);
@@ -379,6 +380,18 @@ describe('malformed coordinates through the whole pipeline', () => {
     const job = run(['G1 X10 Y10 Z5 E1', 'G2 X20 Y10 Z0 I5 J0 E1'].join('\n'));
 
     expect(job.state.z).toEqual(0);
+  });
+
+  test('a helical arc interpolates Z towards the target, not away from it', () => {
+    // zDist was current - target, so a climb from Z1 to Z3 descended to Z-0.97 across
+    // its 31 intermediate points and only reached Z3 at the endpoint.
+    const zs = zsOf(tailVertices(['G1 X10 Y10 Z1 E1'], 'G2 X20 Y10 Z3 I5 J0 E1'));
+
+    expect(zs.length).toBeGreaterThan(2);
+    expect(Math.min(...zs)).toBeGreaterThanOrEqual(1);
+    expect(Math.max(...zs)).toBeLessThanOrEqual(3);
+    // and it should actually climb, not sit flat at the start height
+    expect(Math.max(...zs)).toBeGreaterThan(1);
   });
 
   test('a degenerate R-mode whole circle emits the endpoint and no arc', () => {

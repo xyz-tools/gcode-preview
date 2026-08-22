@@ -207,7 +207,10 @@ export class Interpreter {
     let arcAngleIncrement = totalArc / totalSegments;
     arcAngleIncrement *= cw ? -1 : 1;
 
-    const zDist = state.z - (z || state.z);
+    // target - current. This was the other way round, so a helical arc climbing
+    // Z1 -> Z3 walked its intermediate points down to Z-0.97 and only landed on Z3 at
+    // the endpoint, leaving a visible spike in the rendered path.
+    const zDist = (z || state.z) - state.z;
     const zStep = zDist / totalSegments;
 
     // get points for the arc
