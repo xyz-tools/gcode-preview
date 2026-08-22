@@ -73,9 +73,24 @@ gh release create <tag> --generate-notes --draft --verify-tag
 
 `--generate-notes` groups merged PRs since the previous tag. Rework that draft
 into the themed sections in the template — do not ship the raw auto-notes; the
-recent releases use curated, human-readable sections.
+recent releases use curated, human-readable sections. Suggest the three title
+options and get the user's pick (see the template section below) as part of
+drafting.
 
-## Step 4 — Publish the release
+## Step 4 — Review the full release with the user (gate)
+
+Before publishing anything, **show the user the complete release** — the chosen
+title **and** the full curated body, exactly as it will appear on the Releases
+page — and **ask for feedback**:
+
+> Here's the full release as it will be published. Anything to change before I
+> publish it? (Remember: a stable release broadcasts this to Discord `@everyone`.)
+
+**Do not proceed to Step 5 until the user approves.** If they request changes,
+edit the notes and show the updated full release again — repeat until they're
+happy. Only once they've explicitly signed off do you publish.
+
+## Step 5 — Publish the release
 
 Once the notes are ready, publish it. Both kinds publish to npm; the flags only
 affect how GitHub labels the release and whether Discord is notified:
@@ -123,7 +138,8 @@ publish anything. Give each option a different angle, e.g.:
 
 Present the three as a numbered list, briefly note what each leans on, and
 explicitly invite the user to pick a number or remix their own. **Wait for their
-choice — do not proceed to Step 4 (publish) until they have picked a title.**
+choice — the picked title then goes into the full-release review in Step 4, and
+nothing is published (Step 5) until the user signs off on the whole thing.**
 Match the emoji to the content (🚀 perf, 🐛 fixes, 🎨 rendering, 🧹 cleanup,
 📦 deps) rather than sprinkling them randomly.
 
