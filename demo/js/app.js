@@ -40,7 +40,6 @@ export const app = (window.app = createApp({
       model.value = {
         name: evt.detail.filename
       };
-      applyDevMode(enableDevMode.value); // HACK: force dev mode to update UI
       updateUI();
     };
 
@@ -99,8 +98,6 @@ export const app = (window.app = createApp({
       console.debug('app settings:', currentSettings);
       Object.assign(settings.value, currentSettings);
       sceneManager.endLayer = countLayers;
-
-      applyDevMode(enableDevMode.value);
     };
 
     const loadGCodeFromServer = async (filename) => {
@@ -159,19 +156,18 @@ export const app = (window.app = createApp({
       observer = new ResizeObserver(() => preview.sceneManager.resize());
       observer.observe(canvas);
 
-      applyDevMode(enableDevMode.value); // HACK: force dev mode to update UI
-
       await loadGCodeFromServer(preset.file);
-      applyDevMode(enableDevMode.value);
 
       updateUI();
     };
 
+    // The dev GUI and stats panels are created (and recreated on preset change) by
+    // GCodePreview itself. Toggling a class on the body lets the stylesheet keep them
+    // hidden until the app enables dev mode, so they never flash before Vue has mounted.
     function applyDevMode(enabled) {
-      // these elements will be recreated when changing presets, so we'll look them up dynamically
-      document.querySelectorAll('.lil-gui, .stats').forEach((el) => (el.style.display = enabled ? 'block' : 'none'));
+      document.body.classList.toggle('dev-mode', enabled);
     }
-    watch(enableDevMode, applyDevMode);
+    watch(enableDevMode, applyDevMode, { immediate: true });
 
     onMounted(async () => {
       await selectPreset(defaultPreset);
