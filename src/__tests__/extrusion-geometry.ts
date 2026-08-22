@@ -159,3 +159,47 @@ test('ExtrusionGeometry keeps a straight run consistent across points', () => {
   expect(ringAt(1)).toEqual(ringAt(0));
   expect(ringAt(2)).toEqual(ringAt(0));
 });
+
+test('ExtrusionGeometry should pick the normal axis based on the smallest tangent component', () => {
+  // Exercise the axis-selection branches in computeCornerAngles: a path along Y
+  // makes `ty > min` (false branch of the ty check), and a path along Z makes
+  // `tz > min` (false branch of the tz check).
+  const yAxis = new ExtrusionGeometry([new Vector3(0, 0, 0), new Vector3(0, 1, 0)]);
+  expect(yAxis.attributes.position).toBeDefined();
+  const zAxis = new ExtrusionGeometry([new Vector3(0, 0, 0), new Vector3(0, 0, 1)]);
+  expect(zAxis.attributes.position).toBeDefined();
+});
+
+test('ExtrusionGeometry should handle non-finite point coordinates', () => {
+  // A point with a non-finite coordinate produces a NaN tangent component.
+  // In `computeCornerAngles`, `min` starts at Number.MAX_VALUE, so `tx <= min`
+  // is normally always true for finite values. When `tx` is NaN the comparison
+  // is false, exercising the otherwise-unreachable false branch.
+  const points = [new Vector3(NaN, 0, 0), new Vector3(1, 0, 0)];
+  const geometry = new ExtrusionGeometry(points);
+  expect(geometry.attributes.position).toBeDefined();
+});
+
+test('ExtrusionGeometry construction does not depend on a global `closed`', () => {
+  // Regression test: `generateBufferData` used to read a bare `closed`
+  // identifier, which resolved to the global `window.closed` rather than the
+  // geometry's own parameters. In a DOM-less environment that global does not
+  // exist, so constructing a geometry crashed with a ReferenceError. Remove
+  // the global for the duration of the test to prove construction no longer
+  // consults it.
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'closed');
+  delete (globalThis as { closed?: unknown }).closed;
+  try {
+    const radialSegments = 8;
+    const points = [new Vector3(), new Vector3(1, 0, 0)];
+    let geometry: ExtrusionGeometry | undefined;
+    expect(() => {
+      geometry = new ExtrusionGeometry(points, 0.6, 0.2, radialSegments);
+    }).not.toThrow();
+    expect(geometry?.attributes.position.count).toBe((points.length + 1) * (radialSegments + 1));
+  } finally {
+    if (original) {
+      Object.defineProperty(globalThis, 'closed', original);
+    }
+  }
+});

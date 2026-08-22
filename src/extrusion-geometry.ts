@@ -16,8 +16,6 @@ class ExtrusionGeometry extends BufferGeometry {
     lineHeight: number;
     /** Number of segments around the circumference */
     radialSegments: number;
-    /** Whether the path is closed */
-    closed: boolean;
   };
 
   /**
@@ -46,8 +44,7 @@ class ExtrusionGeometry extends BufferGeometry {
       points: points,
       lineWidth: lineWidth,
       lineHeight: lineHeight,
-      radialSegments: radialSegments,
-      closed: false
+      radialSegments: radialSegments
     };
 
     // helper variables
@@ -121,15 +118,12 @@ class ExtrusionGeometry extends BufferGeometry {
         generateSegment(i);
       }
 
-      // if the geometry is not closed, generate the last row of vertices and normals
-      // at the regular position on the given path
-      //
-      // if the geometry is closed, duplicate the first row of vertices and normals (uvs will differ)
+      // generate the last row of vertices and normals at the regular position
+      // on the given path
 
-      generateSegment(closed === false ? points.length - 1 : 0);
+      generateSegment(points.length - 1);
 
-      // uvs are generated in a separate function.
-      // this makes it easy compute correct values for closed geometries
+      // uvs are generated in a separate function
 
       generateUVs();
 

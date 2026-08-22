@@ -76,6 +76,6 @@ jobs:
       - name: Install three.js ${{ matrix.three-version }}
         run: npm install three@${{ matrix.three-version }} @types/three@${{ matrix.types-version }} --no-save
       - run: npm run build
-      - run: npm run test
+      - run: npm run test:coverage
       - run: npm run typeCheck
       - run: npm run lint

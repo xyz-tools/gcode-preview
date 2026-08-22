@@ -201,6 +201,21 @@ describe('parseCommand tokenizing', () => {
     expect(cmd.params).toEqual({});
   });
 
+  test('skips leading characters that are not letters', () => {
+    // The tokenizer only opens a word at a letter, so anything before the
+    // first letter (line numbers stripped of their N, checksum asterisks,
+    // stray punctuation) is passed over without producing a command or param.
+    const cmd = parse('*12 G1 X5');
+    expect(cmd.gcode).toEqual('g1');
+    expect(cmd.params).toEqual({ x: 5 });
+  });
+
+  test('parses no command or params from a line with no letters at all', () => {
+    const cmd = parse('{5}');
+    expect(cmd.gcode).toEqual('');
+    expect(cmd.params).toEqual({});
+  });
+
   test('treats letters in free text as parameters, as it always has', () => {
     // M117 style messages have no value after each letter, so each becomes NaN.
     // Preserved deliberately: the previous regex split behaved the same way.
@@ -209,4 +224,39 @@ describe('parseCommand tokenizing', () => {
     expect(Object.keys(cmd.params)).toEqual(['h', 'i']);
     expect(cmd.params.h).toBeNaN();
   });
+});
+
+test('parseGCode accepts an array of lines', () => {
+  const parser = new Parser();
+  const parsed = parser.parseGCode(['G1 X1 Y1', 'G1 X2']);
+  expect(parsed.commands.length).toEqual(2);
+  expect(parsed.commands[0].params.x).toEqual(1);
+  expect(parsed.commands[1].params.x).toEqual(2);
+});
+
+test('parseMetadata skips commands without a comment', () => {
+  const parser = new Parser();
+  const commands = [
+    new GCodeCommand('G1 X1', 'g1', { x: 1 }), // comment undefined
+    new GCodeCommand('G1 X2 ;', 'g1', { x: 2 }, ''), // comment empty string
+    new GCodeCommand('G1 X3 ; hello', 'g1', { x: 3 }, ' hello') // non-thumbnail comment
+  ];
+  const metadata = parser.parseMetadata(commands);
+  expect(metadata.thumbnails).toEqual({});
+});
+
+test('parseGCode extracts a valid thumbnail from comments', () => {
+  const parser = new Parser();
+  const chars = 'ABCD'.repeat(25); // 100 valid base64 chars
+  const gcode = [`; thumbnail begin 16x16 ${chars.length}`, `; ${chars}`, '; thumbnail end'].join('\n');
+  const parsed = parser.parseGCode(gcode);
+  expect(parsed.metadata.thumbnails['16x16']).toBeDefined();
+  expect(parsed.metadata.thumbnails['16x16'].chars).toEqual(chars);
+});
+
+test('parseGCode ignores a thumbnail with invalid data', () => {
+  const parser = new Parser();
+  const gcode = ['; thumbnail begin 8x8 100', '; tooshort', '; thumbnail end'].join('\n');
+  const parsed = parser.parseGCode(gcode);
+  expect(parsed.metadata.thumbnails['8x8']).toBeUndefined();
 });

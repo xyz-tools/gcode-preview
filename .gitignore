@@ -15,3 +15,6 @@ demo/build/*
 docs
 demo/dist
 demo/lib
+
+# Test coverage
+coverage
