@@ -140,6 +140,21 @@ test('gcode commands without gcode should result in a command with empty string 
 describe('parseCommand tokenizing', () => {
   const parse = (line: string) => new Parser().parseCommand(line) as GCodeCommand;
 
+  // FAILING ON PURPOSE -- see #368.
+  // The tokenizer splits a word at every letter, so the `e` in an exponent is read as a
+  // separate E parameter. That is not merely lossy: Interpreter derives the path type
+  // from `e` (`e ? Extrusion : Travel`), so a travel move silently renders as extruded
+  // filament and inflates extrusionDistance.
+  //
+  // The expectation below is the fix in option 3 of #368 (recognize exponent notation in
+  // the tokenizer). If the team picks option 2 instead (reject a word whose value is
+  // followed by a valueless letter), change this to expect x to be absent. Either way the
+  // fabricated `e` must go.
+  test('reads exponent notation as a single value, not a value plus an E parameter', () => {
+    const cmd = parse('G1 X12e5 Y5');
+    expect(cmd.params).toEqual({ x: 1200000, y: 5 });
+  });
+
   test('reads a command and its parameters', () => {
     const cmd = parse('G1 X100.5 Y-20 E0.04 F1200');
     expect(cmd.gcode).toEqual('g1');
