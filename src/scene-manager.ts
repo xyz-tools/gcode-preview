@@ -259,9 +259,6 @@ export class SceneManager {
     });
 
     this.renderer.localClippingEnabled = true;
-    // The `?? false` fallback is unreachable in tests: `new WebGLRenderer` above always
-    // throws in a headless (no-WebGL) environment before this line runs.
-    /* v8 ignore next */
     this.camera = this.createCamera(opts.orthographic ?? false);
     this.camera.position.fromArray(this.initialCameraPosition);
     this.resize();
