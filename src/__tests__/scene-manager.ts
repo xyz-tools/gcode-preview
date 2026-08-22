@@ -132,7 +132,6 @@ test('constructor applies explicit options to the instance state', () => {
       travelColor: '#336699',
       topLayerColor: '#fedcba',
       lastSegmentColor: '#446688',
-      toolColors: { 0: '#aaaaaa', 1: '#bbbbbb' },
       disableGradient: true,
       startLayer: 1,
       endLayer: 2,
@@ -155,8 +154,6 @@ test('constructor applies explicit options to the instance state', () => {
   expect((sm.extrusionColor as Color[]).map((c) => c.getHex())).toEqual([0x00ff00, 0x0000ff]);
   expect((sm.lastSegmentColor as Color).getHex()).toBe(0x446688);
   expect((sm.boundingBoxColor as Color).getHex()).toBe(0xff0000);
-  expect((sm as any)._toolColors[0].getHex()).toBe(0xaaaaaa);
-  expect((sm as any)._toolColors[1].getHex()).toBe(0xbbbbbb);
 
   expect(sm.buildVolume?.x).toBe(150);
   expect(sm.buildVolume?.y).toBe(100);

@@ -75,8 +75,6 @@ export type SceneManagerOptions = {
   topLayerColor?: ColorRepresentation;
   /** Color for travel moves */
   travelColor?: ColorRepresentation;
-  /** Colors for different tools */
-  toolColors?: Record<number, ColorRepresentation>;
   /** Disable color gradient between layers */
   disableGradient?: boolean;
   /** Width of extruded material */
@@ -173,8 +171,6 @@ export class SceneManager {
   private _topLayerColor?: Color;
   /** Last segment color */
   private _lastSegmentColor?: Color;
-  /** Tool-specific colors */
-  private _toolColors: Record<number, Color> = {};
   /** Last render time in milliseconds */
   lastRenderTime = 0;
   /** Whether to render in wireframe mode */
@@ -238,13 +234,6 @@ export class SceneManager {
     if (opts.lastSegmentColor !== undefined) {
       this.lastSegmentColor = new Color(opts.lastSegmentColor);
     }
-    if (opts.toolColors) {
-      this._toolColors = {};
-      for (const [key, value] of Object.entries(opts.toolColors)) {
-        this._toolColors[parseInt(key)] = new Color(value);
-      }
-    }
-
     if (opts.disableGradient !== undefined) {
       this.disableGradient = opts.disableGradient;
     }
