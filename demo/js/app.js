@@ -23,7 +23,6 @@ export const app = (window.app = createApp({
     const model = ref(null);
     const dragging = ref(false);
     const settings = ref(Object.assign({}, defaultSettings));
-    const enableDevMode = ref(false);
     const drawBoundingBox = ref(false);
 
     watch(selectedPreset, (preset) => {
@@ -40,7 +39,6 @@ export const app = (window.app = createApp({
       model.value = {
         name: evt.detail.filename
       };
-      applyDevMode(enableDevMode.value); // HACK: force dev mode to update UI
       updateUI();
     };
 
@@ -99,8 +97,6 @@ export const app = (window.app = createApp({
       console.debug('app settings:', currentSettings);
       Object.assign(settings.value, currentSettings);
       sceneManager.endLayer = countLayers;
-
-      applyDevMode(enableDevMode.value);
     };
 
     const loadGCodeFromServer = async (filename) => {
@@ -159,19 +155,10 @@ export const app = (window.app = createApp({
       observer = new ResizeObserver(() => preview.sceneManager.resize());
       observer.observe(canvas);
 
-      applyDevMode(enableDevMode.value); // HACK: force dev mode to update UI
-
       await loadGCodeFromServer(preset.file);
-      applyDevMode(enableDevMode.value);
 
       updateUI();
     };
-
-    function applyDevMode(enabled) {
-      // these elements will be recreated when changing presets, so we'll look them up dynamically
-      document.querySelectorAll('.lil-gui, .stats').forEach((el) => (el.style.display = enabled ? 'block' : 'none'));
-    }
-    watch(enableDevMode, applyDevMode);
 
     onMounted(async () => {
       await selectPreset(defaultPreset);
@@ -263,7 +250,6 @@ export const app = (window.app = createApp({
       dragging,
       settings,
       loadProgressive,
-      enableDevMode,
       drawBoundingBox,
       selectTab,
       addColor,

@@ -132,7 +132,6 @@ test('constructor applies explicit options to the instance state', () => {
       travelColor: '#336699',
       topLayerColor: '#fedcba',
       lastSegmentColor: '#446688',
-      toolColors: { 0: '#aaaaaa', 1: '#bbbbbb' },
       disableGradient: true,
       startLayer: 1,
       endLayer: 2,
@@ -155,8 +154,6 @@ test('constructor applies explicit options to the instance state', () => {
   expect((sm.extrusionColor as Color[]).map((c) => c.getHex())).toEqual([0x00ff00, 0x0000ff]);
   expect((sm.lastSegmentColor as Color).getHex()).toBe(0x446688);
   expect((sm.boundingBoxColor as Color).getHex()).toBe(0xff0000);
-  expect((sm as any)._toolColors[0].getHex()).toBe(0xaaaaaa);
-  expect((sm as any)._toolColors[1].getHex()).toBe(0xbbbbbb);
 
   expect(sm.buildVolume?.x).toBe(150);
   expect(sm.buildVolume?.y).toBe(100);
@@ -558,6 +555,46 @@ test('render as tubes creates a batched mesh with the per-tool color', () => {
   const meshes = collect(sm, isBatchedMesh);
   expect(meshes).toHaveLength(1);
   expect((meshes[0].material as any).uniforms.uColor.value.getHex()).toBe(0x00ff00);
+});
+
+test('render falls back to a configured color when a tool has none of its own', () => {
+  // T2 selects a tool index one past the single color supplied, which used to
+  // read extrusionColor[2] as undefined and throw inside renderPathsAsTubes.
+  const job = jobFromGCode(['T2', ...LAYERED_GCODE.split('\n')].join('\n'));
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const sm = createSceneManager({ renderTubes: true, extrusionColor: ['#00ff00'] }, job);
+
+  expect(() => sm.render()).not.toThrow();
+
+  const meshes = collect(sm, isBatchedMesh);
+  expect(meshes).toHaveLength(1);
+  expect((meshes[0].material as any).uniforms.uColor.value.getHex()).toBe(0x00ff00);
+  expect(warn).toHaveBeenCalledWith('No extrusionColor configured for tool index 2, falling back to another color');
+  warn.mockRestore();
+});
+
+test('render only warns once per tool index missing a configured color', () => {
+  const job = jobFromGCode(['T2', ...LAYERED_GCODE.split('\n')].join('\n'));
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const sm = createSceneManager({ renderTubes: true, extrusionColor: ['#00ff00'] }, job);
+
+  sm.render();
+  sm.render();
+
+  expect(warn).toHaveBeenCalledTimes(1);
+  warn.mockRestore();
+});
+
+test('render falls back to the default extrusion color when no colors are configured at all', () => {
+  const job = jobFromGCode(['T2', ...LAYERED_GCODE.split('\n')].join('\n'));
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const sm = createSceneManager({ renderTubes: true, extrusionColor: [] }, job);
+
+  expect(() => sm.render()).not.toThrow();
+
+  const meshes = collect(sm, isBatchedMesh);
+  expect((meshes[0].material as any).uniforms.uColor.value.getHex()).toBe(SceneManager.defaultExtrusionColor.getHex());
+  warn.mockRestore();
 });
 
 test('paths too short for a tube geometry are skipped', () => {
