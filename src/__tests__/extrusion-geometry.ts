@@ -180,20 +180,26 @@ test('ExtrusionGeometry should handle non-finite point coordinates', () => {
   expect(geometry.attributes.position).toBeDefined();
 });
 
-test('ExtrusionGeometry should duplicate the first row when the global `closed` is truthy', () => {
-  // NOTE: latent bug. In `generateBufferData`, `generateSegment(closed === false ? ...)`
-  // references a bare `closed` identifier. It is NOT a local variable and NOT
-  // `this.parameters.closed`; it resolves to the GLOBAL `closed` (globalThis.closed /
-  // window.closed), which is `false` in the test environment. The intended
-  // "closed geometry" path (the `: 0` branch) is therefore only reachable by
-  // toggling the global. We temporarily set it here to cover that branch and to
-  // document the bug, then restore it so other tests are unaffected.
-  const original = globalThis.closed;
-  Object.defineProperty(globalThis, 'closed', { value: true, configurable: true });
+test('ExtrusionGeometry construction does not depend on a global `closed`', () => {
+  // Regression test: `generateBufferData` used to read a bare `closed`
+  // identifier, which resolved to the global `window.closed` rather than the
+  // geometry's own parameters. In a DOM-less environment that global does not
+  // exist, so constructing a geometry crashed with a ReferenceError. Remove
+  // the global for the duration of the test to prove construction no longer
+  // consults it.
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'closed');
+  delete (globalThis as { closed?: unknown }).closed;
   try {
-    const geometry = new ExtrusionGeometry([new Vector3(), new Vector3(1, 0, 0)]);
-    expect(geometry.attributes.position).toBeDefined();
+    const radialSegments = 8;
+    const points = [new Vector3(), new Vector3(1, 0, 0)];
+    let geometry: ExtrusionGeometry | undefined;
+    expect(() => {
+      geometry = new ExtrusionGeometry(points, 0.6, 0.2, radialSegments);
+    }).not.toThrow();
+    expect(geometry?.attributes.position.count).toBe((points.length + 1) * (radialSegments + 1));
   } finally {
-    Object.defineProperty(globalThis, 'closed', { value: original, configurable: true });
+    if (original) {
+      Object.defineProperty(globalThis, 'closed', original);
+    }
   }
 });

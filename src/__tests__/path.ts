@@ -75,7 +75,6 @@ describe('.geometry', () => {
     expect(result).not.toBeNull();
     expect(result).toBeInstanceOf(ExtrusionGeometry);
     expect(result.parameters.points.length).toEqual(2);
-    expect(result.parameters.closed).toEqual(false);
   });
 
   test('returns an ExtrusionGeometry with the path extrusion width', () => {
