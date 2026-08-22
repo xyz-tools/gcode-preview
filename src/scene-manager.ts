@@ -903,7 +903,7 @@ export class SceneManager {
     if (this.renderExtrusion) {
       this.job.toolPaths.forEach((toolPaths, index) => {
         const color = Array.isArray(this._extrusionColor)
-          ? this._extrusionColor[index] ?? this.fallbackExtrusionColor(index)
+          ? (this._extrusionColor[index] ?? this.fallbackExtrusionColor(index))
           : this._extrusionColor;
         if (this.renderTubes) {
           this.renderPathsAsTubes(toolPaths.slice(this.renderPathIndex, endPathNumber), color);

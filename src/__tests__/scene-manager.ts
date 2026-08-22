@@ -596,9 +596,7 @@ test('render falls back to the default extrusion color when no colors are config
   expect(() => sm.render()).not.toThrow();
 
   const meshes = collect(sm, isBatchedMesh);
-  expect((meshes[0].material as any).uniforms.uColor.value.getHex()).toBe(
-    SceneManager.defaultExtrusionColor.getHex()
-  );
+  expect((meshes[0].material as any).uniforms.uColor.value.getHex()).toBe(SceneManager.defaultExtrusionColor.getHex());
   warn.mockRestore();
 });
 
