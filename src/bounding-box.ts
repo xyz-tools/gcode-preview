@@ -5,11 +5,17 @@ export class BoundingBox {
 
   /**
    * Updates the bounding box with the given coordinates.
+   * Points with any non-finite coordinate (NaN or Infinity) are ignored.
    * @param x - The X coordinate.
    * @param y - The Y coordinate.
    * @param z - The Z coordinate.
    */
   public update(x: number, y: number, z: number): void {
+    // Malformed gcode can yield NaN params; a partial point would corrupt the extremes, so reject the whole point.
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+      console.error(`BoundingBox.update: ignoring non-finite point (${x}, ${y}, ${z})`);
+      return;
+    }
     this.min.x = Math.min(this.min.x, x);
     this.max.x = Math.max(this.max.x, x);
     this.min.y = Math.min(this.min.y, y);
@@ -19,11 +25,11 @@ export class BoundingBox {
   }
 
   /**
-   * Checks if the bounding box has been updated with any points.
-   * @returns True if at least one point has been added, false otherwise.
+   * Checks if the bounding box has been updated with at least one finite point.
+   * @returns True if at least one finite point has been added, false otherwise.
    */
   public get isValid(): boolean {
-    return this.min.x !== Infinity;
+    return Number.isFinite(this.min.x);
   }
 
   /**

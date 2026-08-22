@@ -195,6 +195,52 @@ describe('parseCommand tokenizing', () => {
     });
   });
 
+  describe('non-finite parameter values', () => {
+    test('drops a param whose value is not a number', () => {
+      // G1 Xabc used to yield params.x === NaN, which propagated all the way into
+      // the bounding box and the camera frustum.
+      const cmd = parse('G1 Xabc Y5 Z1');
+      expect(cmd.gcode).toEqual('g1');
+      expect(cmd.params.x).toBeUndefined();
+      expect(cmd.params.y).toEqual(5);
+      expect(cmd.params.z).toEqual(1);
+    });
+
+    test('drops a param with no value at all', () => {
+      const cmd = parse('G1 X Y5');
+      expect(cmd.params.x).toBeUndefined();
+      expect(cmd.params.y).toEqual(5);
+    });
+
+    test('drops a param whose value overflows to Infinity', () => {
+      // The tokenizer splits on letters, so exponent notation is not a route to
+      // Infinity here; an absurdly long digit run is.
+      const huge = '1' + '0'.repeat(400);
+      const cmd = parse(`G1 X${huge} Y-${huge} Z2`);
+      expect(cmd.params.x).toBeUndefined();
+      expect(cmd.params.y).toBeUndefined();
+      expect(cmd.params.z).toEqual(2);
+    });
+
+    test('takes the leading number and drops trailing letters', () => {
+      // The tokenizer splits at the first letter, so X's value slice is '123' and the
+      // trailing letters become valueless words that are now dropped rather than stored
+      // as NaN. Lenient like the firmware: Marlin's strtod also ignores the tail.
+      const cmd = parse('G1 X123abc Y5');
+      expect(cmd.params).toEqual({ x: 123, y: 5 });
+    });
+
+    test('takes the leading number of a malformed decimal', () => {
+      const cmd = parse('G1 X1.2.3 Y5');
+      expect(cmd.params).toEqual({ x: 1.2, y: 5 });
+    });
+
+    test('keeps finite values of every shape', () => {
+      const cmd = parse('G1 X-0.5 Y0 Z100 E-.27245');
+      expect(cmd.params).toEqual({ x: -0.5, y: 0, z: 100, e: -0.27245 });
+    });
+  });
+
   test('produces an empty command for a blank line', () => {
     const cmd = parse('   ');
     expect(cmd.gcode).toEqual('');
@@ -216,13 +262,12 @@ describe('parseCommand tokenizing', () => {
     expect(cmd.params).toEqual({});
   });
 
-  test('treats letters in free text as parameters, as it always has', () => {
-    // M117 style messages have no value after each letter, so each becomes NaN.
-    // Preserved deliberately: the previous regex split behaved the same way.
+  test('drops valueless letters in free text instead of storing NaN params', () => {
+    // M117 style messages have no value after each letter, so each parses to NaN.
+    // Those are no longer stored: params only ever hold finite numbers now.
     const cmd = parse('M117 Hi');
     expect(cmd.gcode).toEqual('m117');
-    expect(Object.keys(cmd.params)).toEqual(['h', 'i']);
-    expect(cmd.params.h).toBeNaN();
+    expect(cmd.params).toEqual({});
   });
 });
 
