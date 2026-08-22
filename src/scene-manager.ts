@@ -291,14 +291,8 @@ export class SceneManager {
     }
 
     this._buildVolume = new BuildVolume(value.x, value.y, value.z, value.smallGrid, this.scene);
-
-    // `new BuildVolume` always returns a truthy object, so the false side of this
-    // defensive guard is unreachable dead code.
-    /* v8 ignore next */
-    if (this._buildVolume) {
-      this.disposables.push(this._buildVolume);
-      this._buildVolume.update();
-    }
+    this.disposables.push(this._buildVolume);
+    this._buildVolume.update();
   }
 
   /**
