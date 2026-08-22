@@ -557,6 +557,46 @@ test('render as tubes creates a batched mesh with the per-tool color', () => {
   expect((meshes[0].material as any).uniforms.uColor.value.getHex()).toBe(0x00ff00);
 });
 
+test('render falls back to a configured color when a tool has none of its own', () => {
+  // T2 selects a tool index one past the single color supplied, which used to
+  // read extrusionColor[2] as undefined and throw inside renderPathsAsTubes.
+  const job = jobFromGCode(['T2', ...LAYERED_GCODE.split('\n')].join('\n'));
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const sm = createSceneManager({ renderTubes: true, extrusionColor: ['#00ff00'] }, job);
+
+  expect(() => sm.render()).not.toThrow();
+
+  const meshes = collect(sm, isBatchedMesh);
+  expect(meshes).toHaveLength(1);
+  expect((meshes[0].material as any).uniforms.uColor.value.getHex()).toBe(0x00ff00);
+  expect(warn).toHaveBeenCalledWith('No extrusionColor configured for tool index 2, falling back to another color');
+  warn.mockRestore();
+});
+
+test('render only warns once per tool index missing a configured color', () => {
+  const job = jobFromGCode(['T2', ...LAYERED_GCODE.split('\n')].join('\n'));
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const sm = createSceneManager({ renderTubes: true, extrusionColor: ['#00ff00'] }, job);
+
+  sm.render();
+  sm.render();
+
+  expect(warn).toHaveBeenCalledTimes(1);
+  warn.mockRestore();
+});
+
+test('render falls back to the default extrusion color when no colors are configured at all', () => {
+  const job = jobFromGCode(['T2', ...LAYERED_GCODE.split('\n')].join('\n'));
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const sm = createSceneManager({ renderTubes: true, extrusionColor: [] }, job);
+
+  expect(() => sm.render()).not.toThrow();
+
+  const meshes = collect(sm, isBatchedMesh);
+  expect((meshes[0].material as any).uniforms.uColor.value.getHex()).toBe(SceneManager.defaultExtrusionColor.getHex());
+  warn.mockRestore();
+});
+
 test('paths too short for a tube geometry are skipped', () => {
   const job = jobFromGCode(LAYERED_GCODE);
   const stub = new Path(PathType.Extrusion);
