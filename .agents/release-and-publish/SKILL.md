@@ -110,8 +110,9 @@ headline of the release. The theme is flavour — keep it short, evocative, and
 tied to what actually shipped. Past releases set the tone:
 `v2.18.0 - Summer Time 🏖️`, `v2.17.0 🚀 Extrusion geometry 🚀`.
 
-Do NOT just pick one. **Read the release's changes and suggest three title
-options** for the user to choose from, each with a different angle, e.g.:
+Never choose the title yourself. **Read the release's changes, suggest three
+title options, then STOP and ask the user to pick one** before you finalize or
+publish anything. Give each option a different angle, e.g.:
 
 - **Headline feature** — name the biggest new capability
   (`v3.1.0 🚀 Faster tubes 🚀`).
@@ -120,9 +121,11 @@ options** for the user to choose from, each with a different angle, e.g.:
 - **Plain / descriptive** — understated, emoji as a light accent
   (`v3.1.0 ✨ Performance & polish`).
 
-Present the three, briefly note what each leans on, and let the user pick or
-remix. Match the emoji to the content (🚀 perf, 🐛 fixes, 🎨 rendering, 🧹
-cleanup, 📦 deps) rather than sprinkling them randomly.
+Present the three as a numbered list, briefly note what each leans on, and
+explicitly invite the user to pick a number or remix their own. **Wait for their
+choice — do not proceed to Step 4 (publish) until they have picked a title.**
+Match the emoji to the content (🚀 perf, 🐛 fixes, 🎨 rendering, 🧹 cleanup,
+📦 deps) rather than sprinkling them randomly.
 
 **Body:**
 
