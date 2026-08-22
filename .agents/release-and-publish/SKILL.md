@@ -12,39 +12,44 @@ Discord (`@everyone`)**, so write them carefully.
 
 ## How publishing is wired (read this before releasing)
 
-- `.github/workflows/npm-publish.yml` runs on `release: [released]` → builds,
-  tests, and runs `npm publish` to npmjs.
-- `.github/workflows/announce-release-in-discord.yml` also runs on
-  `release: [released]` → posts the release body to Discord.
+There is **one path for every release**: publish a GitHub Release. Stable and
+prerelease builds both go through it — the only difference is the version number.
+
+- `.github/workflows/npm-publish.yml` runs on `release: [published]` → builds,
+  tests, and runs `npm publish`. It derives the npm **dist-tag from the version
+  in `package.json`**: a plain version (`3.1.0`) publishes to `latest`; a
+  prerelease version (`3.1.0-alpha.1`) publishes to its prerelease id (`alpha`).
+- `.github/workflows/announce-release-in-discord.yml` runs on
+  `release: [released]` → posts the release body to Discord. Note this uses
+  `released`, **not** `published`, so **only stable releases ping Discord
+  `@everyone`** — prereleases publish to npm silently. That's intentional.
 - `.github/workflows/firebase-hosting-merge.yml` runs on **push to `develop`** →
   deploys the demo to https://gcode-preview.web.app (`predeploy` + `typedoc`).
 
-> ⚠️ **The `released` event only fires for a normal (non-prerelease) Release.**
-> If you tick "Set as a pre-release", GitHub fires `prereleased` instead, so
-> **npm-publish will NOT run**. Stable releases must be published as a normal
-> release. Alpha/prerelease builds go through a different path (see below).
-
-### Alpha / prerelease channel
-
-Alpha builds are published by pushing to the **`alpha` branch**, which triggers
-`.github/workflows/npm-publish-alpha.yml` → `npm publish --tag alpha`. Do **not**
-try to publish an alpha via a GitHub Release — use the branch.
+> 💡 **The version number is the single source of truth for the npm tag.** You
+> never pass `--tag` by hand. Bump to a plain version for a stable release, or a
+> `-alpha.N` version for an alpha, and the workflow does the rest. (There is no
+> separate `alpha` branch anymore — everything ships through a GitHub Release.)
 
 ## Step 1 — Bump the version
 
-From `develop`, run one of:
+From `develop`, run the script that matches the kind of release:
 
 ```bash
-npm run version:minor   # or version:patch
+npm run version:minor   # stable minor  -> 3.1.0   -> npm tag: latest
+npm run version:patch   # stable patch  -> 3.0.1   -> npm tag: latest
+npm run version:alpha   # alpha bump    -> 3.1.0-alpha.1 / .2 / ... -> npm tag: alpha
 ```
 
-This runs the `preversion` gate first (`typeCheck` + `test:coverage` + `lint`) —
+Each runs the `preversion` gate first (`typeCheck` + `test:coverage` + `lint`) —
 if any of those fail, fix them before continuing. On success it bumps the
 `version` in `package.json`, commits, and creates a matching git tag (e.g.
-`v3.1.0`).
+`v3.1.0` or `v3.1.0-alpha.1`).
 
-There is no `version:major` script; for a major bump run `npm version major`
-directly (still runs `preversion`).
+`version:alpha` runs `npm version prerelease --preid=alpha`: from a stable
+version it starts a new `-alpha.0` line, and from an existing alpha it increments
+the alpha counter. There is no `version:major` script; for a major bump run
+`npm version major` directly (still runs `preversion`).
 
 ## Step 2 — Push and verify the demo
 
@@ -72,21 +77,27 @@ recent releases use curated, human-readable sections.
 
 ## Step 4 — Publish the release
 
-Once the notes are ready, publish it as a **normal release** (this is what fires
-npm-publish + Discord):
+Once the notes are ready, publish it. Both kinds publish to npm; the flags only
+affect how GitHub labels the release and whether Discord is notified:
 
 ```bash
-gh release edit <tag> --draft=false --latest
-# or, if creating fresh:
+# Stable release — marked latest, pings Discord @everyone:
 gh release create <tag> --title "<title>" --notes-file <notes.md> --latest --verify-tag
+
+# Alpha / prerelease — marked pre-release, does NOT ping Discord:
+gh release create <tag> --title "<title>" --notes-file <notes.md> --prerelease --verify-tag
 ```
 
-Do NOT pass `--prerelease` for a stable release (see the warning above).
+The npm dist-tag comes from the version number, not these flags — a
+`-alpha.N` version always lands on the `alpha` tag even though the publish
+happens via a GitHub Release. Mark alpha releases `--prerelease` so GitHub shows
+them correctly and Discord stays quiet.
 
 After publishing, confirm:
-- The **Node.js Package** workflow (npm-publish) went green and the new version
-  is live on https://www.npmjs.com/package/gcode-preview.
-- The Discord announcement posted.
+- The **Node.js Package** workflow (npm-publish) went green and the version is
+  live on https://www.npmjs.com/package/gcode-preview under the expected tag
+  (`npm view gcode-preview dist-tags`).
+- For a stable release, the Discord announcement posted.
 
 ## Release notes template
 
@@ -134,7 +145,7 @@ Notes on the template:
 
 ## Notes
 
-- `PUBLISHING.md` is partially stale (it mentions merging into a `releases`
-  branch and TODO example deploys). The workflows above are the source of truth:
-  a `develop` push deploys the demo and a published GitHub Release publishes to
-  npm. The `releases` branch step is not required by any current workflow.
+- The workflows above are the source of truth: a `develop` push deploys the
+  demo, and a published GitHub Release publishes to npm (tag derived from the
+  version). Neither a `releases` branch nor an `alpha` branch is involved — those
+  older paths have been retired.
