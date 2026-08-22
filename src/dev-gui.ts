@@ -42,6 +42,7 @@ class DevGUI {
 
     this.gui = new GUI();
     this.gui.title('Dev info');
+    this.gui.close(); // start collapsed, so it stays out of the way until it's needed
 
     this.setup();
   }
