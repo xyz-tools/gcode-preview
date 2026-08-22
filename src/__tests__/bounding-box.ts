@@ -57,6 +57,51 @@ describe('BoundingBox', () => {
     });
   });
 
+  describe('non-finite coordinates', () => {
+    it('a NaN coordinate does not make the box valid', () => {
+      const bbox = new BoundingBox();
+      bbox.update(NaN, 5, 5);
+      expect(bbox.isValid).toBe(false);
+      expect(bbox.size).toBeNull();
+      expect(bbox.center).toBeNull();
+      expect(bbox.corners).toBeNull();
+    });
+
+    it('a NaN coordinate does not poison an already-valid box', () => {
+      const bbox = new BoundingBox();
+      bbox.update(1, 2, 3);
+      bbox.update(NaN, 10, 10);
+      expect(bbox.isValid).toBe(true);
+      expect(bbox.size).toMatchObject({ x: 0, y: 0, z: 0 });
+      expect(bbox.center).toMatchObject({ x: 1, y: 2, z: 3 });
+    });
+
+    it('rejects a point with a NaN y or z coordinate', () => {
+      const yBox = new BoundingBox();
+      yBox.update(1, NaN, 2);
+      expect(yBox.isValid).toBe(false);
+
+      const zBox = new BoundingBox();
+      zBox.update(1, 2, NaN);
+      expect(zBox.isValid).toBe(false);
+    });
+
+    it('an Infinity coordinate is rejected too', () => {
+      const xBox = new BoundingBox();
+      xBox.update(Infinity, 0, 0);
+      expect(xBox.isValid).toBe(false);
+
+      const yBox = new BoundingBox();
+      yBox.update(0, Infinity, 0);
+      expect(yBox.isValid).toBe(false);
+      expect(yBox.size).toBeNull();
+
+      const zBox = new BoundingBox();
+      zBox.update(0, 0, -Infinity);
+      expect(zBox.isValid).toBe(false);
+    });
+  });
+
   describe('corners', () => {
     it('returns null before any point has been added', () => {
       const bbox = new BoundingBox();
