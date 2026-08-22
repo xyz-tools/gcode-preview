@@ -303,18 +303,12 @@ footer {
 
 /* The dev GUI and stats panels are created by gcode-preview as soon as the
    preview is constructed, before the Vue app has applied the dev mode setting.
-   Keep them hidden until the app opts in, so they don't flash on page load. */
-.lil-gui.root,
-.stats {
-  display: none !important;
-}
-
-body.dev-mode .lil-gui.root {
-  display: flex !important;
-}
-
-body.dev-mode .stats {
-  display: block !important;
+   Keep them hidden until the app opts in, so they don't flash on page load.
+   Selecting on the body is what makes this outweigh lil-gui's own stylesheet,
+   which is injected after this one. */
+body:not(.dev-mode) .lil-gui.root,
+body:not(.dev-mode) .stats {
+  display: none;
 }
 
 .glass {
