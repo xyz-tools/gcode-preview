@@ -1,5 +1,28 @@
 import { BufferAttribute, BufferGeometry, Vector2, Vector3 } from 'three';
 
+// The ring of sines and cosines depends only on radialSegments, and in
+// practice every geometry is built with the same value, so the tables are
+// cached at module level and shared across all ExtrusionGeometry instances.
+// The cached arrays are shared: they must only ever be read, never mutated.
+const ringCache = new Map<number, { sin: Float64Array; cos: Float64Array }>();
+
+function ringTrig(radialSegments: number): { sin: Float64Array; cos: Float64Array } {
+  let ring = ringCache.get(radialSegments);
+  if (ring) return ring;
+
+  const sin = new Float64Array(radialSegments + 1);
+  const cos = new Float64Array(radialSegments + 1);
+  for (let j = 0; j <= radialSegments; j++) {
+    const angle = (j / radialSegments) * Math.PI * 2;
+    sin[j] = Math.sin(angle);
+    cos[j] = -Math.cos(angle);
+  }
+
+  ring = { sin, cos };
+  ringCache.set(radialSegments, ring);
+  return ring;
+}
+
 /**
  * A geometry class for extruding 3D paths into volumetric shapes
  */
@@ -73,17 +96,8 @@ class ExtrusionGeometry extends BufferGeometry {
     const uvCount = points.length * ringSize;
     const indexCount = Math.max(0, points.length - 1) * radialSegments * 6;
 
-    // The ring of sines and cosines depends only on j, which runs from 0 to
-    // radialSegments, so it is the same for every point on the path. Computing
-    // it once keeps a large model from making a million trig calls to produce a
-    // handful of distinct values.
-    const ringSin = new Float64Array(radialSegments + 1);
-    const ringCos = new Float64Array(radialSegments + 1);
-    for (let j = 0; j <= radialSegments; j++) {
-      const angle = (j / radialSegments) * Math.PI * 2;
-      ringSin[j] = Math.sin(angle);
-      ringCos[j] = -Math.cos(angle);
-    }
+    // Shared, read-only trig tables (see ringCache above); do not mutate.
+    const { sin: ringSin, cos: ringCos } = ringTrig(radialSegments);
 
     const vertices = new Float32Array(vertexCount * 3);
     const normals = new Float32Array(vertexCount * 3);

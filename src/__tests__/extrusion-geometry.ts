@@ -127,6 +127,35 @@ test('ExtrusionGeometry produces the same ring for every point on the path', () 
   expect(secondRing).toEqual(firstRing);
 });
 
+test('ExtrusionGeometry produces identical rings across instances', () => {
+  // The trig table is cached at module level and shared between instances, so
+  // two geometries with the same radialSegments must produce identical rings.
+  const radialSegments = 4;
+  const ring = (radialSegments + 1) * 3;
+  const points = [new Vector3(0, 0, 0), new Vector3(1, 0, 0)];
+  const first = new ExtrusionGeometry(points, 0.6, 0.2, radialSegments);
+  const second = new ExtrusionGeometry(points, 0.6, 0.2, radialSegments);
+
+  const firstRing = Array.from(first.attributes.normal.array.slice(0, ring));
+  const secondRing = Array.from(second.attributes.normal.array.slice(0, ring));
+
+  expect(secondRing).toEqual(firstRing);
+});
+
+test('ExtrusionGeometry builds a distinct ring per radialSegments value', () => {
+  // A different radialSegments takes the cache-miss path and yields its own
+  // table rather than reusing another entry.
+  const points = [new Vector3(0, 0, 0), new Vector3(1, 0, 0)];
+  const coarse = new ExtrusionGeometry(points, 0.6, 0.2, 3);
+  const fine = new ExtrusionGeometry(points, 0.6, 0.2, 5);
+
+  expect(coarse.attributes.normal.count).toBe((points.length + 1) * 4);
+  expect(fine.attributes.normal.count).toBe((points.length + 1) * 6);
+  expect(Array.from(coarse.attributes.normal.array.slice(0, 12))).not.toEqual(
+    Array.from(fine.attributes.normal.array.slice(0, 12))
+  );
+});
+
 test('ExtrusionGeometry orients each corner independently', () => {
   // The corner vectors are scratch objects shared between points, so stale
   // state from one point leaking into the next would show up as a corner
