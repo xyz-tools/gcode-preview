@@ -279,7 +279,14 @@ export class Parser {
         gcode = letter.toLowerCase() + Number(value);
         isFirstWord = false;
       } else {
-        params[letter.toLowerCase()] = parseFloat(value);
+        // Validate at the boundary: `X`, `Xabc` and overflowing digit runs parse to
+        // NaN/Infinity. Drop the param instead of storing a poisoned value -- an absent
+        // param is handled everywhere downstream (`x ?? state.x`), a NaN is not: it would
+        // latch into the job state and from there into every later vertex.
+        const parsed = parseFloat(value);
+        if (Number.isFinite(parsed)) {
+          params[letter.toLowerCase()] = parsed;
+        }
       }
 
       i = end;

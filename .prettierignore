@@ -8,3 +8,4 @@ vue.esm-browser.js
 examples/react-typescript-demo/build
 demo/lib
 demo/js/vue.esm-browser.prod.js
+.claude

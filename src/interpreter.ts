@@ -133,6 +133,8 @@ export class Interpreter {
   g2(command: GCodeCommand, job: Job): void {
     const { x, y, z, e } = command.params;
     let { i, j, r } = command.params;
+    // Set when the arc cannot be described at all, so only the endpoint is emitted.
+    let arcIsDegenerate = false;
     const { state } = job;
 
     const cw = command.gcode === 'g2';
@@ -158,23 +160,24 @@ export class Interpreter {
 
       const dSquared = Math.pow(deltaX, 2) + Math.pow(deltaY, 2);
       const hSquared = Math.pow(r, 2) - dSquared / 4;
-      // if (dSquared == 0 || hSquared < 0) {
-      //   return { position: { x: x, y: z, z: y }, points: [] }; //we'll abort the render and move te position to the new position.
-      // }
-      let hDivD = Math.sqrt(hSquared / dSquared);
 
-      // Ref RRF DoArcMove for details
-      if ((cw && r < 0.0) || (!cw && r > 0.0)) {
-        hDivD = -hDivD;
+      // R mode cannot describe a whole circle: with start == end the centre is
+      // undefined, and hSquared / dSquared divides by zero, which used to make i/j NaN
+      // and poison every derived value. Skip the arc and move straight to the endpoint.
+      // (hSquared < 0 needs no guard: r was just clamped to minR, so it cannot go
+      // negative.) This replaces the guard that was commented out here.
+      if (dSquared === 0) {
+        arcIsDegenerate = true;
+      } else {
+        let hDivD = Math.sqrt(hSquared / dSquared);
+
+        // Ref RRF DoArcMove for details
+        if ((cw && r < 0.0) || (!cw && r > 0.0)) {
+          hDivD = -hDivD;
+        }
+        i = deltaX / 2 + deltaY * hDivD;
+        j = deltaY / 2 - deltaX * hDivD;
       }
-      i = deltaX / 2 + deltaY * hDivD;
-      j = deltaY / 2 - deltaX * hDivD;
-      // } else {
-      //     //the radial point is an offset from the current position
-      //     ///Need at least on point
-      //     if (i == 0 && j == 0) {
-      //         return { position: { x: x, y: y, z: z }, points: [] }; //we'll abort the render and move te position to the new position.
-      //     }
     }
 
     const wholeCircle = state.x == x && state.y == y;
@@ -204,7 +207,15 @@ export class Interpreter {
     let arcAngleIncrement = totalArc / totalSegments;
     arcAngleIncrement *= cw ? -1 : 1;
 
-    const zDist = state.z - (z || state.z);
+    // target - current. This was the other way round, so a helical arc climbing
+    // Z1 -> Z3 walked its intermediate points down to Z-0.97 and only landed on Z3 at
+    // the endpoint, leaving a visible spike in the rendered path.
+    //
+    // `??` not `||`: Z0 is a legitimate target, and `|| state.z` turned a descent to
+    // Z0 into a flat arc at the old height. This matches the endpoint assignment
+    // below, and is only safe because the parser now drops non-finite params -- `||`
+    // was rejecting NaN here by accident, and `??` does not.
+    const zDist = (z ?? state.z) - state.z;
     const zStep = zDist / totalSegments;
 
     // get points for the arc
@@ -214,20 +225,31 @@ export class Interpreter {
     // calculate segments
     let currentAngle = arcCurrentAngle;
 
-    for (let moveIdx = 0; moveIdx < totalSegments - 1; moveIdx++) {
-      currentAngle += arcAngleIncrement;
-      px = centerX + arcRadius * Math.cos(currentAngle);
-      py = centerY + arcRadius * Math.sin(currentAngle);
-      pz += zStep;
-      currentPath.addPoint(px, py, pz);
-      if (pathType === PathType.Extrusion) {
-        job.boundingBox.update(px, py, pz);
+    // A degenerate arc leaves totalSegments non-finite even though every param was
+    // finite: an R-mode whole circle divides by dSquared === 0, and offsets near
+    // Number.MAX_VALUE overflow arcRadius. NaN already skipped the loop (NaN - 1
+    // fails the condition), but Infinity ran until the vertex array hit its length
+    // limit and threw, aborting the whole job. Emit no intermediate points in either
+    // case and fall through to the endpoint below.
+    if (!arcIsDegenerate && Number.isFinite(totalSegments)) {
+      for (let moveIdx = 0; moveIdx < totalSegments - 1; moveIdx++) {
+        currentAngle += arcAngleIncrement;
+        px = centerX + arcRadius * Math.cos(currentAngle);
+        py = centerY + arcRadius * Math.sin(currentAngle);
+        pz += zStep;
+        currentPath.addPoint(px, py, pz);
+        if (pathType === PathType.Extrusion) {
+          job.boundingBox.update(px, py, pz);
+        }
       }
     }
 
-    state.x = x || state.x;
-    state.y = y || state.y;
-    state.z = z || state.z;
+    // `??` not `||`: an arc ending on X0, Y0 or Z0 used to silently keep the previous
+    // coordinate. Safe now that the parser drops non-finite params -- `||` was also
+    // rejecting NaN here by accident, which `??` does not do.
+    state.x = x ?? state.x;
+    state.y = y ?? state.y;
+    state.z = z ?? state.z;
 
     currentPath.addPoint(state.x, state.y, state.z);
     if (pathType === PathType.Extrusion) {
