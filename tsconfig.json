@@ -12,7 +12,10 @@
     "paths": {
       "three": ["node_modules/three/src/Three"]
     },
-    "typeRoots": ["types", "node_modules/@types"]
+    // @webgpu/types supplies the ambient GPUTexture global that
+    // @types/three references from ExternalTexture.d.ts (three 0.180+).
+    // It is never imported, so it looks unused -- do not remove.
+    "typeRoots": ["types", "node_modules/@types", "node_modules/@webgpu"]
   },
   "files": ["src/gcode-preview.ts"]
 }
