@@ -105,8 +105,24 @@ The title and body appear on the [Releases page](https://github.com/xyz-tools/gc
 and are what Discord broadcasts. Keep the body user-facing — these are read by
 people deciding whether to upgrade, not just contributors.
 
-**Title:** `v<version>` optionally with a short theme, e.g.
-`v2.18.0 - Summer Time` or `v3.1.0 🚀 Faster tubes 🚀`.
+**Title:** `v<version>` plus a short **theme with emojis** that captures the
+headline of the release. The theme is flavour — keep it short, evocative, and
+tied to what actually shipped. Past releases set the tone:
+`v2.18.0 - Summer Time 🏖️`, `v2.17.0 🚀 Extrusion geometry 🚀`.
+
+Do NOT just pick one. **Read the release's changes and suggest three title
+options** for the user to choose from, each with a different angle, e.g.:
+
+- **Headline feature** — name the biggest new capability
+  (`v3.1.0 🚀 Faster tubes 🚀`).
+- **Theme / mood** — a seasonal or playful hook, like the Summer Time release
+  (`v3.1.0 — Spring Cleaning 🧹`).
+- **Plain / descriptive** — understated, emoji as a light accent
+  (`v3.1.0 ✨ Performance & polish`).
+
+Present the three, briefly note what each leans on, and let the user pick or
+remix. Match the emoji to the content (🚀 perf, 🐛 fixes, 🎨 rendering, 🧹
+cleanup, 📦 deps) rather than sprinkling them randomly.
 
 **Body:**
 
