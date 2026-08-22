@@ -1,4 +1,7 @@
-# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
+# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests.
+# On pull requests it runs a single, fast check against the latest supported three.js version.
+# The full matrix across all supported three.js versions only runs once changes land on develop/releases/v3.x
+# (i.e. after a PR is merged), to keep CI usage down on every PR push.
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-nodejs-with-github-actions
 
 name: Runs All Unit tests
@@ -16,8 +19,26 @@ on:
       - v3.x
 
 jobs:
-  build:
+  pr-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
 
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: "npm"
+      - run: npm ci
+      - name: Install three.js 0.185.1
+        run: npm install three@0.185.1 @types/three@0.185.4 --no-save
+      - run: npm run build
+      - run: npm run test:coverage
+      - run: npm run typeCheck
+      - run: npm run lint
+
+  matrix:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     strategy:
