@@ -23,7 +23,6 @@ export const app = (window.app = createApp({
     const model = ref(null);
     const dragging = ref(false);
     const settings = ref(Object.assign({}, defaultSettings));
-    const enableDevMode = ref(false);
     const drawBoundingBox = ref(false);
 
     watch(selectedPreset, (preset) => {
@@ -161,14 +160,6 @@ export const app = (window.app = createApp({
       updateUI();
     };
 
-    // The dev GUI and stats panels are created (and recreated on preset change) by
-    // GCodePreview itself. Toggling a class on the body lets the stylesheet keep them
-    // hidden until the app enables dev mode, so they never flash before Vue has mounted.
-    function applyDevMode(enabled) {
-      document.body.classList.toggle('dev-mode', enabled);
-    }
-    watch(enableDevMode, applyDevMode, { immediate: true });
-
     onMounted(async () => {
       await selectPreset(defaultPreset);
 
@@ -259,7 +250,6 @@ export const app = (window.app = createApp({
       dragging,
       settings,
       loadProgressive,
-      enableDevMode,
       drawBoundingBox,
       selectTab,
       addColor,
