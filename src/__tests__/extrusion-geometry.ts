@@ -86,3 +86,43 @@ test('ExtrusionGeometry widens its index buffer when the vertex count needs it',
   // and the widest index it wrote is still addressable
   expect(Math.max(...Array.from(wide.index.array.slice(-6)))).toBeLessThan(wide.attributes.position.count);
 });
+
+test('ExtrusionGeometry walks the ring in the order the trig dictates', () => {
+  // Four radial segments land on the axes, so the ring around a path running
+  // along +X is exact: up, left, down, right, back to the start. Any drift in
+  // the precomputed sin/cos table shows up here immediately.
+  const points = [new Vector3(0, 0, 0), new Vector3(1, 0, 0)];
+  const geometry = new ExtrusionGeometry(points, 2, 2, 4);
+
+  const round = (n: number) => {
+    const rounded = Math.round(n * 1e6) / 1e6;
+    return rounded === 0 ? 0 : rounded; // collapse -0
+  };
+  const firstRing = Array.from(geometry.attributes.normal.array.slice(0, 15)).map(round);
+
+  expect(firstRing).toEqual([0, 0, 1, 0, 1, 0, 0, 0, -1, 0, -1, 0, 0, 0, 1]);
+});
+
+test('ExtrusionGeometry keeps every ring normal a unit vector', () => {
+  const points = [new Vector3(0, 0, 0), new Vector3(1, 2, 3), new Vector3(4, 4, 4)];
+  const geometry = new ExtrusionGeometry(points, 0.6, 0.2, 8);
+
+  const normals = geometry.attributes.normal.array;
+  for (let i = 0; i < normals.length; i += 3) {
+    expect(Math.hypot(normals[i], normals[i + 1], normals[i + 2])).toBeCloseTo(1, 5);
+  }
+});
+
+test('ExtrusionGeometry produces the same ring for every point on the path', () => {
+  // Every point re-uses the same table, so a straight path repeats one ring.
+  const radialSegments = 4;
+  const ring = (radialSegments + 1) * 3;
+  const points = [new Vector3(0, 0, 0), new Vector3(1, 0, 0), new Vector3(2, 0, 0)];
+  const geometry = new ExtrusionGeometry(points, 0.6, 0.2, radialSegments);
+
+  const normals = geometry.attributes.normal.array;
+  const firstRing = Array.from(normals.slice(0, ring));
+  const secondRing = Array.from(normals.slice(ring, ring * 2));
+
+  expect(secondRing).toEqual(firstRing);
+});
