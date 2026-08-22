@@ -394,6 +394,24 @@ describe('malformed coordinates through the whole pipeline', () => {
     expect(Math.max(...zs)).toBeGreaterThan(1);
   });
 
+  test('an arc descending to Z0 spreads the drop across its segments', () => {
+    // `z || state.z` made a Z0 target fall back to the current height, so zDist was 0
+    // and every intermediate point sat flat at Z5 before the endpoint snapped to Z0.
+    const zs = zsOf(tailVertices(['G1 X10 Y10 Z5 E1'], 'G2 X20 Y10 Z0 I5 J0 E1'));
+
+    expect(zs.some((value) => value > 0 && value < 5)).toBe(true);
+    expect(zs.every((value) => Number.isFinite(value))).toBe(true);
+  });
+
+  test('a malformed Z on an arc leaves the intermediate points finite', () => {
+    // `??` propagates NaN where `||` absorbed it, so this relies on the parser
+    // dropping the param entirely. Guards the coupling between the two changes.
+    const zs = zsOf(tailVertices(['G1 X10 Y10 Z5 E1'], 'G2 X20 Y10 Zabc I5 J0 E1'));
+
+    expect(zs.every((value) => Number.isFinite(value))).toBe(true);
+    expect(zs.every((value) => value === 5)).toBe(true);
+  });
+
   test('a degenerate R-mode whole circle emits the endpoint and no arc', () => {
     // start === end in R mode leaves dSquared === 0, so the centre is undefined.
     // The arc is skipped deliberately rather than rendered from NaN centres.

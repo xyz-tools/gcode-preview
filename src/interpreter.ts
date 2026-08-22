@@ -210,7 +210,12 @@ export class Interpreter {
     // target - current. This was the other way round, so a helical arc climbing
     // Z1 -> Z3 walked its intermediate points down to Z-0.97 and only landed on Z3 at
     // the endpoint, leaving a visible spike in the rendered path.
-    const zDist = (z || state.z) - state.z;
+    //
+    // `??` not `||`: Z0 is a legitimate target, and `|| state.z` turned a descent to
+    // Z0 into a flat arc at the old height. This matches the endpoint assignment
+    // below, and is only safe because the parser now drops non-finite params -- `||`
+    // was rejecting NaN here by accident, and `??` does not.
+    const zDist = (z ?? state.z) - state.z;
     const zStep = zDist / totalSegments;
 
     // get points for the arc
