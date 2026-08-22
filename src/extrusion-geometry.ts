@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Float32BufferAttribute, Vector2, Vector3 } from 'three';
+import { BufferAttribute, BufferGeometry, Vector2, Vector3 } from 'three';
 
 /**
  * A geometry class for extruding 3D paths into volumetric shapes
@@ -84,9 +84,9 @@ class ExtrusionGeometry extends BufferGeometry {
     // build geometry
 
     this.setIndex(new BufferAttribute(indices, 1));
-    this.setAttribute('position', new Float32BufferAttribute(vertices, 3));
-    this.setAttribute('normal', new Float32BufferAttribute(normals, 3));
-    this.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
+    this.setAttribute('position', new BufferAttribute(vertices, 3));
+    this.setAttribute('normal', new BufferAttribute(normals, 3));
+    this.setAttribute('uv', new BufferAttribute(uvs, 2));
 
     // functions
 
