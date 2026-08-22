@@ -126,3 +126,36 @@ test('ExtrusionGeometry produces the same ring for every point on the path', () 
 
   expect(secondRing).toEqual(firstRing);
 });
+
+test('ExtrusionGeometry orients each corner independently', () => {
+  // The corner vectors are scratch objects shared between points, so stale
+  // state from one point leaking into the next would show up as a corner
+  // oriented like its predecessor. This path turns 90 degrees, so the ring
+  // before the turn and the ring after it must not match.
+  const radialSegments = 4;
+  const ring = (radialSegments + 1) * 3;
+  const points = [new Vector3(0, 0, 0), new Vector3(2, 0, 0), new Vector3(2, 2, 0), new Vector3(2, 2, 2)];
+  const geometry = new ExtrusionGeometry(points, 0.6, 0.2, radialSegments);
+
+  const normals = geometry.attributes.normal.array;
+  const ringAt = (i: number) => Array.from(normals.slice(i * ring, (i + 1) * ring));
+
+  expect(ringAt(0)).not.toEqual(ringAt(1));
+  expect(ringAt(1)).not.toEqual(ringAt(2));
+  expect(ringAt(2)).not.toEqual(ringAt(3));
+});
+
+test('ExtrusionGeometry keeps a straight run consistent across points', () => {
+  // The mirror of the test above: with no change in direction, sharing the
+  // scratch vectors must still produce the same ring at every point.
+  const radialSegments = 4;
+  const ring = (radialSegments + 1) * 3;
+  const points = [new Vector3(0, 0, 0), new Vector3(1, 0, 0), new Vector3(2, 0, 0), new Vector3(3, 0, 0)];
+  const geometry = new ExtrusionGeometry(points, 0.6, 0.2, radialSegments);
+
+  const normals = geometry.attributes.normal.array;
+  const ringAt = (i: number) => Array.from(normals.slice(i * ring, (i + 1) * ring));
+
+  expect(ringAt(1)).toEqual(ringAt(0));
+  expect(ringAt(2)).toEqual(ringAt(0));
+});
