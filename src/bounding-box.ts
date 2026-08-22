@@ -13,6 +13,7 @@ export class BoundingBox {
   public update(x: number, y: number, z: number): void {
     // Malformed gcode can yield NaN params; a partial point would corrupt the extremes, so reject the whole point.
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+      console.error(`BoundingBox.update: ignoring non-finite point (${x}, ${y}, ${z})`);
       return;
     }
     this.min.x = Math.min(this.min.x, x);
