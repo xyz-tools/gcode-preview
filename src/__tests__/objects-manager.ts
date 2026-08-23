@@ -227,6 +227,32 @@ describe('ObjectsManager', () => {
 
       expect(objectsManager.materials.length).toBe(initialMaterialCount + 1);
     });
+
+    test('tools sharing a color get their own materials, so recoloring one leaves the other alone', () => {
+      const color = new Color(0x0000ff);
+      objectsManager.renderExtrusionTubes([createTestPath()], color, 0);
+      objectsManager.renderExtrusionTubes([createTestPath()], color, 1);
+
+      expect(objectsManager.materials[0]).not.toBe(objectsManager.materials[1]);
+
+      objectsManager.setExtrusionColor(new Color(0x00ff00), 0);
+
+      expect(objectsManager.materials[0].uniforms.uColor.value.getHex()).toBe(0x00ff00);
+      expect(objectsManager.materials[1].uniforms.uColor.value.getHex()).toBe(0x0000ff);
+    });
+
+    test('a fresh manager does not resurrect materials from a disposed one', () => {
+      const first = new ObjectsManager(new Scene(), 0.4, 0.2, 0.6);
+      first.renderExtrusionTubes([createTestPath()], new Color(0x123456));
+      const firstMaterial = first.materials[0];
+      first.dispose();
+
+      const second = new ObjectsManager(new Scene(), 0.4, 0.2, 0.6);
+      second.renderExtrusionTubes([createTestPath()], new Color(0x123456));
+
+      expect(second.materials[0]).not.toBe(firstMaterial);
+      second.dispose();
+    });
   });
 
   describe('dispose', () => {

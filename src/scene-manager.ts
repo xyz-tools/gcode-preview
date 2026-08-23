@@ -463,8 +463,7 @@ export class SceneManager {
    * Updates the clipping planes for the 3D preview based on the start and end layers.
    *
    * This method calculates the minimum and maximum Z values from the specified start and end layers.
-   * If the start layer is not defined, the minimum Z value defaults to 0.
-   * If the end layer is not defined, the maximum Z value defaults to Infinity.
+   * An unset start or end layer leaves that side of the range unbounded.
    *
    * It then updates the clipping planes for shader materials and line clipping using these Z values.
    *
@@ -472,7 +471,10 @@ export class SceneManager {
   updateClippingPlanes() {
     const startLayer = this.job.layers[this._startLayer - 1];
     const endLayer = this.job.layers[this._endLayer - 1];
-    const minZ = startLayer?.z - startLayer?.height;
+    // an unset bound must stay undefined: subtracting through `?.` would produce
+    // NaN, which passes the !== undefined guards and ends up in plane constants
+    // and shader uniforms, where NaN comparisons are undefined behavior in GLSL
+    const minZ = startLayer ? startLayer.z - startLayer.height : undefined;
     const maxZ = endLayer?.z;
 
     this.objectsManager.updateClippingPlanes(minZ, maxZ);
@@ -739,8 +741,9 @@ export class SceneManager {
 
   // reset parser & processing state
   clear(): void {
-    // read the dimensions off the outgoing manager before it is torn down
-    const { lineWidth, lineHeight, extrusionWidth } = this.objectsManager;
+    // read the settings off the outgoing manager before it is torn down
+    const { lineWidth, lineHeight, extrusionWidth, renderTubes, ambientLight, directionalLight, brightness } =
+      this.objectsManager;
 
     this.startLayer = undefined;
     this.endLayer = Infinity;
@@ -753,6 +756,12 @@ export class SceneManager {
     this.disposables = this.disposables.filter((d) => d !== this.objectsManager);
     this.objectsManager.dispose();
     this.objectsManager = this.createObjectsManager(lineWidth, lineHeight, extrusionWidth);
+    // assign the fields directly: the fresh manager has no materials or geometry
+    // yet, so the setters' uniform writes and rebuild requests have nothing to do
+    this.objectsManager.renderTubes = renderTubes;
+    this.objectsManager.ambientLight = ambientLight;
+    this.objectsManager.directionalLight = directionalLight;
+    this.objectsManager.brightness = brightness;
   }
 
   resize(): void {

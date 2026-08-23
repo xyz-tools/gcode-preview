@@ -339,6 +339,29 @@ describe('SceneManager properties', () => {
       expect(spy).toHaveBeenCalled();
     });
 
+    test('an end-layer-only range leaves the lower bound open instead of NaN', () => {
+      sceneManager.endLayer = 1;
+
+      const planes = objectsManager(sceneManager).clippingPlanes;
+      expect(planes).toHaveLength(1);
+      expect(planes[0].constant).toBe(sceneManager.job.layers[0].z);
+    });
+
+    test('tube materials keep an open lower bound when only endLayer is set', () => {
+      const fresh = createSceneManager({ renderTubes: true });
+
+      fresh.endLayer = 1;
+
+      const materials = objectsManager(fresh).materials;
+      expect(materials.length).toBeGreaterThan(0);
+      materials.forEach((material) => {
+        expect(material.uniforms.clipMinY.value).toBe(-Infinity);
+        expect(Number.isNaN(material.uniforms.clipMaxY.value)).toBe(false);
+      });
+
+      fresh.dispose();
+    });
+
     test('singleLayerMode collapses the range onto the end layer', () => {
       sceneManager.endLayer = 2;
 
@@ -406,6 +429,20 @@ describe('SceneManager properties', () => {
       const current = objectsManager(sceneManager);
       expect(current).not.toBe(previous);
       expect(current.lineWidth).toBe(3);
+    });
+
+    test('keeps renderTubes and the lighting for the next job', () => {
+      sceneManager.renderTubes = true;
+      sceneManager.ambientLight = 0.7;
+      sceneManager.directionalLight = 0.9;
+      sceneManager.brightness = 1.1;
+
+      sceneManager.clear();
+
+      expect(sceneManager.renderTubes).toBe(true);
+      expect(sceneManager.ambientLight).toBe(0.7);
+      expect(sceneManager.directionalLight).toBe(0.9);
+      expect(sceneManager.brightness).toBe(1.1);
     });
 
     test('drops the old manager so dispose does not revisit it', () => {

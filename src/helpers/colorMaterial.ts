@@ -56,24 +56,16 @@ void main() {
 }
 `;
 
-// cachedMaterial is used to store the material so that it is only created once for every color
-export const cachedMaterials: { [color: number]: ShaderMaterial } = {};
-
-// TODO: remove the cache or add a way to clear it
-
+// Each call returns a fresh material: callers mutate the uniforms in place
+// (recoloring, clipping), so sharing instances across tools or previews would
+// let one write bleed into every mesh with the same starting color.
 export function createColorMaterial(
   color: number,
   ambient: number,
   directional: number,
   brightness: number
 ): ShaderMaterial {
-  // Check if the material for the given color is already cached
-  if (cachedMaterials[color]) {
-    return cachedMaterials[color];
-  }
-  // console.debug('createColorMaterial. not cached', color);
-
-  const material = new ShaderMaterial({
+  return new ShaderMaterial({
     vertexShader,
     fragmentShader,
     uniforms: {
@@ -85,9 +77,4 @@ export function createColorMaterial(
       clipMaxY: { value: Infinity }
     }
   });
-
-  // Cache the material
-  cachedMaterials[color] = material;
-
-  return material;
 }

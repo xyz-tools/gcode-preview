@@ -275,7 +275,7 @@ export class ObjectsManager {
     this.disposables = [];
   }
 
-  updateClippingPlanes(minZ: number, maxZ: number) {
+  updateClippingPlanes(minZ?: number, maxZ?: number) {
     this.clipMinZ = minZ;
     this.clipMaxZ = maxZ;
     this.clippingPlanes = this.createClippingPlanes(minZ, maxZ);
@@ -424,10 +424,10 @@ export class ObjectsManager {
    * @param maxZ - The maximum Z value for the clipping plane
    */
 
-  private updateClippingPlanesForShaderMaterials(minZ: number, maxZ: number) {
+  private updateClippingPlanesForShaderMaterials(minZ?: number, maxZ?: number) {
     this.materials.forEach((material) => {
-      material.uniforms.clipMinY.value = minZ;
-      material.uniforms.clipMaxY.value = maxZ;
+      material.uniforms.clipMinY.value = minZ ?? -Infinity;
+      material.uniforms.clipMaxY.value = maxZ ?? Infinity;
     });
   }
 
