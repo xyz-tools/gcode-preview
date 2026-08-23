@@ -160,7 +160,6 @@ export class GCodePreview {
     this._sceneManager = this.createSceneManager();
     // the devMode setter also creates the dev GUI, so no separate initGui() call
     this.devMode = opts?.devMode;
-    this.interpreter = new Interpreter();
 
     this.initStats();
     if (opts.droppable) makeDroppable(this);

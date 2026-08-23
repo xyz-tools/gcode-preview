@@ -42,6 +42,7 @@ describe('public API types', () => {
         | 'droppable'
         | 'keepLines'
         | 'liveRenderInterval'
+        | 'arcChordTolerance'
         // SceneManagerOptions
         | 'buildVolume'
         | 'backgroundColor'
