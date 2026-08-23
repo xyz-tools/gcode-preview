@@ -668,6 +668,36 @@ describe('SceneManager properties', () => {
       expect(spy).not.toHaveBeenCalled();
     });
 
+    test('singleLayerMode rebuilds so the lone layer is not left dimmed', () => {
+      const spy = vi.spyOn(objectsManager(sceneManager), 'reset');
+
+      sceneManager.singleLayerMode = true;
+
+      expect(spy).toHaveBeenCalled();
+    });
+
+    test('singleLayerMode skips the rebuild when the gradient is disabled', () => {
+      const fresh = createSceneManager({ disableGradient: true });
+      const spy = vi.spyOn(objectsManager(fresh), 'reset');
+
+      fresh.singleLayerMode = true;
+
+      expect(spy).not.toHaveBeenCalled();
+
+      fresh.dispose();
+    });
+
+    test('singleLayerMode skips the rebuild in tube mode', () => {
+      const fresh = createSceneManager({ renderTubes: true });
+      const spy = vi.spyOn(objectsManager(fresh), 'reset');
+
+      fresh.singleLayerMode = true;
+
+      expect(spy).not.toHaveBeenCalled();
+
+      fresh.dispose();
+    });
+
     test('endLayer follows the end layer while single layer mode is on', () => {
       sceneManager.singleLayerMode = true;
 
@@ -844,6 +874,46 @@ describe('SceneManager properties', () => {
       sceneManager.disableGradient = true;
 
       expect(sceneManager.disableGradient).toBe(true);
+    });
+
+    test('gradients the extrusion lines by default', () => {
+      const line = extrusionGroup(sceneManager).children[0] as LineSegments2;
+
+      expect((line.material as LineMaterial).vertexColors).toBe(true);
+    });
+
+    test('leaves the extrusion lines flat when disabled', () => {
+      const fresh = createSceneManager({ disableGradient: true });
+
+      const line = extrusionGroup(fresh).children[0] as LineSegments2;
+      expect((line.material as LineMaterial).vertexColors).toBe(false);
+
+      fresh.dispose();
+    });
+
+    test('rebuilds the scene so the lines pick up the change', () => {
+      const spy = vi.spyOn(objectsManager(sceneManager), 'reset');
+
+      sceneManager.disableGradient = true;
+
+      expect(spy).toHaveBeenCalled();
+    });
+
+    test('ignores a repeated value', () => {
+      const spy = vi.spyOn(objectsManager(sceneManager), 'reset');
+
+      sceneManager.disableGradient = false;
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    test('does not rebuild once the job is cleared', () => {
+      sceneManager.clear();
+      const spy = vi.spyOn(objectsManager(sceneManager), 'reset');
+
+      sceneManager.disableGradient = true;
+
+      expect(spy).not.toHaveBeenCalled();
     });
   });
 

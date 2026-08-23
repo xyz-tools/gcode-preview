@@ -55,6 +55,14 @@ export class ObjectsManager {
   extrusionWidth?: number;
   renderTubes = false;
 
+  /**
+   * Whether extrusion lines get a per-layer brightness gradient baked into their vertex colors.
+   * Only meaningful for line rendering; tubes ignore it.
+   */
+  gradientEnabled = false;
+  /** Total number of layers, used to normalize the gradient ramp */
+  layerCount = 0;
+
   /** Build volume visualization, or undefined when none is drawn */
   buildVolume?: BuildVolume;
   /** Wireframe box around the model, created lazily on first draw */
@@ -339,7 +347,7 @@ export class ObjectsManager {
     const unrenderedPaths = this.takeUnrendered(paths);
     if (unrenderedPaths.length === 0) return;
 
-    this.travelMovesGroup.add(this.renderPathsAsLines(unrenderedPaths, color));
+    this.travelMovesGroup.add(this.renderPathsAsLines(unrenderedPaths, color, false));
   }
 
   /**
@@ -359,7 +367,7 @@ export class ObjectsManager {
     const unrenderedPaths = this.takeUnrendered(paths);
     if (unrenderedPaths.length === 0) return;
 
-    const lines = this.renderPathsAsLines(unrenderedPaths, color);
+    const lines = this.renderPathsAsLines(unrenderedPaths, color, this.gradientEnabled && this.layerCount > 0);
     lines.userData.toolIndex = toolIndex;
     this.extrusionsGroup.add(lines);
   }
@@ -388,7 +396,8 @@ export class ObjectsManager {
 
     const object = this.renderTubes
       ? this.renderPathsAsTubes(unrenderedPaths, this.createHighlightMaterial(color))
-      : this.renderPathsAsLines(unrenderedPaths, color);
+      : // highlights draw in their exact color and must win, so never gradient them
+        this.renderPathsAsLines(unrenderedPaths, color, false);
     object.userData.highlight = true;
     this.extrusionsGroup.add(object);
   }
@@ -510,17 +519,66 @@ export class ObjectsManager {
     this.updateLineClipping();
   }
 
-  private renderPathsAsLines(paths: Path[], color: Color): LineSegments2 {
+  private renderPathsAsLines(paths: Path[], color: Color, gradient: boolean): LineSegments2 {
     const material = new LineMaterial({
       color: Number(color.getHex()),
       linewidth: this.lineWidth,
-      clippingPlanes: this.clippingPlanes
+      clippingPlanes: this.clippingPlanes,
+      // the gradient rides on vertex colors, multiplied against the base color, so
+      // recoloring stays a one-line material.color write and the ramp reapplies itself
+      vertexColors: gradient
     });
 
     const geometry = new LineSegmentsGeometry().setPositions(this.packLineVertices(paths));
+    if (gradient) geometry.setColors(this.packLineColors(paths));
     this.disposables.push(material);
     this.disposables.push(geometry);
     return new LineSegments2(geometry, material);
+  }
+
+  /**
+   * Builds the per-vertex color buffer that shades each segment by its layer depth.
+   * @param paths - Paths to color, in the same order and segmentation as packLineVertices
+   * @returns Six floats per segment: a grayscale brightness at each endpoint
+   * @remarks
+   * The value is a plain grayscale multiplier, not an absolute color: the shader
+   * multiplies it against the material's base color, so the same buffer works for
+   * any extrusion color and a live recolor needs no rebuild. Lower layers come out
+   * darker, matching the original per-layer brightness ramp.
+   */
+  private packLineColors(paths: Path[]): Float32Array {
+    let segments = 0;
+    for (const path of paths) {
+      segments += Math.max(0, Math.ceil((path.vertices.length - 3) / 3));
+    }
+
+    const colors = new Float32Array(segments * 6);
+    let next = 0;
+
+    for (const path of paths) {
+      const brightness = this.layerBrightness(path.layerIndex);
+      const vertices = path.vertices;
+      for (let i = 0; i < vertices.length - 3; i += 3) {
+        colors[next++] = brightness;
+        colors[next++] = brightness;
+        colors[next++] = brightness;
+        colors[next++] = brightness;
+        colors[next++] = brightness;
+        colors[next++] = brightness;
+      }
+    }
+
+    return colors;
+  }
+
+  /**
+   * Maps a layer index to a brightness in [0.1, 0.8], ramping from dark at the bottom
+   * to bright at the top. Paths with no layer (non-planar jobs) render at full brightness.
+   * @remarks Only called with layerCount > 0, so the division is always safe.
+   */
+  private layerBrightness(layerIndex?: number): number {
+    if (layerIndex === undefined) return 1;
+    return 0.1 + (0.7 * layerIndex) / this.layerCount;
   }
 
   /**

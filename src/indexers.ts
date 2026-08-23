@@ -116,7 +116,11 @@ export class LayersIndexer extends Indexer {
       }
     }
 
-    this.lastLayer?.paths.push(path);
+    if (this.lastLayer) {
+      // record which layer the path landed in so the renderer can shade it by depth
+      path.layerIndex = this.indexes.length - 1;
+      this.lastLayer.paths.push(path);
+    }
   }
 
   /**

@@ -31,6 +31,9 @@ export class Path {
   /** Tool number used for this path */
   public tool: number;
 
+  /** Index of the layer this path belongs to, set by the LayersIndexer; undefined for non-planar jobs */
+  public layerIndex?: number;
+
   /** Internal storage for path vertices */
   private _vertices: number[];
 
