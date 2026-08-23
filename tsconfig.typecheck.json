@@ -1,0 +1,23 @@
+{
+  // Used only by the vitest typecheck pass (see vitest.config.mts) that runs
+  // the public API type pins in src/__tests__/*.test-d.ts.
+  //
+  // - "files" must be overridden to empty: the base config pins it to the
+  //   library entry point, which would exclude the type tests entirely and
+  //   silently skip every assertion.
+  // - strict mode is required: expect-type assertions silently pass without
+  //   strictNullChecks.
+  // - skipLibCheck: vitest's own type declarations need node16+ module
+  //   resolution; their internal resolution errors are irrelevant here.
+  //
+  // Strict errors in the library source are reported as "source errors" and
+  // ignored by the typecheck pass (ignoreSourceErrors in vitest.config.mts);
+  // the source itself is checked by `npm run typeCheck` with the real config.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "files": [],
+  "include": ["src/__tests__/**/*.test-d.ts"]
+}
