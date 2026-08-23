@@ -16,6 +16,7 @@ export default defineConfig({
         'src/gcode-parser.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
         'src/extrusion-geometry.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
         'src/scene-manager.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
+        'src/objects-manager.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
         'src/bounding-box.ts': { statements: 100, branches: 100, functions: 100, lines: 100 }
       }
     }

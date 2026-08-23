@@ -342,6 +342,19 @@ describe('ObjectsManager', () => {
       });
     });
 
+    test('an open-ended range resets tube uniforms to infinities', () => {
+      objectsManager.renderExtrusionTubes([createTestPath()], new Color(0x0000ff));
+      objectsManager.updateClippingPlanes(1.0, 10.0);
+
+      objectsManager.updateClippingPlanes();
+
+      objectsManager.materials.forEach((material) => {
+        expect(material.uniforms.clipMinY.value).toBe(-Infinity);
+        expect(material.uniforms.clipMaxY.value).toBe(Infinity);
+      });
+      expect(objectsManager.clippingPlanes).toHaveLength(0);
+    });
+
     test('stores the planes for the current layer range', () => {
       objectsManager.updateClippingPlanes(1.0, 10.0);
 
@@ -456,6 +469,37 @@ describe('ObjectsManager', () => {
       objectsManager.materials.forEach((material) => {
         expect(material.uniforms.uColor.value).toBe(updated);
       });
+    });
+
+    test('setExtrusionColor without a tool index tolerates a material without uniforms', () => {
+      objectsManager.renderTubes = true;
+      objectsManager.renderExtrusionTubes([createTestPath()], new Color(0xff0000), 0);
+      objectsManager.materials[1] = {} as (typeof objectsManager.materials)[number];
+      const updated = new Color(0x00ff00);
+
+      expect(() => objectsManager.setExtrusionColor(updated)).not.toThrow();
+
+      expect(objectsManager.materials[0].uniforms.uColor.value).toBe(updated);
+    });
+
+    test('setTravelColor ignores non-line children in the travel group', () => {
+      objectsManager.renderTravelLines([createTestPath()], new Color(0x000000));
+      objectsManager.travelMovesGroup.add(new Group());
+      const updated = new Color(0x00ff00);
+
+      expect(() => objectsManager.setTravelColor(updated)).not.toThrow();
+
+      const line = objectsManager.travelMovesGroup.children[0] as LineSegments2;
+      expect((line.material as LineMaterial).color.equals(updated)).toBe(true);
+    });
+
+    test('lighting updates skip materials missing the uniform', () => {
+      objectsManager.renderExtrusionTubes([createTestPath()], new Color(0xff0000), 0);
+      objectsManager.materials[1] = { uniforms: {} } as (typeof objectsManager.materials)[number];
+
+      expect(() => objectsManager.setBrightness(2)).not.toThrow();
+
+      expect(objectsManager.materials[0].uniforms.brightness.value).toBe(2);
     });
 
     test('setExtrusionColor reuses the existing geometry', () => {
