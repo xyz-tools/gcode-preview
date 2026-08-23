@@ -111,4 +111,71 @@ describe('chunked parsing', () => {
     // lineIndex must be file-relative (offset by the lines in chunk 1).
     expect(chunked.layerMetadata).toEqual(single.layerMetadata);
   });
+
+  it('keeps explicit layer indices unchanged across chunks', () => {
+    const single = new Parser().parseGCode(ORCA_GCODE).metadata;
+
+    // Chunk 2 starts at the second LAYER_CHANGE: its explicit indices (1, 2)
+    // no longer match their chunk-local positions (0, 1) and must be kept.
+    const splitAt = ORCA_LINES.indexOf(';LAYER_CHANGE', ORCA_LINES.indexOf(';LAYER_CHANGE') + 1);
+    const parser = new Parser();
+    parser.parseGCode(ORCA_LINES.slice(0, splitAt).join('\n'));
+    const chunked = parser.parseGCode(ORCA_LINES.slice(splitAt).join('\n')).metadata;
+
+    expect(chunked.slicerName).toBe('OrcaSlicer');
+    expect(chunked.layerMetadata).toEqual(single.layerMetadata);
+  });
+
+  // A Prusa-dialect file that omits ;HEIGHT: comments: heights are only
+  // derivable from consecutive Z values, which crosses the chunk boundary.
+  const NO_HEIGHT_LINES = [
+    ';LAYER_CHANGE',
+    ';Z:0.2',
+    'G1 Z0.2 F7200',
+    'G1 X10 Y10 E0.5',
+    ';LAYER_CHANGE',
+    ';Z:0.4',
+    'G1 Z0.4 F7200',
+    'G1 X20 Y10 E1',
+    ';LAYER_CHANGE',
+    'G1 X10 Y20 E1.5'
+  ];
+
+  it('backfills a derived height for the first layer of a chunk', () => {
+    const splitAt = NO_HEIGHT_LINES.indexOf(';LAYER_CHANGE', 1);
+    const parser = new Parser();
+    parser.parseGCode(NO_HEIGHT_LINES.slice(0, splitAt).join('\n'));
+    const { layerMetadata } = parser.parseGCode(NO_HEIGHT_LINES.slice(splitAt).join('\n')).metadata;
+
+    expect(layerMetadata).toHaveLength(3);
+    // Chunk 2's first layer knows the previous layer only in the accumulated
+    // result, so its height is derived there (0.4 - 0.2).
+    expect(layerMetadata![1].height).toBeCloseTo(0.2);
+    // Later layers of the chunk are left to the parser: the third layer has
+    // no Z at all, so no height can be derived for it.
+    expect(layerMetadata![2].height).toBeUndefined();
+  });
+
+  it('skips the height backfill when the chunk opens on a layer without a Z', () => {
+    const splitAt = NO_HEIGHT_LINES.lastIndexOf(';LAYER_CHANGE');
+    const parser = new Parser();
+    parser.parseGCode(NO_HEIGHT_LINES.slice(0, splitAt).join('\n'));
+    const { layerMetadata } = parser.parseGCode(NO_HEIGHT_LINES.slice(splitAt).join('\n')).metadata;
+
+    expect(layerMetadata).toHaveLength(3);
+    expect(layerMetadata![2].z).toBeUndefined();
+    expect(layerMetadata![2].height).toBeUndefined();
+  });
+
+  it('skips the height backfill when the previous layer has no Z', () => {
+    const lines = [';LAYER_CHANGE', 'G1 X10 Y10 E0.5', ';LAYER_CHANGE', ';Z:0.4', 'G1 X20 Y10 E1'];
+    const splitAt = lines.indexOf(';LAYER_CHANGE', 1);
+    const parser = new Parser();
+    parser.parseGCode(lines.slice(0, splitAt).join('\n'));
+    const { layerMetadata } = parser.parseGCode(lines.slice(splitAt).join('\n')).metadata;
+
+    expect(layerMetadata).toHaveLength(2);
+    expect(layerMetadata![0].z).toBeUndefined();
+    expect(layerMetadata![1].height).toBeUndefined();
+  });
 });
