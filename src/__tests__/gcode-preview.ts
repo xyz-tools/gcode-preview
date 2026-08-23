@@ -55,7 +55,7 @@ describe('GCodePreview', () => {
       resize: vi.fn(),
       processGCode: vi.fn().mockResolvedValue(undefined),
       render: vi.fn(),
-      renderAnimated: vi.fn(),
+      renderAnimated: vi.fn().mockResolvedValue(undefined),
       dispose: vi.fn()
     };
 
@@ -126,6 +126,8 @@ describe('GCodePreview', () => {
       preview = new GCodePreview(options);
 
       expect(DevGUI).toHaveBeenCalledWith(preview);
+      // the devMode setter is the only construction site, so exactly one GUI
+      expect(DevGUI).toHaveBeenCalledTimes(1);
     });
 
     it('should initialize dev GUI with options when devMode is an object', () => {
@@ -134,6 +136,7 @@ describe('GCodePreview', () => {
       preview = new GCodePreview(options);
 
       expect(DevGUI).toHaveBeenCalledWith(preview, devModeOptions);
+      expect(DevGUI).toHaveBeenCalledTimes(1);
     });
 
     it('should not initialize dev GUI when devMode is false', () => {
@@ -214,6 +217,19 @@ describe('GCodePreview', () => {
         expect(mockInterpreter.execute).toHaveBeenCalled();
         expect(mockSceneManager.renderAnimated).toHaveBeenCalled();
       });
+
+      it('should resolve only after the animated render has completed', async () => {
+        let renderDone = false;
+        mockSceneManager.renderAnimated.mockImplementation(() =>
+          Promise.resolve().then(() => {
+            renderDone = true;
+          })
+        );
+
+        await preview.processGCode('G0 X0 Y0');
+
+        expect(renderDone).toBe(true);
+      });
     });
 
     describe('processGCodeStream', () => {
@@ -233,6 +249,19 @@ describe('GCodePreview', () => {
         expect(preview.parser.parseGCode).toHaveBeenCalledWith(gcode);
         expect(mockInterpreter.execute).toHaveBeenCalled();
         expect(mockSceneManager.renderAnimated).not.toHaveBeenCalled();
+      });
+
+      it('should resolve only after the animated render has completed', async () => {
+        let renderDone = false;
+        mockSceneManager.renderAnimated.mockImplementation(() =>
+          Promise.resolve().then(() => {
+            renderDone = true;
+          })
+        );
+
+        await preview.processGCodeStream('G0 X0 Y0');
+
+        expect(renderDone).toBe(true);
       });
 
       it('should handle ReadableStream', async () => {

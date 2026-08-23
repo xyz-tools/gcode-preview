@@ -48,9 +48,18 @@ export type GCodePreviewOptions = LibOptions & SceneManagerOptions;
  * ```
  */
 export class GCodePreview {
-  /** Called whenever parsed commands have been folded into the job */
+  /**
+   * Called whenever parsed commands have been folded into the job.
+   * @remarks
+   * Holds a single callback: assigning it replaces any previous one. Wrap
+   * multiple listeners in one function if several consumers need the signal.
+   */
   onJobUpdated?: (job: Job) => void;
-  /** Called once a streamed G-code file has been read to the end */
+  /**
+   * Called once a streamed G-code file has been read to the end.
+   * @remarks
+   * Holds a single callback: assigning it replaces any previous one.
+   */
   onStreamEnd?: () => void;
   /** Job containing parsed G-code data */
   job: Job;
@@ -128,11 +137,11 @@ export class GCodePreview {
     this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
     this.stats = this.devMode ? new Stats() : undefined;
     this._sceneManager = this.createSceneManager();
+    // the devMode setter also creates the dev GUI, so no separate initGui() call
     this.devMode = opts?.devMode;
     this.interpreter = new Interpreter();
 
     this.initStats();
-    this.initGui();
     if (opts.droppable) makeDroppable(this);
   }
 
@@ -151,8 +160,9 @@ export class GCodePreview {
   /**
    * Processes G-code and renders the preview
    * @param gcode - G-code string or array of lines
+   * @returns Promise that resolves when the animated render has completed
    */
-  processGCode(gcode: string | string[]): void {
+  processGCode(gcode: string | string[]): Promise<void> {
     // Parse the gcode using our managed parser
     const { commands } = this.parser.parseGCode(gcode);
 
@@ -160,7 +170,7 @@ export class GCodePreview {
     this.executeCommands(commands);
 
     // Render the result
-    this.sceneManager.renderAnimated();
+    return this.sceneManager.renderAnimated();
   }
 
   /**
@@ -186,7 +196,9 @@ export class GCodePreview {
     }
 
     if (options.render) {
-      this.sceneManager.renderAnimated();
+      // resolve only once the animated render has completed, so callers can
+      // observe the moment the model is fully drawn
+      await this.sceneManager.renderAnimated();
     }
   }
 
@@ -278,4 +290,4 @@ export class GCodePreview {
  * This class provides a simple interface for rendering G-code previews.
  * Most properties and methods are available through the `sceneManager` property.
  */
-export { SceneManager, DevModeOptions, GCodeCommand, Parser };
+export { SceneManager, SceneManagerOptions, DevModeOptions, GCodeCommand, Parser, Job };

@@ -84,11 +84,22 @@ export class ObjectsManager {
   // --- appearance: mutate materials in place, no geometry work ----------------
 
   /**
-   * Recolors the extrusions belonging to one tool.
+   * Recolors the extrusions belonging to one tool, or every tool at once.
    * @param color - New color
-   * @param toolIndex - Tool to recolor, defaulting to the first
+   * @param toolIndex - Tool to recolor; omit to recolor all tools
    */
-  setExtrusionColor(color: Color, toolIndex = 0) {
+  setExtrusionColor(color: Color, toolIndex?: number) {
+    if (toolIndex === undefined) {
+      // a scalar color applies to every tool the job renders with
+      this.materials.forEach((material) => {
+        if (material?.uniforms) material.uniforms.uColor.value = color;
+      });
+      this.extrusionsGroup.children.forEach((child) => {
+        if (child instanceof LineSegments2) (child.material as LineMaterial).color.set(color);
+      });
+      return;
+    }
+
     const material = this.materials[toolIndex];
     if (material?.uniforms) {
       material.uniforms.uColor.value = color;

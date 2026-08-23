@@ -432,6 +432,32 @@ describe('ObjectsManager', () => {
       expect((tool1.material as LineMaterial).color.equals(updated)).toBe(true);
     });
 
+    test('setExtrusionColor without a tool index recolors the lines of every tool', () => {
+      const original = new Color(0x000000);
+      const updated = new Color(0x00ff00);
+      objectsManager.renderExtrusionLines([createTestPath()], original, 0);
+      objectsManager.renderExtrusionLines([createTestPath()], original, 2);
+
+      objectsManager.setExtrusionColor(updated);
+
+      objectsManager.extrusionsGroup.children.forEach((child) => {
+        expect(((child as LineSegments2).material as LineMaterial).color.equals(updated)).toBe(true);
+      });
+    });
+
+    test('setExtrusionColor without a tool index recolors every tube material', () => {
+      objectsManager.renderTubes = true;
+      objectsManager.renderExtrusionTubes([createTestPath()], new Color(0xff0000), 0);
+      objectsManager.renderExtrusionTubes([createTestPath()], new Color(0x0000ff), 1);
+      const updated = new Color(0x00ff00);
+
+      objectsManager.setExtrusionColor(updated);
+
+      objectsManager.materials.forEach((material) => {
+        expect(material.uniforms.uColor.value).toBe(updated);
+      });
+    });
+
     test('setExtrusionColor reuses the existing geometry', () => {
       objectsManager.renderExtrusionLines([createTestPath()], new Color(0x000000));
       const before = objectsManager.extrusionsGroup.children[0];

@@ -146,7 +146,11 @@ export class SceneManager {
   private _wireframe = false;
   /** Whether to preserve drawing buffer */
   private preserveDrawingBuffer = false;
-  /** Called after every rendered frame, for consumers that track render stats */
+  /**
+   * Called after every rendered frame, for consumers that track render stats.
+   * @remarks
+   * Holds a single callback: assigning it replaces any previous one.
+   */
   onFrameRendered?: () => void;
   private objectsManager: ObjectsManager;
 
@@ -286,6 +290,11 @@ export class SceneManager {
     if (Array.isArray(value)) {
       this._extrusionColor = value.map((color) => new Color(color));
       this._extrusionColor.forEach((color, index) => this.objectsManager.setExtrusionColor(color, index));
+      // tools past the end of the array draw with the fallback, so recolor them too
+      for (let index = this._extrusionColor.length; index < (this.job?.toolPaths.length ?? 0); index++) {
+        if (!this.job.toolPaths[index]?.length) continue;
+        this.objectsManager.setExtrusionColor(this.fallbackExtrusionColor(index), index);
+      }
       return;
     }
 

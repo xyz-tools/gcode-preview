@@ -196,6 +196,34 @@ describe('SceneManager properties', () => {
       fresh.dispose();
     });
 
+    test('a shorter color array repaints the extra tools with the fallback', () => {
+      const job = createJob();
+      const highToolPath = new Path(PathType.Extrusion, 0.6, 0.2, 2);
+      highToolPath.addPoint(0, 0, 0);
+      highToolPath.addPoint(5, 0, 0);
+      job.addPath(highToolPath);
+
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const fresh = createSceneManager({ job, renderTubes: true, extrusionColor: ['#ff0000', '#00ff00', '#0000ff'] });
+
+      fresh.extrusionColor = ['#112233'];
+
+      const materials = objectsManager(fresh).materials;
+      expect(materials[0].uniforms.uColor.value.getHex()).toBe(0x112233);
+      expect(materials[2].uniforms.uColor.value.getHex()).toBe(0x112233);
+
+      fresh.dispose();
+      warn.mockRestore();
+    });
+
+    test('an array extrusionColor is safe to set after clear drops the job', () => {
+      sceneManager.clear();
+
+      expect(() => {
+        sceneManager.extrusionColor = ['#ff0000'];
+      }).not.toThrow();
+    });
+
     test('falls back to the default extrusion color when the color array is empty', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       const fresh = createSceneManager({ job: createJob(), extrusionColor: [] });
