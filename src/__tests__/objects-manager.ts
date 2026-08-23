@@ -409,7 +409,7 @@ describe('ObjectsManager', () => {
 
   describe('renderExtrusions', () => {
     test('renders lines when renderTubes is off', () => {
-      objectsManager.renderExtrusions([createTestPath()], new Color(0x00ff00));
+      objectsManager.renderExtrusions([createTestPath()]);
 
       expect(objectsManager.extrusionsGroup.children[0]).toBeInstanceOf(LineSegments2);
     });
@@ -417,9 +417,29 @@ describe('ObjectsManager', () => {
     test('renders tubes when renderTubes is on', () => {
       objectsManager.renderTubes = true;
 
-      objectsManager.renderExtrusions([createTestPath()], new Color(0x00ff00));
+      objectsManager.renderExtrusions([createTestPath()]);
 
       expect(objectsManager.extrusionsGroup.children[0]).toBeInstanceOf(BatchedMesh);
+    });
+
+    test('draws each tool in the color its array entry resolves to', () => {
+      objectsManager.setExtrusionColor([new Color(0xff0000), new Color(0x0000ff)]);
+
+      objectsManager.renderExtrusions([createTestPath()], 0);
+      objectsManager.renderExtrusions([createTestPath()], 1);
+
+      const [tool0, tool1] = objectsManager.extrusionsGroup.children as LineSegments2[];
+      expect((tool0.material as LineMaterial).color.getHex()).toBe(0xff0000);
+      expect((tool1.material as LineMaterial).color.getHex()).toBe(0x0000ff);
+    });
+
+    test('draws tubes in the color the tool resolves to', () => {
+      objectsManager.renderTubes = true;
+      objectsManager.setExtrusionColor([new Color(0xff0000), new Color(0x0000ff)]);
+
+      objectsManager.renderExtrusions([createTestPath()], 1);
+
+      expect(objectsManager.materials[1].uniforms.uColor.value.getHex()).toBe(0x0000ff);
     });
   });
 
@@ -501,6 +521,31 @@ describe('ObjectsManager', () => {
       expect(() => objectsManager.setBrightness(2)).not.toThrow();
 
       expect(objectsManager.materials[0].uniforms.brightness.value).toBe(2);
+    });
+
+    test('a shrunken color array repaints line-drawn tools with the fallback', () => {
+      objectsManager.setExtrusionColor([new Color(0xff0000), new Color(0x00ff00), new Color(0x0000ff)]);
+      objectsManager.renderExtrusions([createTestPath()], 0);
+      objectsManager.renderExtrusions([createTestPath()], 1);
+      objectsManager.renderExtrusions([createTestPath()], 2);
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      objectsManager.setExtrusionColor([new Color(0x123456)]);
+
+      const lines = objectsManager.extrusionsGroup.children as LineSegments2[];
+      lines.forEach((line) => {
+        expect((line.material as LineMaterial).color.getHex()).toBe(0x123456);
+      });
+      warn.mockRestore();
+    });
+
+    test('setTravelColor is used as the default when travel lines draw later', () => {
+      objectsManager.setTravelColor(new Color(0x654321));
+
+      objectsManager.renderTravelLines([createTestPath()]);
+
+      const travel = objectsManager.travelMovesGroup.children[0] as LineSegments2;
+      expect((travel.material as LineMaterial).color.getHex()).toBe(0x654321);
     });
 
     test('setExtrusionColor reuses the existing geometry', () => {
