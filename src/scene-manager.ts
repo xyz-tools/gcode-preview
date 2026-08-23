@@ -116,8 +116,6 @@ export class SceneManager {
   static readonly defaultExtrusionColor = ObjectsManager.defaultExtrusionColor;
   /** Animation frame ID */
   private animationFrameId?: number;
-  /** Current path index for animated rendering */
-  private renderPathIndex?: number;
   /** Previous start layer before single layer mode */
   private prevStartLayer = 0;
   // colors
@@ -591,8 +589,6 @@ export class SceneManager {
    * and lighting if 3D tube rendering is enabled.
    */
   private initScene(): void {
-    this.renderPathIndex = 0;
-
     this.renderPaths();
 
     this.renderBoundingBox();
@@ -630,9 +626,7 @@ export class SceneManager {
     // sensible default for pathCount
     pathCount = pathCount ?? Math.floor(this.job.paths.length / 60);
 
-    this.renderPathIndex = 0;
-
-    if (this.renderPathIndex >= this.job.paths.length - 1) {
+    if (this.job.paths.length <= 1) {
       this.renderPaths();
     } else {
       return this.renderFrameLoop(pathCount > 0 ? Math.min(pathCount, this.job.paths.length) : 1);
@@ -643,15 +637,20 @@ export class SceneManager {
    * Animation loop that renders paths incrementally
    * @param pathCount - Number of paths to render per frame
    * @returns Promise that resolves when all paths are rendered
+   * @remarks
+   * The cursor walks the job's combined path list; the ObjectsManager routes
+   * each prefix by category and skips what it has already drawn.
    */
   private renderFrameLoop(pathCount: number): Promise<void> {
     return new Promise((resolve) => {
+      let drawnUpTo = 0;
       const loop = () => {
-        if (this.renderPathIndex >= this.job.paths.length - 1) {
+        if (drawnUpTo >= this.job.paths.length) {
           // the returned promise is the completion signal
           resolve();
         } else {
-          this.renderFrame(pathCount);
+          drawnUpTo = Math.min(drawnUpTo + pathCount, this.job.paths.length);
+          this.renderFrame(drawnUpTo);
           requestAnimationFrame(loop);
         }
       };
@@ -660,16 +659,11 @@ export class SceneManager {
   }
 
   /**
-   * Renders a frame with the specified number of paths
-   * @param pathCount - Number of paths to render in this frame
-   * @remarks
-   * Creates a new group for the frame and renders paths up to the specified count.
-   * Updates the renderPathIndex to track progress through the job's paths.
+   * Renders one animation frame containing the paths up to the given index
+   * @param endPathNumber - End index into the job's combined path list
    */
-  private renderFrame(pathCount: number): void {
-    const endPathNumber = Math.min(this.renderPathIndex + pathCount, this.job.paths.length - 1);
+  private renderFrame(endPathNumber: number): void {
     this.renderPaths(endPathNumber);
-    this.renderPathIndex = endPathNumber;
 
     this.renderBoundingBox();
     this.renderer.render(this.scene, this.camera);
@@ -752,38 +746,29 @@ export class SceneManager {
   }
 
   /**
-   * Renders paths between the current render index and specified end index
-   * @param endPathNumber - End index of paths to render (default: Infinity)
-   */
-  /**
    * Builds any paths that have not been drawn yet, across the whole job.
    * @remarks
-   * Turning a category back on reveals paths that were skipped while it was off,
-   * and those can sit anywhere in the job — not just past renderPathIndex, which
-   * indexes the combined path list rather than travels or a single tool. The
-   * ObjectsManager skips whatever it has already drawn, so this stays cheap.
+   * Turning a category back on reveals paths that were skipped while it was off.
+   * The ObjectsManager skips whatever it has already drawn, so this stays cheap.
    */
   private renderMissingPaths(): void {
     if (!this.job) return;
 
-    const resumeFrom = this.renderPathIndex;
-    this.renderPathIndex = 0;
     this.renderPaths();
-    this.renderPathIndex = resumeFrom;
   }
 
+  /**
+   * Draws the job's paths up to the given index of its combined path list
+   * @param endPathNumber - End index into job.paths (default: all of them)
+   */
   private renderPaths(endPathNumber: number = Infinity): void {
     this.objectsManager.setTravelsVisible(this._renderTravel);
-    if (this._renderTravel) {
-      this.objectsManager.renderTravelLines(this.job.travels.slice(this.renderPathIndex, endPathNumber));
-    }
-
     this.objectsManager.setExtrusionsVisible(this._renderExtrusion);
-    if (this._renderExtrusion && this.job?.toolPaths.length > 0) {
-      this.job.toolPaths.forEach((toolPaths, index) => {
-        this.objectsManager.renderExtrusions(toolPaths.slice(this.renderPathIndex, endPathNumber), index);
-      });
-    }
+
+    this.objectsManager.renderPaths(this.job.paths.slice(0, endPathNumber), {
+      travels: this._renderTravel,
+      extrusions: this._renderExtrusion
+    });
   }
 
   saveCamera() {

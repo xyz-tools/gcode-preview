@@ -764,6 +764,37 @@ describe('SceneManager properties', () => {
       fresh.dispose();
     });
 
+    test('draws every path, including the last one', async () => {
+      // the loop's end bound used to stop one short of the combined list, so
+      // the job's final path — a travel move in this job — never appeared
+      const fresh = createSceneManager({ renderTravel: true });
+
+      await fresh.renderAnimated(1);
+
+      const segments = (travelGroup(fresh).children as LineSegments2[]).reduce(
+        (total, line) => total + positionCountOf(line) / 6,
+        0
+      );
+      expect(segments).toBe(2); // one travel move per layer of the two-layer job
+      fresh.dispose();
+    });
+
+    test('the categories keep their own pace, so travels are not exhausted early', async () => {
+      // renderPathIndex used to index the combined list but slice the travels
+      // array with it, drawing travels far ahead of the extrusions
+      const fresh = createSceneManager({ renderTravel: true });
+      const spy = vi.spyOn(objectsManager(fresh), 'renderPaths');
+
+      await fresh.renderAnimated(1);
+
+      // every frame hands over a prefix of the combined list; the manager
+      // routes by category, so no frame slices travels with an alien index
+      const firstFramePaths = spy.mock.calls[0][0];
+      expect(firstFramePaths).toHaveLength(1);
+      expect(firstFramePaths[0]).toBe(fresh.job.paths[0]);
+      fresh.dispose();
+    });
+
     test('falls back to a single pass when a frame covers the whole job', async () => {
       const fresh = createSceneManager();
 
@@ -915,6 +946,11 @@ function extrusionGroup(sceneManager: SceneManager): Group {
 
 function travelGroup(sceneManager: SceneManager): Group {
   return sceneManager.scene.children.find((child) => child.name === 'Travel Moves') as Group;
+}
+
+/** Number of floats in a line's packed position buffer; six per segment. */
+function positionCountOf(lines: LineSegments2): number {
+  return (lines.geometry.attributes.instanceStart.data.array as Float32Array).length;
 }
 
 function createSceneManager(opts: Partial<SceneManagerOptions> & { job?: Job } = {}): SceneManager {

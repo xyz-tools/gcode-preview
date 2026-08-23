@@ -1,4 +1,4 @@
-import { Path } from './path';
+import { Path, PathType } from './path';
 import { type Disposable } from './helpers/three-utils';
 import { BuildVolume, type BuildVolumeDef } from './build-volume';
 import { type BoundingBox } from './bounding-box';
@@ -301,6 +301,37 @@ export class ObjectsManager {
   }
 
   // --- rendering --------------------------------------------------------------
+
+  /**
+   * Draws a slice of the job's combined path list, routing each path to its
+   * category: travels as travel lines, extrusions per tool in the current
+   * representation.
+   * @param paths - Paths in print order, travels and extrusions interleaved
+   * @param categories - Which categories to draw. Paths of a disabled category
+   * are left unrendered, so they draw when the category is re-enabled.
+   * @remarks
+   * Already-drawn paths are skipped, so progressive rendering can pass a growing
+   * prefix of the same list and each path is built exactly once.
+   */
+  renderPaths(paths: Path[], categories: { travels: boolean; extrusions: boolean }) {
+    if (categories.travels) {
+      this.renderTravelLines(paths.filter((path) => path.travelType === PathType.Travel));
+    }
+
+    if (categories.extrusions) {
+      const byTool = new Map<number, Path[]>();
+      for (const path of paths) {
+        if (path.travelType !== PathType.Extrusion) continue;
+        const toolPaths = byTool.get(path.tool);
+        if (toolPaths) {
+          toolPaths.push(path);
+        } else {
+          byTool.set(path.tool, [path]);
+        }
+      }
+      byTool.forEach((toolPaths, toolIndex) => this.renderExtrusions(toolPaths, toolIndex));
+    }
+  }
 
   renderTravelLines(paths: Path[], color = this.travelColor) {
     const unrenderedPaths = this.takeUnrendered(paths);
