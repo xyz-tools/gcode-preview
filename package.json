@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git@github.com:remcoder/gcode-preview.git"
+    "url": "git+https://github.com/xyz-tools/gcode-preview.git"
   },
   "homepage": "https://gcode-preview.web.app/",
   "main": "dist/gcode-preview.es.js",
