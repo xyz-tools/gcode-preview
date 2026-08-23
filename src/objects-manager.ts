@@ -40,6 +40,15 @@ export class ObjectsManager {
   directionalLight = 1.3;
   brightness = 1.3;
 
+  /** Default color for extrusions when the caller supplies none */
+  static readonly defaultExtrusionColor = new Color('hotpink');
+  /** Current extrusion color(s); an array is indexed by tool */
+  extrusionColor: Color | Color[] = ObjectsManager.defaultExtrusionColor;
+  /** Current travel move color */
+  travelColor = new Color(0x990000);
+  /** Tool indices already warned about missing an entry in the extrusionColor array */
+  private warnedMissingExtrusionColorIndices = new Set<number>();
+
   lineWidth: number;
   lineHeight: number;
   /** Width of extruded material. Undefined means each path uses its own width. */
@@ -97,11 +106,61 @@ export class ObjectsManager {
   // --- appearance: mutate materials in place, no geometry work ----------------
 
   /**
-   * Recolors the extrusions belonging to one tool, or every tool at once.
-   * @param color - New color
-   * @param toolIndex - Tool to recolor; omit to recolor all tools
+   * Stores the extrusion color(s) and repaints the rendered extrusions in place.
+   * @param value - One color for every tool, or an array indexed by tool
+   * @remarks
+   * Tools already drawn past the end of an array repaint with the fallback
+   * color, so shrinking the array never leaves a tool showing a stale color.
    */
-  setExtrusionColor(color: Color, toolIndex?: number) {
+  setExtrusionColor(value: Color | Color[]) {
+    this.extrusionColor = value;
+
+    if (!Array.isArray(value)) {
+      this.applyExtrusionColor(value);
+      return;
+    }
+
+    value.forEach((color, toolIndex) => this.applyExtrusionColor(color, toolIndex));
+    this.renderedToolIndices().forEach((toolIndex) => {
+      if (toolIndex >= value.length) this.applyExtrusionColor(this.colorForTool(toolIndex), toolIndex);
+    });
+  }
+
+  setTravelColor(color: Color) {
+    this.travelColor = color;
+    this.travelMovesGroup.children.forEach((child) => {
+      if (child instanceof LineSegments2) {
+        (child.material as LineMaterial).color.set(color);
+      }
+    });
+  }
+
+  /**
+   * Resolves the color a tool draws with, falling back when the array has no entry.
+   * @param toolIndex - Tool asking for its color
+   * @remarks
+   * A gcode file can reference more tools than the caller supplied colors for
+   * (e.g. a color array sized for 2 tools rendering a 3-tool file). The array's
+   * last configured color — or the default when the array is empty — is used
+   * instead, warning once per tool index rather than throwing.
+   */
+  private colorForTool(toolIndex: number): Color {
+    if (!Array.isArray(this.extrusionColor)) return this.extrusionColor;
+
+    return this.extrusionColor[toolIndex] ?? this.fallbackExtrusionColor(toolIndex);
+  }
+
+  private fallbackExtrusionColor(toolIndex: number): Color {
+    if (!this.warnedMissingExtrusionColorIndices.has(toolIndex)) {
+      this.warnedMissingExtrusionColorIndices.add(toolIndex);
+      console.warn(`No extrusionColor configured for tool index ${toolIndex}, falling back to another color`);
+    }
+    const colors = this.extrusionColor as Color[];
+    return colors[colors.length - 1] ?? ObjectsManager.defaultExtrusionColor;
+  }
+
+  /** Mutates the materials and lines of one tool — or every tool — in place. */
+  private applyExtrusionColor(color: Color, toolIndex?: number) {
     if (toolIndex === undefined) {
       // a scalar color applies to every tool the job renders with
       this.materials.forEach((material) => {
@@ -123,12 +182,15 @@ export class ObjectsManager {
     });
   }
 
-  setTravelColor(color: Color) {
-    this.travelMovesGroup.children.forEach((child) => {
-      if (child instanceof LineSegments2) {
-        (child.material as LineMaterial).color.set(color);
-      }
+  /** The tool indices that currently have something drawn in the scene. */
+  private renderedToolIndices(): number[] {
+    const indices = new Set<number>();
+    // forEach skips the holes of the sparse per-tool array
+    this.materials.forEach((material, toolIndex) => indices.add(toolIndex));
+    this.extrusionsGroup.children.forEach((child) => {
+      if (child instanceof LineSegments2) indices.add(child.userData.toolIndex);
     });
+    return [...indices];
   }
 
   setAmbientLight(value: number) {
@@ -240,7 +302,7 @@ export class ObjectsManager {
 
   // --- rendering --------------------------------------------------------------
 
-  renderTravelLines(paths: Path[], color: Color) {
+  renderTravelLines(paths: Path[], color = this.travelColor) {
     const unrenderedPaths = this.takeUnrendered(paths);
     if (unrenderedPaths.length === 0) return;
 
@@ -248,9 +310,11 @@ export class ObjectsManager {
   }
 
   /**
-   * Renders extrusions in whichever representation is currently selected.
+   * Renders a tool's extrusions in whichever representation is currently
+   * selected, in the color the tool resolves to.
    */
-  renderExtrusions(paths: Path[], color: Color, toolIndex = 0) {
+  renderExtrusions(paths: Path[], toolIndex = 0) {
+    const color = this.colorForTool(toolIndex);
     if (this.renderTubes) {
       this.renderExtrusionTubes(paths, color, toolIndex);
     } else {

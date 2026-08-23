@@ -166,12 +166,12 @@ describe('SceneManager properties', () => {
 
     test('an array extrusionColor gives each tool its own color when drawing', () => {
       sceneManager.extrusionColor = ['#ff0000', '#0000ff'];
-      const spy = vi.spyOn(objectsManager(sceneManager), 'renderExtrusions');
 
       sceneManager.renderExtrusion = false;
       sceneManager.renderExtrusion = true;
 
-      expect(spy).toHaveBeenCalledWith(expect.anything(), new Color('#ff0000'), 0);
+      const [tool0] = extrusionGroup(sceneManager).children as LineSegments2[];
+      expect((tool0.material as LineMaterial).color.getHex()).toBe(0xff0000);
     });
 
     test('a tool without a configured color falls back to the last one, warning once', () => {
@@ -184,12 +184,11 @@ describe('SceneManager properties', () => {
       job.addPath(highToolPath);
 
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      const fresh = createSceneManager({ job, extrusionColor: ['#00ff00'] });
-      const spy = vi.spyOn(objectsManager(fresh), 'renderExtrusions');
+      const fresh = createSceneManager({ job, renderTubes: true, extrusionColor: ['#00ff00'] });
 
       expect(() => fresh.render()).not.toThrow();
 
-      expect(spy).toHaveBeenCalledWith(expect.anything(), new Color('#00ff00'), 2);
+      expect(objectsManager(fresh).materials[2].uniforms.uColor.value.getHex()).toBe(0x00ff00);
       expect(warn).toHaveBeenCalledWith('No extrusionColor configured for tool index 2, falling back to another color');
 
       fresh.render();
@@ -228,12 +227,13 @@ describe('SceneManager properties', () => {
 
     test('falls back to the default extrusion color when the color array is empty', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      const fresh = createSceneManager({ job: createJob(), extrusionColor: [] });
-      const spy = vi.spyOn(objectsManager(fresh), 'renderExtrusions');
+      const fresh = createSceneManager({ job: createJob(), renderTubes: true, extrusionColor: [] });
 
       expect(() => fresh.render()).not.toThrow();
 
-      expect(spy).toHaveBeenCalledWith(expect.anything(), SceneManager.defaultExtrusionColor, 0);
+      expect(objectsManager(fresh).materials[0].uniforms.uColor.value.getHex()).toBe(
+        SceneManager.defaultExtrusionColor.getHex()
+      );
 
       fresh.dispose();
       warn.mockRestore();
@@ -244,8 +244,7 @@ describe('SceneManager properties', () => {
 
       sceneManager.extrusionColor = ['#ff0000', '#0000ff'];
 
-      expect(spy).toHaveBeenCalledTimes(2);
-      expect(spy).toHaveBeenLastCalledWith(new Color('#0000ff'), 1);
+      expect(spy).toHaveBeenCalledWith([new Color('#ff0000'), new Color('#0000ff')]);
       expect(sceneManager.extrusionColor).toEqual([new Color('#ff0000'), new Color('#0000ff')]);
     });
 
@@ -521,6 +520,16 @@ describe('SceneManager properties', () => {
       sceneManager.clear();
 
       expect(sceneManager.buildVolume).toBeUndefined();
+    });
+
+    test('keeps the extrusion and travel colors for the next job', () => {
+      sceneManager.extrusionColor = '#123456';
+      sceneManager.travelColor = '#654321';
+
+      sceneManager.clear();
+
+      expect((sceneManager.extrusionColor as Color).getHex()).toBe(0x123456);
+      expect(sceneManager.travelColor.getHex()).toBe(0x654321);
     });
 
     test('keeps renderTubes and the lighting for the next job', () => {

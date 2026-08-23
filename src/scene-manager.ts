@@ -113,11 +113,7 @@ export class SceneManager {
   /** Disposable resources */
   private disposables: Disposable[] = [];
   /** Default extrusion color */
-  static readonly defaultExtrusionColor = new Color('hotpink');
-  /** Current extrusion color(s) */
-  private _extrusionColor: Color | Color[] = SceneManager.defaultExtrusionColor;
-  /** Tool indices already warned about missing an entry in the extrusionColor array */
-  private warnedMissingExtrusionColorIndices = new Set<number>();
+  static readonly defaultExtrusionColor = ObjectsManager.defaultExtrusionColor;
   /** Animation frame ID */
   private animationFrameId?: number;
   /** Current path index for animated rendering */
@@ -127,8 +123,6 @@ export class SceneManager {
   // colors
   /** Background color */
   private _backgroundColor = new Color(0xe0e0e0);
-  /** Travel move color */
-  private _travelColor = new Color(0x990000);
   /** Top layer color */
   private _topLayerColor?: Color;
   /** Last segment color */
@@ -257,7 +251,7 @@ export class SceneManager {
    * @returns Color or array of colors for extruded paths
    */
   get extrusionColor(): Color | Color[] {
-    return this._extrusionColor;
+    return this.objectsManager.extrusionColor;
   }
 
   /**
@@ -265,19 +259,9 @@ export class SceneManager {
    * @param value - Color value(s) as number, string, Color instance, or array of ColorRepresentation
    */
   set extrusionColor(value: number | string | Color | ColorRepresentation[]) {
-    if (Array.isArray(value)) {
-      this._extrusionColor = value.map((color) => new Color(color));
-      this._extrusionColor.forEach((color, index) => this.objectsManager.setExtrusionColor(color, index));
-      // tools past the end of the array draw with the fallback, so recolor them too
-      for (let index = this._extrusionColor.length; index < (this.job?.toolPaths.length ?? 0); index++) {
-        if (!this.job.toolPaths[index]?.length) continue;
-        this.objectsManager.setExtrusionColor(this.fallbackExtrusionColor(index), index);
-      }
-      return;
-    }
-
-    this._extrusionColor = new Color(value);
-    this.objectsManager.setExtrusionColor(this._extrusionColor);
+    this.objectsManager.setExtrusionColor(
+      Array.isArray(value) ? value.map((color) => new Color(color)) : new Color(value)
+    );
   }
 
   /**
@@ -302,7 +286,7 @@ export class SceneManager {
    * @returns Current travel move color
    */
   get travelColor(): Color {
-    return this._travelColor;
+    return this.objectsManager.travelColor;
   }
 
   /**
@@ -310,8 +294,7 @@ export class SceneManager {
    * @param value - Color value as number, string, or Color instance
    */
   set travelColor(value: number | string | Color) {
-    this._travelColor = new Color(value);
-    this.objectsManager.setTravelColor(this._travelColor);
+    this.objectsManager.setTravelColor(new Color(value));
   }
 
   /**
@@ -703,7 +686,7 @@ export class SceneManager {
     // read the settings off the outgoing manager before it is torn down
     const { lineWidth, lineHeight, extrusionWidth, renderTubes, ambientLight, directionalLight, brightness } =
       this.objectsManager;
-    const { buildVolume, boundingBoxColor } = this.objectsManager;
+    const { buildVolume, boundingBoxColor, extrusionColor, travelColor } = this.objectsManager;
     // the bounding box belongs to the outgoing job, but the build volume does not:
     // it is recreated on the replacement manager from the same dimensions
     const buildVolumeDef = buildVolume
@@ -726,6 +709,8 @@ export class SceneManager {
     this.objectsManager.directionalLight = directionalLight;
     this.objectsManager.brightness = brightness;
     this.objectsManager.boundingBoxColor = boundingBoxColor;
+    this.objectsManager.extrusionColor = extrusionColor;
+    this.objectsManager.travelColor = travelColor;
     if (buildVolumeDef) this.objectsManager.setBuildVolume(buildVolumeDef);
   }
 
@@ -790,38 +775,15 @@ export class SceneManager {
   private renderPaths(endPathNumber: number = Infinity): void {
     this.objectsManager.setTravelsVisible(this._renderTravel);
     if (this._renderTravel) {
-      this.objectsManager.renderTravelLines(
-        this.job.travels.slice(this.renderPathIndex, endPathNumber),
-        this._travelColor
-      );
+      this.objectsManager.renderTravelLines(this.job.travels.slice(this.renderPathIndex, endPathNumber));
     }
 
     this.objectsManager.setExtrusionsVisible(this._renderExtrusion);
     if (this._renderExtrusion && this.job?.toolPaths.length > 0) {
       this.job.toolPaths.forEach((toolPaths, index) => {
-        const color = Array.isArray(this._extrusionColor)
-          ? (this._extrusionColor[index] ?? this.fallbackExtrusionColor(index))
-          : this._extrusionColor;
-        this.objectsManager.renderExtrusions(toolPaths.slice(this.renderPathIndex, endPathNumber), color, index);
+        this.objectsManager.renderExtrusions(toolPaths.slice(this.renderPathIndex, endPathNumber), index);
       });
     }
-  }
-
-  /**
-   * Falls back to a usable color when extrusionColor is an array with no entry for a tool index
-   * @param toolIndex - Tool index missing a configured color
-   * @returns The array's last configured color, or the default extrusion color if the array is empty
-   * @remarks
-   * A gcode file can reference more tools than the caller supplied colors for (e.g. a color array
-   * sized for 2 tools rendering a 3-tool file). Warns once per tool index instead of throwing.
-   */
-  private fallbackExtrusionColor(toolIndex: number): Color {
-    if (!this.warnedMissingExtrusionColorIndices.has(toolIndex)) {
-      this.warnedMissingExtrusionColorIndices.add(toolIndex);
-      console.warn(`No extrusionColor configured for tool index ${toolIndex}, falling back to another color`);
-    }
-    const colors = this._extrusionColor as Color[];
-    return colors[colors.length - 1] ?? SceneManager.defaultExtrusionColor;
   }
 
   saveCamera() {

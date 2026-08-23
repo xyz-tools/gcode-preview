@@ -236,7 +236,7 @@ describe('ObjectsManager', () => {
 
       expect(objectsManager.materials[0]).not.toBe(objectsManager.materials[1]);
 
-      objectsManager.setExtrusionColor(new Color(0x00ff00), 0);
+      objectsManager.setExtrusionColor([new Color(0x00ff00), color]);
 
       expect(objectsManager.materials[0].uniforms.uColor.value.getHex()).toBe(0x00ff00);
       expect(objectsManager.materials[1].uniforms.uColor.value.getHex()).toBe(0x0000ff);
@@ -433,13 +433,13 @@ describe('ObjectsManager', () => {
       expect(objectsManager.materials[0].uniforms.uColor.value).toBe(color);
     });
 
-    test('setExtrusionColor only recolors the lines of the given tool', () => {
+    test('an array setExtrusionColor recolors each tool independently', () => {
       const original = new Color(0x000000);
       const updated = new Color(0x00ff00);
       objectsManager.renderExtrusionLines([createTestPath()], original, 0);
       objectsManager.renderExtrusionLines([createTestPath()], original, 1);
 
-      objectsManager.setExtrusionColor(updated, 1);
+      objectsManager.setExtrusionColor([original, updated]);
 
       const [tool0, tool1] = objectsManager.extrusionsGroup.children as LineSegments2[];
       expect((tool0.material as LineMaterial).color.equals(original)).toBe(true);
