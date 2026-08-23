@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 470" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect width="850" height="470" fill="#fcfcfb" rx="8"/>
+  <text x="425" y="34" text-anchor="middle" font-size="19" font-weight="600" fill="#0b0b0b">Tessellating the same G2 quarter circle</text>
+  <text x="425" y="56" text-anchor="middle" font-size="14" fill="#52514e">gray = true arc &#183; blue = emitted polyline and points &#183; chords stay within 0.05 mm of the arc in both</text>
+  
+  <g>
+    <text x="194" y="80" text-anchor="middle" font-size="17" font-weight="600" fill="#0b0b0b">Before</text>
+    <text x="194" y="102" text-anchor="middle" font-size="14" fill="#52514e">one point every 0.5 mm of arc</text>
+    <!-- true arc, recessive reference -->
+    <path d="M 338 410 A 288 288 0 0 0 50 122" fill="none" stroke="#e3e2df" stroke-width="7" stroke-linecap="round"/>
+    <!-- radius annotation -->
+    <line x1="50" y1="410" x2="338" y2="410" stroke="#c9c8c4" stroke-width="1.5" stroke-dasharray="5 5"/>
+    <circle cx="50" cy="410" r="3" fill="#52514e"/>
+    <text x="194" y="432" text-anchor="middle" font-size="13" fill="#52514e">r = 12 mm</text>
+    <!-- tessellated polyline -->
+    <polyline points="338.0,410.0 337.8,398.0 337.0,386.0 335.8,374.1 334.0,362.2 331.8,350.4 329.0,338.7 325.8,327.2 322.1,315.8 318.0,304.5 313.4,293.4 308.3,282.6 302.7,271.9 296.8,261.5 290.4,251.4 283.6,241.5 276.3,231.9 268.7,222.6 260.7,213.7 252.4,205.1 243.7,196.8 234.6,188.9 225.2,181.4 215.6,174.3 205.6,167.7 195.4,161.4 184.9,155.5 174.2,150.1 163.2,145.2 152.1,140.7 140.8,136.7 129.3,133.1 117.7,130.1 106.0,127.5 94.2,125.4 82.3,123.8 70.4,122.7 58.4,122.1 50.0,122.0" fill="none" stroke="#2a78d6" stroke-width="2"/>
+    <circle cx="338.0" cy="410.0" r="3.2" fill="#1c5cab"/>
+    <circle cx="337.8" cy="398.0" r="3.2" fill="#1c5cab"/>
+    <circle cx="337.0" cy="386.0" r="3.2" fill="#1c5cab"/>
+    <circle cx="335.8" cy="374.1" r="3.2" fill="#1c5cab"/>
+    <circle cx="334.0" cy="362.2" r="3.2" fill="#1c5cab"/>
+    <circle cx="331.8" cy="350.4" r="3.2" fill="#1c5cab"/>
+    <circle cx="329.0" cy="338.7" r="3.2" fill="#1c5cab"/>
+    <circle cx="325.8" cy="327.2" r="3.2" fill="#1c5cab"/>
+    <circle cx="322.1" cy="315.8" r="3.2" fill="#1c5cab"/>
+    <circle cx="318.0" cy="304.5" r="3.2" fill="#1c5cab"/>
+    <circle cx="313.4" cy="293.4" r="3.2" fill="#1c5cab"/>
+    <circle cx="308.3" cy="282.6" r="3.2" fill="#1c5cab"/>
+    <circle cx="302.7" cy="271.9" r="3.2" fill="#1c5cab"/>
+    <circle cx="296.8" cy="261.5" r="3.2" fill="#1c5cab"/>
+    <circle cx="290.4" cy="251.4" r="3.2" fill="#1c5cab"/>
+    <circle cx="283.6" cy="241.5" r="3.2" fill="#1c5cab"/>
+    <circle cx="276.3" cy="231.9" r="3.2" fill="#1c5cab"/>
+    <circle cx="268.7" cy="222.6" r="3.2" fill="#1c5cab"/>
+    <circle cx="260.7" cy="213.7" r="3.2" fill="#1c5cab"/>
+    <circle cx="252.4" cy="205.1" r="3.2" fill="#1c5cab"/>
+    <circle cx="243.7" cy="196.8" r="3.2" fill="#1c5cab"/>
+    <circle cx="234.6" cy="188.9" r="3.2" fill="#1c5cab"/>
+    <circle cx="225.2" cy="181.4" r="3.2" fill="#1c5cab"/>
+    <circle cx="215.6" cy="174.3" r="3.2" fill="#1c5cab"/>
+    <circle cx="205.6" cy="167.7" r="3.2" fill="#1c5cab"/>
+    <circle cx="195.4" cy="161.4" r="3.2" fill="#1c5cab"/>
+    <circle cx="184.9" cy="155.5" r="3.2" fill="#1c5cab"/>
+    <circle cx="174.2" cy="150.1" r="3.2" fill="#1c5cab"/>
+    <circle cx="163.2" cy="145.2" r="3.2" fill="#1c5cab"/>
+    <circle cx="152.1" cy="140.7" r="3.2" fill="#1c5cab"/>
+    <circle cx="140.8" cy="136.7" r="3.2" fill="#1c5cab"/>
+    <circle cx="129.3" cy="133.1" r="3.2" fill="#1c5cab"/>
+    <circle cx="117.7" cy="130.1" r="3.2" fill="#1c5cab"/>
+    <circle cx="106.0" cy="127.5" r="3.2" fill="#1c5cab"/>
+    <circle cx="94.2" cy="125.4" r="3.2" fill="#1c5cab"/>
+    <circle cx="82.3" cy="123.8" r="3.2" fill="#1c5cab"/>
+    <circle cx="70.4" cy="122.7" r="3.2" fill="#1c5cab"/>
+    <circle cx="58.4" cy="122.1" r="3.2" fill="#1c5cab"/>
+    <circle cx="50.0" cy="122.0" r="3.2" fill="#1c5cab"/>
+    <text x="80" y="348" font-size="15" font-weight="600" fill="#1c5cab">39 points</text>
+    <text x="80" y="370" font-size="15" fill="#52514e">38 segments</text>
+  </g>
+  
+  <g>
+    <text x="654" y="80" text-anchor="middle" font-size="17" font-weight="600" fill="#0b0b0b">After</text>
+    <text x="654" y="102" text-anchor="middle" font-size="14" fill="#52514e">chord tolerance 0.05 mm</text>
+    <!-- true arc, recessive reference -->
+    <path d="M 798 410 A 288 288 0 0 0 510 122" fill="none" stroke="#e3e2df" stroke-width="7" stroke-linecap="round"/>
+    <!-- radius annotation -->
+    <line x1="510" y1="410" x2="798" y2="410" stroke="#c9c8c4" stroke-width="1.5" stroke-dasharray="5 5"/>
+    <circle cx="510" cy="410" r="3" fill="#52514e"/>
+    <text x="654" y="432" text-anchor="middle" font-size="13" fill="#52514e">r = 12 mm</text>
+    <!-- tessellated polyline -->
+    <polyline points="798.0,410.0 793.2,357.7 779.0,307.1 755.8,260.0 724.5,217.8 686.0,182.1 641.7,153.9 593.0,134.2 541.5,123.7 510.0,122.0" fill="none" stroke="#2a78d6" stroke-width="2"/>
+    <circle cx="798.0" cy="410.0" r="3.2" fill="#1c5cab"/>
+    <circle cx="793.2" cy="357.7" r="3.2" fill="#1c5cab"/>
+    <circle cx="779.0" cy="307.1" r="3.2" fill="#1c5cab"/>
+    <circle cx="755.8" cy="260.0" r="3.2" fill="#1c5cab"/>
+    <circle cx="724.5" cy="217.8" r="3.2" fill="#1c5cab"/>
+    <circle cx="686.0" cy="182.1" r="3.2" fill="#1c5cab"/>
+    <circle cx="641.7" cy="153.9" r="3.2" fill="#1c5cab"/>
+    <circle cx="593.0" cy="134.2" r="3.2" fill="#1c5cab"/>
+    <circle cx="541.5" cy="123.7" r="3.2" fill="#1c5cab"/>
+    <circle cx="510.0" cy="122.0" r="3.2" fill="#1c5cab"/>
+    <text x="540" y="348" font-size="15" font-weight="600" fill="#1c5cab">10 points</text>
+    <text x="540" y="370" font-size="15" fill="#52514e">9 segments</text>
+  </g>
+  <text x="425" y="452" text-anchor="middle" font-size="14" fill="#52514e">39 &#8594; 10 points (&#8722;74%) &#183; the gap scales: segment count grows with &#8730;radius instead of linearly</text>
+</svg>
