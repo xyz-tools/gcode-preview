@@ -114,6 +114,7 @@ describe('malformed coordinates through the whole pipeline', () => {
   const allVertices = (job: Job) => job.paths.flatMap((path) => path.vertices);
   // The vertices the final command contributed, without the lead-in move or the
   // implicit start point at the origin.
+  const ysOf = (vertices: number[]) => vertices.filter((_, index) => index % 3 === 1);
   const zsOf = (vertices: number[]) => vertices.filter((_, index) => index % 3 === 2);
   const tailVertices = (setup: string[], last: string) => {
     const before = allVertices(run(setup.join('\n'))).length;
@@ -155,6 +156,22 @@ describe('malformed coordinates through the whole pipeline', () => {
     expect(points.length).toBeGreaterThan(3 * 3);
     expect(points.every((value) => Number.isFinite(value))).toBe(true);
     expect(job.boundingBox.isValid).toBe(true);
+  });
+
+  test('a G3 arc sweeps counter-clockwise where G2 sweeps clockwise', () => {
+    // The same half circle around (15,10), from west to east, in both directions.
+    // Viewed from above, G2 (clockwise) passes north of the center and G3
+    // (counter-clockwise) south. Also guards the g3 registry wiring end to end:
+    // without it G3 is silently ignored and contributes no intermediate points,
+    // and the shared handler must still flip direction per gcode.
+    const g2Ys = ysOf(tailVertices(['G1 X10 Y10 Z1 E1'], 'G2 X20 Y10 I5 J0 E1'));
+    const g3Ys = ysOf(tailVertices(['G1 X10 Y10 Z1 E1'], 'G3 X20 Y10 I5 J0 E1'));
+
+    expect(g3Ys.length).toBeGreaterThan(2);
+    expect(Math.max(...g2Ys)).toBeGreaterThan(14);
+    expect(Math.min(...g2Ys)).toBeGreaterThanOrEqual(10);
+    expect(Math.min(...g3Ys)).toBeLessThan(6);
+    expect(Math.max(...g3Ys)).toBeLessThanOrEqual(10);
   });
 
   test('an arc ending on X0 or Y0 moves there instead of keeping the previous position', () => {
