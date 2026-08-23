@@ -290,4 +290,5 @@ export class GCodePreview {
  * This class provides a simple interface for rendering G-code previews.
  * Most properties and methods are available through the `sceneManager` property.
  */
-export { SceneManager, SceneManagerOptions, DevModeOptions, GCodeCommand, Parser, Job };
+export { SceneManager, DevModeOptions, GCodeCommand, Parser, Job };
+export type { SceneManagerOptions };
