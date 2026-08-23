@@ -1,4 +1,6 @@
 import { Thumbnail } from '../thumbnail';
+import { LayerMetadata, SlicerMetadataParser } from './metadata-parser-base';
+import { detectSlicer, parseSlicerMetadata } from './slicer-detector';
 
 /**
  * Parameters for G-code commands used in 3D printing.
@@ -101,7 +103,11 @@ export class GCodeCommand {
 }
 
 export type ParseResult = { metadata: Metadata; commands: GCodeCommand[] };
-export type Metadata = { thumbnails: Record<string, Thumbnail> };
+export type Metadata = {
+  thumbnails: Record<string, Thumbnail>;
+  layerMetadata?: LayerMetadata[];
+  slicerName?: string;
+};
 
 /**
  * Whether a character code is an ASCII letter, which is what opens a G-code word.
@@ -152,6 +158,8 @@ export class Parser {
    * deliberately not filtered out.
    */
   lines: string[] = [];
+
+  private metadataParser: SlicerMetadataParser | null = null;
 
   /**
    * How many lines have been parsed, counting every call.
@@ -204,10 +212,51 @@ export class Parser {
     // chunks it has already handled
     const commands = this.lines2commands(lines);
 
-    // merge thumbs
-    const thumbs = this.parseMetadata(commands.filter((cmd) => cmd.comment)).thumbnails;
+    const comments = commands.filter((cmd) => cmd.comment);
+
+    // Extract thumbnails
+    const thumbs = this.parseMetadata(comments).thumbnails;
     for (const [key, value] of Object.entries(thumbs)) {
       this.metadata.thumbnails[key] = value;
+    }
+
+    // Extract layer metadata from slicer comments. Pass the full command list
+    // (not just comments) so parsers that read Z from G-code moves work.
+    if (!this.metadataParser) {
+      this.metadataParser = detectSlicer(commands);
+      // The slicer name comes from the chunk that identified the slicer -- a
+      // later chunk may contain layer comments but not the header.
+      if (this.metadataParser) {
+        this.metadata.slicerName = this.metadataParser.detectSlicerName(comments);
+      }
+    }
+    const slicerMetadata = parseSlicerMetadata(commands, this.metadataParser);
+    if (slicerMetadata.layers.length > 0) {
+      // Accumulate across chunks (like thumbnails above): a streaming parse
+      // hands each chunk to parseGCode separately, and the parsers report
+      // chunk-local indices. lineIndex shifts by the lines parsed before this
+      // chunk; positional layer numbering (layerIndex === position in the
+      // chunk result) continues from the layers gathered so far, while
+      // explicit slicer-reported indices (e.g. Cura's LAYER:n) are kept.
+      const layers = (this.metadata.layerMetadata ??= []);
+      const lineOffset = this.lineCount - lines.length;
+      const layerOffset = layers.length;
+      slicerMetadata.layers.forEach((layer, i) => {
+        // Parsers that derive height from the previous layer's Z cannot see
+        // across a chunk boundary; the first layer of a chunk knows the
+        // previous layer only here, where the accumulated result is in hand.
+        let height = layer.height;
+        const previous = layers[layers.length - 1];
+        if (height === undefined && i === 0 && layer.z !== undefined && previous?.z !== undefined) {
+          height = Math.round((layer.z - previous.z) * 10000) / 10000;
+        }
+        layers.push({
+          ...layer,
+          height,
+          lineIndex: layer.lineIndex + lineOffset,
+          layerIndex: layer.layerIndex === i ? i + layerOffset : layer.layerIndex
+        });
+      });
     }
 
     return { metadata: this.metadata, commands: commands };
