@@ -166,8 +166,10 @@ Want to help out? We are open to your ideas and always willing to get you starte
 ## Contributors 
 - ❤️ Thank you @0xTHAC0 for adding the orthographic camera.
 - ❤️ Thank you @sophiedeziel for rendering extrusion as tubes and creating a new interpreter.
-- ❤️ Thank you @Sindarius for implementing G2/G3 arc support.
+- ❤️ Thank you @RickRyan26 and @Sindarius for implementing G2/G3 arc support.
 - ❤️ Thank you @Zeng95 for providing a React & Typescript example.
+- ❤️ Thank you @raulodev for parser and preview fixes.
+- ❤️ Thank you @TimTheBig for dependency and tooling updates.
 
 ## Known issues
 ### Preview doesn't render in Brave
