@@ -418,8 +418,9 @@ export class ObjectsManager {
    * Applies the current clipping planes to every `LineSegments2` in the scene.
    */
   private updateLineClipping() {
-    // TODO: apply clipping selectively to travels lines and extrusion lines
-    // and/or use a clipping group
+    // travel lines share the extrusions' planes deliberately: a restricted layer
+    // range hides both. An unrestricted range produces no planes at all, which
+    // is what keeps travel moves outside the printed stack visible (#278)
     this.scene.traverse((obj) => {
       if (obj instanceof LineSegments2) {
         (obj.material as LineMaterial).clippingPlanes = this.clippingPlanes;

@@ -63,6 +63,8 @@ import { ObjectsManager } from '../objects-manager';
 import { Job } from '../job';
 import { Path, PathType } from '../path';
 import { Color, Group, OrthographicCamera, PerspectiveCamera } from 'three';
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
 describe('SceneManager properties', () => {
   let sceneManager: SceneManager;
@@ -365,6 +367,48 @@ describe('SceneManager properties', () => {
       sceneManager.endLayer = 1;
 
       expect(spy).toHaveBeenCalled();
+    });
+
+    test('an end layer at the top of the stack leaves the range unbounded', () => {
+      // the demo drives endLayer to countLayers by default; that is no
+      // restriction, so nothing — travel moves above the top layer
+      // included — should be clipped (#278)
+      sceneManager.endLayer = sceneManager.job.countLayers;
+
+      expect(objectsManager(sceneManager).clippingPlanes).toHaveLength(0);
+    });
+
+    test('a start layer at the bottom of the stack adds no lower bound', () => {
+      sceneManager.startLayer = 1;
+
+      expect(objectsManager(sceneManager).clippingPlanes).toHaveLength(0);
+    });
+
+    test('a start layer above the first still bounds the bottom of the range', () => {
+      sceneManager.startLayer = 2;
+
+      const planes = objectsManager(sceneManager).clippingPlanes;
+      const layer = sceneManager.job.layers[1];
+      expect(planes).toHaveLength(1);
+      expect(planes[0].constant).toBe(-(layer.z - layer.height));
+    });
+
+    test('travel lines above the top layer survive a full-stack range', () => {
+      sceneManager.renderTravel = true;
+
+      sceneManager.endLayer = sceneManager.job.countLayers;
+
+      const travel = travelGroup(sceneManager).children[0] as LineSegments2;
+      expect((travel.material as LineMaterial).clippingPlanes).toHaveLength(0);
+    });
+
+    test('a restricted range still clips the travel lines', () => {
+      sceneManager.renderTravel = true;
+
+      sceneManager.endLayer = 1;
+
+      const travel = travelGroup(sceneManager).children[0] as LineSegments2;
+      expect((travel.material as LineMaterial).clippingPlanes).toHaveLength(1);
     });
 
     test('an end-layer-only range leaves the lower bound open instead of NaN', () => {

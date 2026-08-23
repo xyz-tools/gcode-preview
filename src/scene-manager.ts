@@ -472,19 +472,21 @@ export class SceneManager {
    * Updates the clipping planes for the 3D preview based on the start and end layers.
    *
    * This method calculates the minimum and maximum Z values from the specified start and end layers.
-   * An unset start or end layer leaves that side of the range unbounded.
+   * A bound that is unset — or that sits at the very end of the layer stack — leaves that side of
+   * the range unbounded: an endLayer equal to the layer count is no restriction, so moves outside
+   * the printed layers (travel moves above the top layer, most commonly) stay visible.
    *
    * It then updates the clipping planes for shader materials and line clipping using these Z values.
    *
    */
   updateClippingPlanes() {
-    const startLayer = this.job.layers[this._startLayer - 1];
-    const endLayer = this.job.layers[this._endLayer - 1];
-    // an unset bound must stay undefined: subtracting through `?.` would produce
+    const bottomLayer = this._startLayer > 1 ? this.job.layers[this._startLayer - 1] : undefined;
+    const topLayer = this._endLayer < this.job.layers.length ? this.job.layers[this._endLayer - 1] : undefined;
+    // an open bound must stay undefined: subtracting through `?.` would produce
     // NaN, which passes the !== undefined guards and ends up in plane constants
     // and shader uniforms, where NaN comparisons are undefined behavior in GLSL
-    const minZ = startLayer ? startLayer.z - startLayer.height : undefined;
-    const maxZ = endLayer?.z;
+    const minZ = bottomLayer === undefined ? undefined : bottomLayer.z - bottomLayer.height;
+    const maxZ = topLayer?.z;
 
     this.objectsManager.updateClippingPlanes(minZ, maxZ);
   }
