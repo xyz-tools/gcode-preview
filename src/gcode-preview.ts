@@ -178,7 +178,8 @@ export class GCodePreview {
    */
   processGCode(gcode: string | string[]): Promise<void> {
     // Parse the gcode using our managed parser
-    const { commands } = this.parser.parseGCode(gcode);
+    const { commands, metadata } = this.parser.parseGCode(gcode);
+    this.job.metadata = metadata;
 
     // Pass the parsed commands to the sceneManager
     this.executeCommands(commands);
@@ -201,7 +202,8 @@ export class GCodePreview {
     if (gcode instanceof ReadableStream) {
       await this.readStream(gcode, { render: options.render });
     } else {
-      const { commands } = this.parser.parseGCode(gcode);
+      const { commands, metadata } = this.parser.parseGCode(gcode);
+      this.job.metadata = metadata;
       this.executeCommands(commands);
     }
 
@@ -234,7 +236,11 @@ export class GCodePreview {
       const split = splitChunk(tail, result.value);
       tail = split.tail;
 
-      const { commands } = this.parser.parseGCode(split.complete);
+      const { commands, metadata } = this.parser.parseGCode(split.complete);
+
+      // forward metadata before executing: the layer indexer locks its
+      // strategy on the first path it sees
+      this.job.metadata = metadata;
 
       // we'll execute the commands immediately, for now
       this.executeCommands(commands);

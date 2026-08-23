@@ -14,3 +14,5 @@ docs
 # Test coverage
 coverage
 .context
+
+*.bench.ts
