@@ -1,8 +1,8 @@
-import { test, expect, describe } from 'vitest';
+import { test, expect, describe, vi, afterEach } from 'vitest';
 import { Job } from '../job';
 import { PathType, Path } from '../path';
 import { State } from '../state';
-import { LayersIndexer } from '../indexers';
+import { LayersIndexer, NonApplicableIndexer, TravelTypeIndexer } from '../indexers';
 
 test('it has an initial state', () => {
   const job = new Job();
@@ -361,6 +361,26 @@ describe('.layers', () => {
     expect(layers.length).toEqual(2);
     expect(layers[1].z).toEqual(4);
   });
+
+  test('a previously obtained layers array is emptied when the job turns out non-planar', () => {
+    const job = new Job();
+
+    append_path(job, PathType.Extrusion, [
+      [0, 0, 0],
+      [1, 2, 0]
+    ]);
+
+    const layers = job.layers;
+    expect(layers.length).toEqual(1);
+
+    append_path(job, PathType.Extrusion, [
+      [5, 6, 0],
+      [5, 6, 1]
+    ]);
+
+    expect(layers.length).toEqual(0);
+    expect(job.layers).toBe(layers);
+  });
 });
 
 describe('.extrusions', () => {
@@ -447,6 +467,22 @@ describe('.toolPaths', () => {
     expect(toolPaths[4]).toBeUndefined();
     expect(toolPaths[5].length).toEqual(1);
   });
+
+  test('a non-planar extrusion path is still indexed by tool', () => {
+    const job = new Job();
+
+    const planar = append_path(job, PathType.Extrusion, [
+      [0, 0, 0],
+      [1, 2, 0]
+    ]);
+    const nonPlanar = append_path(job, PathType.Extrusion, [
+      [1, 2, 0],
+      [5, 6, 1]
+    ]);
+
+    expect(job.isPlanar).toEqual(false);
+    expect(job.toolPaths[0]).toEqual([planar, nonPlanar]);
+  });
 });
 
 describe('.addPath', () => {
@@ -466,6 +502,43 @@ describe('.addPath', () => {
     job.addPath(path);
 
     expect(job.extrusions).toEqual([path]);
+  });
+
+  describe('when an indexer throws an error', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    test('rethrows errors that are not NonApplicableIndexer', () => {
+      const job = new Job();
+      const error = new Error('boom');
+      vi.spyOn(TravelTypeIndexer.prototype, 'sortIn').mockImplementation(() => {
+        throw error;
+      });
+      const path = new Path(PathType.Extrusion, 0.6, 0.2, 0);
+
+      expect(() => job.addPath(path)).toThrow(error);
+    });
+
+    test('removes an indexer that throws NonApplicableIndexer without clearing layers', () => {
+      const job = new Job();
+      const sortIn = vi.spyOn(TravelTypeIndexer.prototype, 'sortIn').mockImplementation(() => {
+        throw new NonApplicableIndexer('not applicable');
+      });
+
+      append_path(job, PathType.Extrusion, [
+        [0, 0, 0],
+        [1, 2, 0]
+      ]);
+      append_path(job, PathType.Extrusion, [
+        [1, 2, 0],
+        [5, 6, 0]
+      ]);
+
+      expect(sortIn).toHaveBeenCalledTimes(1);
+      expect(job.extrusions).toEqual([]);
+      expect(job.layers.length).toEqual(1);
+    });
   });
 });
 
@@ -541,6 +614,57 @@ describe('.resumeLastPath', () => {
 
     expect(job.extrusions).toEqual([]);
     expect(job.layers[job.layers.length - 1].paths).toEqual([]);
+  });
+
+  test('the path is removed from the tool index', () => {
+    const job = new Job();
+
+    append_path(job, PathType.Extrusion, [
+      [0, 0, 0],
+      [1, 2, 0]
+    ]);
+    job.resumeLastPath();
+
+    expect(job.toolPaths[0]).toEqual([]);
+  });
+
+  test('resuming and finishing across chunks does not duplicate tool paths', () => {
+    const job = new Job();
+
+    const path = append_path(job, PathType.Extrusion, [
+      [0, 0, 0],
+      [1, 2, 0]
+    ]);
+
+    // simulate streaming: each chunk resumes the last path, appends and finishes it
+    for (let chunk = 0; chunk < 2; chunk++) {
+      job.resumeLastPath();
+      job.inprogressPath.addPoint(2 + chunk, 2, 0);
+      job.finishPath();
+    }
+
+    expect(job.paths).toEqual([path]);
+    expect(job.extrusions).toEqual([path]);
+    expect(job.toolPaths[0]).toEqual([path]);
+  });
+
+  test('leaves non-empty indexes that do not contain the resumed path intact', () => {
+    const job = new Job();
+
+    const extrusion = append_path(job, PathType.Extrusion, [
+      [0, 0, 0],
+      [1, 2, 0]
+    ]);
+    const travel = append_path(job, PathType.Travel, [
+      [1, 2, 0],
+      [5, 6, 0]
+    ]);
+
+    job.resumeLastPath();
+
+    expect(job.inprogressPath).toEqual(travel);
+    expect(job.extrusions).toEqual([extrusion]);
+    expect(job.travels).toEqual([]);
   });
 });
 

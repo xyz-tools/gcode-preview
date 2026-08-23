@@ -118,7 +118,12 @@ export class Job {
       return;
     }
     this.inprogressPath = this.paths.pop();
-    [this.extrusionPaths, this.travelPaths, this.layers[this.layers.length - 1]?.paths].forEach((indexer) => {
+    [
+      this.extrusionPaths,
+      this.travelPaths,
+      this.layers[this.layers.length - 1]?.paths,
+      this._toolPaths[this.inprogressPath.tool]
+    ].forEach((indexer) => {
       if (indexer === undefined || indexer.length === 0) {
         return;
       }
@@ -154,7 +159,9 @@ export class Job {
    * the layers will be cleared.
    */
   private indexPath(path: Path): void {
-    this.indexers.forEach((indexer) => {
+    // Iterate over a snapshot so removing a failed indexer
+    // does not skip the indexers that follow it
+    [...this.indexers].forEach((indexer) => {
       try {
         indexer.sortIn(path);
       } catch (e) {
@@ -164,7 +171,8 @@ export class Job {
 
         if (e instanceof NonPlanarExtrusionError) {
           console.warn('Non-planar path detected; clearing layer index');
-          this._layers = [];
+          // Truncate in place so consumers holding the array see it emptied
+          this._layers.length = 0;
         }
 
         // Remove the indexer that cannot handle this path
