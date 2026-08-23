@@ -3,6 +3,9 @@ import { AxesHelper, Color, Group, Vector3, Scene } from 'three';
 import { LineBox } from './helpers/line-box';
 import { type Disposable } from './helpers/three-utils';
 
+/** The dimensions a caller supplies to describe a build volume */
+export type BuildVolumeDef = Pick<BuildVolume, 'x' | 'y' | 'z' | 'smallGrid'>;
+
 /**
  * Represents the build volume of a 3D printer.
  */

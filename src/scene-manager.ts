@@ -1,6 +1,6 @@
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-import { BuildVolume } from './build-volume';
+import { BuildVolume, type BuildVolumeDef } from './build-volume';
 import { type Disposable } from './helpers/three-utils';
 import { LineBox } from './helpers/line-box';
 
@@ -15,11 +15,10 @@ import {
   REVISION,
   Scene,
   WebGLRenderer,
-  MathUtils,
-  LineBasicMaterial
+  MathUtils
 } from 'three';
 
-export type BuildVolumeDef = Pick<BuildVolume, 'x' | 'y' | 'z' | 'smallGrid'>;
+export type { BuildVolumeDef };
 
 // Orthographic camera constants
 const PERSPECTIVE_FOV = 25;
@@ -102,8 +101,6 @@ export class SceneManager {
   private _endLayer?: number;
   /** Whether single layer mode is enabled */
   private _singleLayerMode = false;
-  /** Build volume dimensions */
-  private _buildVolume?: BuildVolume;
   /** Initial camera position [x, y, z] */
   private initialCameraPosition = [-100, 400, 450];
   /** Whether to use inches instead of millimeters */
@@ -111,10 +108,6 @@ export class SceneManager {
   /** Disable color gradient between layers */
   private _disableGradient = false;
   job: Job;
-  /** Bounding box mesh */
-  private _boundingBoxMesh?: LineBox;
-  /** Color for the bounding box */
-  private _boundingBoxColor?: Color;
 
   // rendering
   /** Disposable resources */
@@ -171,14 +164,7 @@ export class SceneManager {
     this.startLayer = opts.startLayer;
 
     if (opts.buildVolume) {
-      this._buildVolume = new BuildVolume(
-        opts.buildVolume.x,
-        opts.buildVolume.y,
-        opts.buildVolume.z,
-        opts.buildVolume.smallGrid,
-        this.scene
-      );
-      this.disposables.push(this._buildVolume);
+      this.objectsManager.setBuildVolume(opts.buildVolume);
     }
     this.initialCameraPosition = opts.initialCameraPosition ?? this.initialCameraPosition;
     // assign the backing fields directly: the setters would draw the scene before
@@ -188,7 +174,7 @@ export class SceneManager {
     this.objectsManager.renderTubes = opts.renderTubes ?? this.objectsManager.renderTubes;
 
     if (opts.boundingBoxColor !== undefined) {
-      this._boundingBoxColor = new Color(opts.boundingBoxColor);
+      this.objectsManager.setBoundingBoxColor(new Color(opts.boundingBoxColor));
     }
 
     if (!opts.canvas) {
@@ -227,7 +213,7 @@ export class SceneManager {
     this.resize();
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.target.set(this._buildVolume.x / 2, 0, -this._buildVolume.y / 2);
+    this.controls.target.set(this.buildVolume.x / 2, 0, -this.buildVolume.y / 2);
     this.disposables.push(this.controls);
     this.loadCamera();
 
@@ -255,7 +241,7 @@ export class SceneManager {
    * @returns Current build volume or undefined if not set
    */
   get buildVolume(): BuildVolume | undefined {
-    return this._buildVolume;
+    return this.objectsManager.buildVolume;
   }
 
   /**
@@ -263,15 +249,7 @@ export class SceneManager {
    * @param value - Partial build volume properties (x, y, z, smallGrid)
    */
   set buildVolume(value: BuildVolumeDef | undefined) {
-    if (!value) {
-      this._buildVolume?.dispose();
-      this._buildVolume = undefined;
-    } else {
-      this._buildVolume = new BuildVolume(value.x, value.y, value.z, value.smallGrid, this.scene);
-
-      this.disposables.push(this._buildVolume);
-      this._buildVolume.update();
-    }
+    this.objectsManager.setBuildVolume(value);
   }
 
   /**
@@ -373,7 +351,7 @@ export class SceneManager {
    * @returns Color representation or undefined if not set
    */
   get boundingBoxColor(): ColorRepresentation | undefined {
-    return this._boundingBoxColor;
+    return this.objectsManager.boundingBoxColor;
   }
 
   /**
@@ -381,7 +359,7 @@ export class SceneManager {
    * @param value - Color value or undefined to hide the bounding box
    */
   set boundingBoxColor(value: ColorRepresentation | undefined) {
-    this._boundingBoxColor = value !== undefined ? new Color(value) : undefined;
+    this.objectsManager.setBoundingBoxColor(value !== undefined ? new Color(value) : undefined);
 
     this.renderBoundingBox();
   }
@@ -434,10 +412,7 @@ export class SceneManager {
   }
 
   get boundingBoxMesh(): LineBox | undefined {
-    return this._boundingBoxMesh;
-  }
-  set boundingBoxMesh(value: LineBox | undefined) {
-    this._boundingBoxMesh = value;
+    return this.objectsManager.boundingBoxMesh;
   }
 
   get lineWidth(): number | undefined {
@@ -608,8 +583,8 @@ export class SceneManager {
       const size = this.job.boundingBox.size;
       return Math.max(size.x, size.y, size.z) * FRUSTUM_PADDING;
     }
-    if (this._buildVolume) {
-      return Math.max(this._buildVolume.x, this._buildVolume.y, this._buildVolume.z) * FRUSTUM_PADDING;
+    if (this.buildVolume) {
+      return Math.max(this.buildVolume.x, this.buildVolume.y, this.buildVolume.z) * FRUSTUM_PADDING;
     }
     return DEFAULT_FRUSTUM_SIZE;
   }
@@ -638,11 +613,6 @@ export class SceneManager {
     this.renderPaths();
 
     this.renderBoundingBox();
-
-    if (this._buildVolume) {
-      this.disposables.push(this._buildVolume);
-      this._buildVolume.update();
-    }
   }
 
   /** Resets the scene by clearing all existing objects and re-initializing
@@ -716,7 +686,6 @@ export class SceneManager {
   private renderFrame(pathCount: number): void {
     const endPathNumber = Math.min(this.renderPathIndex + pathCount, this.job.paths.length - 1);
     this.renderPaths(endPathNumber);
-    this.renderBoundingBox();
     this.renderPathIndex = endPathNumber;
 
     this.renderBoundingBox();
@@ -725,29 +694,8 @@ export class SceneManager {
 
   private renderBoundingBox(): void {
     if (!this.job) return;
-    if (!this.job.boundingBox.isValid) {
-      return;
-    }
 
-    // create the bounding box mesh if it doesn't exist
-    if (!this.boundingBoxMesh) {
-      this.boundingBoxMesh = this.createBoundingBox();
-      this.boundingBoxMesh.name = 'bounding-box';
-      this.disposables.push(this.boundingBoxMesh);
-
-      this.scene.add(this.boundingBoxMesh);
-    }
-    this.boundingBoxMesh.visible = this._boundingBoxColor !== undefined;
-    (this.boundingBoxMesh.material as LineBasicMaterial).color = this._boundingBoxColor;
-  }
-
-  createBoundingBox(): LineBox {
-    const bb = this.job.boundingBox;
-    const size = bb.size;
-    const mesh = new LineBox(size.x, size.z, size.y, this._boundingBoxColor, false);
-    const pos = bb.corners.min.toVector3();
-    mesh.position.set(pos.x, pos.y, pos.z);
-    return mesh;
+    this.objectsManager.updateBoundingBox(this.job.boundingBox);
   }
 
   // reset parser & processing state
@@ -755,13 +703,17 @@ export class SceneManager {
     // read the settings off the outgoing manager before it is torn down
     const { lineWidth, lineHeight, extrusionWidth, renderTubes, ambientLight, directionalLight, brightness } =
       this.objectsManager;
+    const { buildVolume, boundingBoxColor } = this.objectsManager;
+    // the bounding box belongs to the outgoing job, but the build volume does not:
+    // it is recreated on the replacement manager from the same dimensions
+    const buildVolumeDef = buildVolume
+      ? { x: buildVolume.x, y: buildVolume.y, z: buildVolume.z, smallGrid: buildVolume.smallGrid }
+      : undefined;
 
     this.startLayer = undefined;
     this.endLayer = Infinity;
     this._singleLayerMode = false;
     this.job = undefined;
-    this.scene.remove(this.boundingBoxMesh);
-    this.boundingBoxMesh = undefined;
 
     // drop the old manager from disposables too, or dispose() would revisit it
     this.disposables = this.disposables.filter((d) => d !== this.objectsManager);
@@ -773,6 +725,8 @@ export class SceneManager {
     this.objectsManager.ambientLight = ambientLight;
     this.objectsManager.directionalLight = directionalLight;
     this.objectsManager.brightness = brightness;
+    this.objectsManager.boundingBoxColor = boundingBoxColor;
+    if (buildVolumeDef) this.objectsManager.setBuildVolume(buildVolumeDef);
   }
 
   resize(): void {
