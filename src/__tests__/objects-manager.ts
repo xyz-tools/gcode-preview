@@ -407,6 +407,60 @@ describe('ObjectsManager', () => {
     });
   });
 
+  describe('renderPaths', () => {
+    function createTravelPath(): Path {
+      const path = new Path(PathType.Travel, 0.6, 0.2, 0);
+      path.addPoint(0, 0, 0);
+      path.addPoint(10, 10, 0);
+      return path;
+    }
+
+    function createToolPath(tool: number): Path {
+      const path = new Path(PathType.Extrusion, 0.6, 0.2, tool);
+      path.addPoint(0, 0, 0);
+      path.addPoint(10, 0, 0);
+      return path;
+    }
+
+    test('routes each path to its category and tool', () => {
+      objectsManager.setExtrusionColor([new Color(0xff0000), new Color(0x00ff00), new Color(0x0000ff)]);
+
+      objectsManager.renderPaths([createTravelPath(), createToolPath(0), createToolPath(2)], {
+        travels: true,
+        extrusions: true
+      });
+
+      expect(objectsManager.travelMovesGroup.children).toHaveLength(1);
+      const [tool0, tool2] = objectsManager.extrusionsGroup.children as LineSegments2[];
+      expect((tool0.material as LineMaterial).color.getHex()).toBe(0xff0000);
+      expect((tool2.material as LineMaterial).color.getHex()).toBe(0x0000ff);
+    });
+
+    test('a disabled category leaves its paths unrendered for later', () => {
+      const paths = [createTravelPath(), createToolPath(0)];
+
+      objectsManager.renderPaths(paths, { travels: false, extrusions: false });
+      expect(objectsManager.travelMovesGroup.children).toHaveLength(0);
+      expect(objectsManager.extrusionsGroup.children).toHaveLength(0);
+
+      objectsManager.renderPaths(paths, { travels: true, extrusions: true });
+      expect(objectsManager.travelMovesGroup.children).toHaveLength(1);
+      expect(objectsManager.extrusionsGroup.children).toHaveLength(1);
+    });
+
+    test('a growing prefix draws each path exactly once', () => {
+      const paths = [createToolPath(0), createToolPath(0), createToolPath(0)];
+
+      objectsManager.renderPaths(paths.slice(0, 1), { travels: true, extrusions: true });
+      objectsManager.renderPaths(paths.slice(0, 3), { travels: true, extrusions: true });
+      objectsManager.renderPaths(paths.slice(0, 3), { travels: true, extrusions: true });
+
+      const lines = objectsManager.extrusionsGroup.children as LineSegments2[];
+      const segments = lines.reduce((total, line) => total + positionsOf(line).length / 6, 0);
+      expect(segments).toBe(3);
+    });
+  });
+
   describe('renderExtrusions', () => {
     test('renders lines when renderTubes is off', () => {
       objectsManager.renderExtrusions([createTestPath()]);
