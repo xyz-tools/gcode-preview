@@ -20,6 +20,7 @@ export const app = (window.app = createApp({
     const thumbnail = ref(null);
     const layerCount = ref(0);
     const fileSize = ref(0);
+    const slicerName = ref(null);
     const model = ref(null);
     const dragging = ref(false);
     const settings = ref(Object.assign({}, defaultSettings));
@@ -49,6 +50,7 @@ export const app = (window.app = createApp({
       thumbnail.value = thumbnails[largestThumbnailKey]?.src;
 
       layerCount.value = countLayers;
+      slicerName.value = parser.metadata.slicerName ?? null;
       sceneManager.endLayer = countLayers;
 
       const currentSettings = {
@@ -207,6 +209,7 @@ export const app = (window.app = createApp({
       thumbnail,
       layerCount,
       fileSize,
+      slicerName,
       model,
       dragging,
       settings,
