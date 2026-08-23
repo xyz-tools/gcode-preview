@@ -28,11 +28,14 @@ jobs:
   publish-npm:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           registry-url: https://registry.npmjs.org/
       - run: npm ci
       - run: npm run build
@@ -49,5 +52,3 @@ jobs:
           echo "Publishing $VERSION with npm dist-tag '$TAG'"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
       - run: npm publish --tag ${{ steps.tag.outputs.tag }}
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
