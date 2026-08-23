@@ -136,7 +136,10 @@ export class Interpreter {
 
     const cw = command.gcode === 'g2';
     let currentPath = job.inprogressPath;
-    const pathType = e ? PathType.Extrusion : PathType.Travel;
+    // `e > 0`, matching g0/g1: a negative E is a retraction, i.e. a travel move with no
+    // material laid down. The looser `e ?` used to misclassify a retracting arc as
+    // Extrusion, so it rendered as deposited filament and stretched the bounding box.
+    const pathType = e > 0 ? PathType.Extrusion : PathType.Travel;
 
     if (currentPath === undefined || currentPath.travelType !== pathType) {
       currentPath = this.breakPath(job, pathType);

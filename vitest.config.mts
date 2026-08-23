@@ -18,7 +18,8 @@ export default defineConfig({
         'src/scene-manager.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
         'src/objects-manager.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
         'src/bounding-box.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
-        'src/job.ts': { statements: 100, branches: 100, functions: 100, lines: 100 }
+        'src/job.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
+        'src/interpreter.ts': { statements: 100, branches: 100, functions: 100, lines: 100 }
       }
     }
   }
