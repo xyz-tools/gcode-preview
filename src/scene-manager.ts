@@ -265,10 +265,8 @@ export class SceneManager {
     } else {
       this._buildVolume = new BuildVolume(value.x, value.y, value.z, value.smallGrid, this.scene);
 
-      if (this._buildVolume) {
-        this.disposables.push(this._buildVolume);
-        this._buildVolume.update();
-      }
+      this.disposables.push(this._buildVolume);
+      this._buildVolume.update();
     }
   }
 

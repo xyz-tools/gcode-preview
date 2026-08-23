@@ -23,7 +23,6 @@ export const app = (window.app = createApp({
     const model = ref(null);
     const dragging = ref(false);
     const settings = ref(Object.assign({}, defaultSettings));
-    const drawBoundingBox = ref(false);
     const enableDevMode = ref(false);
 
     watch(selectedPreset, (preset) => {
@@ -210,7 +209,6 @@ export const app = (window.app = createApp({
       dragging,
       settings,
       loadProgressive,
-      drawBoundingBox,
       enableDevMode,
       selectTab,
       addColor,

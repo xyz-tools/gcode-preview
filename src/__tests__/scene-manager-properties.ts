@@ -2,13 +2,41 @@ import { test, expect, describe, vi, beforeEach, afterEach } from 'vitest';
 
 // WebGL and OrbitControls cannot run under happy-dom, so only those two are stubbed.
 // Everything else — the scene graph, materials, the ObjectsManager — is real.
-vi.mock('three/examples/jsm/controls/OrbitControls.js', () => ({
-  OrbitControls: class {
-    target = { set: vi.fn(), x: 0, y: 0, z: 0 };
-    update = vi.fn();
-    dispose = vi.fn();
+vi.mock('three/examples/jsm/controls/OrbitControls.js', () => {
+  // the orthographic swap clones and copies the target, so it needs to behave
+  // like a Vector3 rather than a bag of spies
+  class Vec3 {
+    constructor(
+      public x = 0,
+      public y = 0,
+      public z = 0
+    ) {}
+    set(x: number, y: number, z: number) {
+      this.x = x;
+      this.y = y;
+      this.z = z;
+      return this;
+    }
+    copy(v: { x: number; y: number; z: number }) {
+      return this.set(v.x, v.y, v.z);
+    }
+    clone() {
+      return new Vec3(this.x, this.y, this.z);
+    }
+    toArray() {
+      return [this.x, this.y, this.z];
+    }
   }
-}));
+
+  return {
+    OrbitControls: class {
+      target = new Vec3();
+      screenSpacePanning = false;
+      update = vi.fn();
+      dispose = vi.fn();
+    }
+  };
+});
 
 vi.mock('three', async (importOriginal) => {
   const actual = await importOriginal<typeof import('three')>();
@@ -34,7 +62,7 @@ import { SceneManager, type SceneManagerOptions } from '../scene-manager';
 import { ObjectsManager } from '../objects-manager';
 import { Job } from '../job';
 import { Path, PathType } from '../path';
-import { Color, Group } from 'three';
+import { Color, Group, OrthographicCamera, PerspectiveCamera } from 'three';
 
 describe('SceneManager properties', () => {
   let sceneManager: SceneManager;
@@ -142,6 +170,43 @@ describe('SceneManager properties', () => {
       sceneManager.renderExtrusion = true;
 
       expect(spy).toHaveBeenCalledWith(expect.anything(), new Color('#ff0000'), 0);
+    });
+
+    test('a tool without a configured color falls back to the last one, warning once', () => {
+      // a tool index one past the colors supplied used to read extrusionColor[2]
+      // as undefined and poison the material color downstream
+      const job = createJob();
+      const highToolPath = new Path(PathType.Extrusion, 0.6, 0.2, 2);
+      highToolPath.addPoint(0, 0, 0);
+      highToolPath.addPoint(5, 0, 0);
+      job.addPath(highToolPath);
+
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const fresh = createSceneManager({ job, extrusionColor: ['#00ff00'] });
+      const spy = vi.spyOn(objectsManager(fresh), 'renderExtrusions');
+
+      expect(() => fresh.render()).not.toThrow();
+
+      expect(spy).toHaveBeenCalledWith(expect.anything(), new Color('#00ff00'), 2);
+      expect(warn).toHaveBeenCalledWith('No extrusionColor configured for tool index 2, falling back to another color');
+
+      fresh.render();
+      expect(warn).toHaveBeenCalledTimes(1);
+
+      fresh.dispose();
+    });
+
+    test('falls back to the default extrusion color when the color array is empty', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const fresh = createSceneManager({ job: createJob(), extrusionColor: [] });
+      const spy = vi.spyOn(objectsManager(fresh), 'renderExtrusions');
+
+      expect(() => fresh.render()).not.toThrow();
+
+      expect(spy).toHaveBeenCalledWith(expect.anything(), SceneManager.defaultExtrusionColor, 0);
+
+      fresh.dispose();
+      warn.mockRestore();
     });
 
     test('extrusionColor accepts an array, one entry per tool', () => {
@@ -420,6 +485,103 @@ describe('SceneManager properties', () => {
     });
   });
 
+  describe('orthographic camera', () => {
+    test('starts perspective', () => {
+      expect(sceneManager.orthographic).toBe(false);
+      expect(sceneManager.camera).toBeInstanceOf(PerspectiveCamera);
+    });
+
+    test('swaps the camera when enabled', () => {
+      sceneManager.orthographic = true;
+
+      expect(sceneManager.orthographic).toBe(true);
+      expect(sceneManager.camera).toBeInstanceOf(OrthographicCamera);
+    });
+
+    test('swaps back when disabled', () => {
+      sceneManager.orthographic = true;
+      sceneManager.orthographic = false;
+
+      expect(sceneManager.camera).toBeInstanceOf(PerspectiveCamera);
+    });
+
+    test('carries the camera position and target across the swap', () => {
+      sceneManager.camera.position.set(11, 22, 33);
+      sceneManager.controls.target.set(1, 2, 3);
+
+      sceneManager.orthographic = true;
+
+      expect(sceneManager.camera.position.toArray()).toEqual([11, 22, 33]);
+      expect(sceneManager.controls.target.toArray()).toEqual([1, 2, 3]);
+    });
+
+    test('enables screen space panning in orthographic mode', () => {
+      sceneManager.orthographic = true;
+
+      expect(sceneManager.controls.screenSpacePanning).toBe(true);
+    });
+
+    test('ignores a repeated value', () => {
+      sceneManager.orthographic = true;
+      const camera = sceneManager.camera;
+
+      sceneManager.orthographic = true;
+
+      expect(sceneManager.camera).toBe(camera);
+    });
+
+    test('sizes the frustum from the job bounds', () => {
+      sceneManager.orthographic = true;
+
+      // the test job spans 10mm, so the frustum is padded around that
+      const camera = sceneManager.camera as OrthographicCamera;
+      expect(camera.top).toBeGreaterThan(0);
+      expect(camera.left).toBeLessThan(0);
+    });
+
+    test('falls back to the build volume when the job has no bounds', () => {
+      const job = new Job();
+      appendPath(job, PathType.Extrusion, [
+        [0, 0, 0],
+        [10, 0, 0]
+      ]);
+      const unbounded = createSceneManager({ job });
+
+      unbounded.orthographic = true;
+
+      const camera = unbounded.camera as OrthographicCamera;
+      // build volume is 200mm, much larger than the job
+      expect(camera.top).toBeGreaterThan(50);
+      unbounded.dispose();
+    });
+
+    test('falls back to a default size with neither bounds nor build volume', () => {
+      const job = new Job();
+      appendPath(job, PathType.Extrusion, [
+        [0, 0, 0],
+        [10, 0, 0]
+      ]);
+      const bare = createSceneManager({ job });
+      bare.buildVolume = undefined;
+
+      bare.orthographic = true;
+
+      expect(bare.camera).toBeInstanceOf(OrthographicCamera);
+      bare.dispose();
+    });
+
+    test('resize keeps the orthographic frustum square to the canvas', () => {
+      sceneManager.orthographic = true;
+      const camera = sceneManager.camera as OrthographicCamera;
+      const widthBefore = camera.right - camera.left;
+
+      sceneManager.resize();
+
+      expect(camera.right - camera.left).toBeCloseTo(widthBefore, 5);
+      expect(camera.right).toBeGreaterThan(camera.top);
+    });
+  });
+
   describe('progressive rendering', () => {
     test('renders every path across frames', async () => {
       sceneManager.clear();
@@ -542,7 +704,6 @@ describe('SceneManager properties', () => {
         travelColor: '#404040',
         topLayerColor: '#505050',
         lastSegmentColor: '#606060',
-        toolColors: { 0: '#707070' },
         disableGradient: true,
         renderTubes: true,
         renderTravel: true,
