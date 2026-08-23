@@ -194,6 +194,16 @@ export class LayersMetadataIndexer extends Indexer {
   private currentMetadataLayerIndex = 0;
 
   /**
+   * Which strategy owns the shared layer array, decided on the first path.
+   * @remarks
+   * Locked once because the two strategies disagree about what an array
+   * position means: metadata mode requires position N to be metadata layer N,
+   * while the fallback creates layers purely from observed Z jumps. Switching
+   * midway would file paths into unrelated layers.
+   */
+  private useMetadata: boolean | null = null;
+
+  /**
    * Creates a new LayersMetadataIndexer
    * @param indexes - Array to store layers
    * @param layerMetadata - Layer metadata from slicer comments
@@ -218,10 +228,17 @@ export class LayersMetadataIndexer extends Indexer {
   /**
    * Replaces the layer metadata used for indexing.
    * @param layerMetadata - Layer metadata from slicer comments
-   * @remarks Must be set before paths are indexed to take effect.
+   * @remarks
+   * Must be set before paths are indexed to take effect: the strategy locks
+   * on the first path (see `useMetadata`). A streaming parse re-sets the same
+   * (growing) array each chunk, which keeps the layer pointer; swapping in a
+   * different array rewinds the pointer so stale positions cannot leak.
    */
   setLayerMetadata(layerMetadata: LayerMetadata[]): void {
-    this.layerMetadata = layerMetadata ?? [];
+    const next = layerMetadata ?? [];
+    if (next === this.layerMetadata) return;
+    this.layerMetadata = next;
+    this.currentMetadataLayerIndex = 0;
   }
 
   /**
@@ -230,7 +247,8 @@ export class LayersMetadataIndexer extends Indexer {
    * @throws NonPlanarPathError if path is non-planar (fallback mode only)
    */
   sortIn(path: Path): void {
-    if (this.hasMetadata) {
+    this.useMetadata ??= this.hasMetadata;
+    if (this.useMetadata) {
       this.sortWithMetadata(path);
     } else {
       this.fallbackIndexer.sortIn(path);

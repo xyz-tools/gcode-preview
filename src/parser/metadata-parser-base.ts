@@ -49,6 +49,19 @@ export abstract class SlicerMetadataParser {
   }
 
   /**
+   * Resolves the slicer name to report for the given gcode.
+   * @param commentCommands - Array of gcode commands with comments
+   * @returns The slicer name
+   * @remarks
+   * Parsers that handle a family of slicers sharing one comment dialect
+   * override this to report the specific generator named in the header.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  detectSlicerName(commentCommands: GCodeCommand[]): string {
+    return this.slicerName;
+  }
+
+  /**
    * Parses layer metadata from gcode comments
    * @param commands - Array of gcode commands with comments
    * @returns Layer metadata extracted from comments

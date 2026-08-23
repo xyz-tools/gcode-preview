@@ -206,7 +206,11 @@ export class GCodePreview {
       tail = split.tail;
 
       // parse increments but don't render yet
-      const { commands } = this.parser.parseGCode(split.complete);
+      const { commands, metadata } = this.parser.parseGCode(split.complete);
+
+      // forward metadata before executing: the layer indexer locks its
+      // strategy on the first path it sees
+      this.job.metadata = metadata;
 
       // we'll execute the commands immediately, for now
       this.interpreter.execute(commands, this.job);

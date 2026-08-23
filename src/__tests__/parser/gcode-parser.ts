@@ -172,22 +172,32 @@ describe('parseCommand tokenizing', () => {
       const cmd = parse('G1 X1 ; move right');
       expect(cmd.gcode).toEqual('g1');
       expect(cmd.params.x).toEqual(1);
-      expect(cmd.comment).toEqual(' move right');
+      expect(cmd.comment).toEqual('move right');
     });
 
     test('stops the comment at a second semicolon', () => {
-      expect(parse('G1 X1 ; first ; second').comment).toEqual(' first ');
+      expect(parse('G1 X1 ; first ; second').comment).toEqual('first');
     });
 
     test('treats an empty comment as absent', () => {
       expect(parse('G1 X1 ;').comment).toBeUndefined();
     });
 
+    test('treats a whitespace-only comment as absent', () => {
+      expect(parse('G1 X1 ;   ').comment).toBeUndefined();
+    });
+
+    test('trims surrounding whitespace off the comment', () => {
+      // Slicers write '; comment' with a space after the semicolon; consumers
+      // (the slicer metadata parsers anchor patterns with ^) rely on the trim.
+      expect(parse('G1 X1 ;   padded   ').comment).toEqual('padded');
+    });
+
     test('parses no command from a comment-only line', () => {
       const cmd = parse('; just a comment');
       expect(cmd.gcode).toEqual('');
       expect(cmd.params).toEqual({});
-      expect(cmd.comment).toEqual(' just a comment');
+      expect(cmd.comment).toEqual('just a comment');
     });
 
     test('drops the comment when asked to', () => {

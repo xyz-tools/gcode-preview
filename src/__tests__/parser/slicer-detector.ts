@@ -15,7 +15,8 @@ test('detectSlicer detects PrusaSlicer', () => {
   const parser = detectSlicer(commands);
 
   expect(parser).not.toBeNull();
-  expect(parser!.slicerName).toBe('PrusaSlicer');
+  expect(parser!.slicerName).toBe('PrusaFamily');
+  expect(parser!.detectSlicerName(commands.filter((cmd) => cmd.comment))).toBe('PrusaSlicer');
 });
 
 test('detectSlicer detects Cura', () => {
@@ -41,9 +42,9 @@ test('detectSlicer returns null for unknown slicer', () => {
   expect(parser).toBeNull();
 });
 
-test('detectSlicer prioritizes PrusaSlicer when both patterns match', () => {
+test('detectSlicer prioritizes the Prusa family when both patterns match', () => {
   const commands = [
-    createCommand(';LAYER_CHANGE', 'LAYER_CHANGE'), // PrusaSlicer pattern
+    createCommand(';LAYER_CHANGE', 'LAYER_CHANGE'), // Prusa family pattern
     createCommand(';LAYER:0', 'LAYER:0'), // Cura pattern
     createCommand('G1 X0 Y0')
   ];
@@ -51,7 +52,7 @@ test('detectSlicer prioritizes PrusaSlicer when both patterns match', () => {
   const parser = detectSlicer(commands);
 
   expect(parser).not.toBeNull();
-  expect(parser!.slicerName).toBe('PrusaSlicer'); // Should pick first matching parser
+  expect(parser!.slicerName).toBe('PrusaFamily'); // Should pick first matching parser
 });
 
 test('parseSlicerMetadata parses PrusaSlicer metadata', () => {
@@ -64,7 +65,7 @@ test('parseSlicerMetadata parses PrusaSlicer metadata', () => {
 
   const result = parseSlicerMetadata(commands, detectSlicer(commands));
 
-  expect(result.slicerName).toBe('PrusaSlicer');
+  expect(result.slicerName).toBe('PrusaFamily');
   expect(result.layers).toHaveLength(1);
   expect(result.layers[0]).toEqual({
     layerIndex: 0,
@@ -100,12 +101,11 @@ test('parseSlicerMetadata returns empty result for unknown slicer', () => {
 test('getAvailableParsers returns all parsers', () => {
   const parsers = getAvailableParsers();
 
-  expect(parsers).toHaveLength(5);
-  expect(parsers[0].slicerName).toBe('PrusaSlicer');
-  expect(parsers[1].slicerName).toBe('PrusaFamily');
-  expect(parsers[2].slicerName).toBe('Simplify3D');
-  expect(parsers[3].slicerName).toBe('Slic3r');
-  expect(parsers[4].slicerName).toBe('Cura');
+  expect(parsers).toHaveLength(4);
+  expect(parsers[0].slicerName).toBe('PrusaFamily');
+  expect(parsers[1].slicerName).toBe('Simplify3D');
+  expect(parsers[2].slicerName).toBe('Slic3r');
+  expect(parsers[3].slicerName).toBe('Cura');
 });
 
 test('parseSlicerMetadata handles empty commands array', () => {

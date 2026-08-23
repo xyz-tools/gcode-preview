@@ -226,11 +226,39 @@ export class Parser {
     // (not just comments) so parsers that read Z from G-code moves work.
     if (!this.metadataParser) {
       this.metadataParser = detectSlicer(commands);
+      // The slicer name comes from the chunk that identified the slicer -- a
+      // later chunk may contain layer comments but not the header.
+      if (this.metadataParser) {
+        this.metadata.slicerName = this.metadataParser.detectSlicerName(comments);
+      }
     }
     const slicerMetadata = parseSlicerMetadata(commands, this.metadataParser);
     if (slicerMetadata.layers.length > 0) {
-      this.metadata.layerMetadata = slicerMetadata.layers;
-      this.metadata.slicerName = slicerMetadata.slicerName;
+      // Accumulate across chunks (like thumbnails above): a streaming parse
+      // hands each chunk to parseGCode separately, and the parsers report
+      // chunk-local indices. lineIndex shifts by the lines parsed before this
+      // chunk; positional layer numbering (layerIndex === position in the
+      // chunk result) continues from the layers gathered so far, while
+      // explicit slicer-reported indices (e.g. Cura's LAYER:n) are kept.
+      const layers = (this.metadata.layerMetadata ??= []);
+      const lineOffset = this.lineCount - lines.length;
+      const layerOffset = layers.length;
+      slicerMetadata.layers.forEach((layer, i) => {
+        // Parsers that derive height from the previous layer's Z cannot see
+        // across a chunk boundary; the first layer of a chunk knows the
+        // previous layer only here, where the accumulated result is in hand.
+        let height = layer.height;
+        const previous = layers[layers.length - 1];
+        if (height === undefined && i === 0 && layer.z !== undefined && previous?.z !== undefined) {
+          height = Math.round((layer.z - previous.z) * 10000) / 10000;
+        }
+        layers.push({
+          ...layer,
+          height,
+          lineIndex: layer.lineIndex + lineOffset,
+          layerIndex: layer.layerIndex === i ? i + layerOffset : layer.layerIndex
+        });
+      });
     }
 
     return { metadata: this.metadata, commands: commands };
@@ -274,7 +302,9 @@ export class Parser {
       // only the span up to the next semicolon, matching the previous split(';')[1]
       const nextSemicolon = input.indexOf(';', firstSemicolon + 1);
       const text = nextSemicolon < 0 ? input.slice(firstSemicolon + 1) : input.slice(firstSemicolon + 1, nextSemicolon);
-      comment = text || undefined;
+      // Normalized once here so every consumer sees '; layer 1' and ';layer 1'
+      // identically -- the slicer metadata parsers anchor their patterns with ^.
+      comment = text.trim() || undefined;
     }
 
     let gcode = '';

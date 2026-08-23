@@ -25,7 +25,7 @@ export class CuraMetadataParser extends SlicerMetadataParser {
     commands.forEach((command, lineIndex) => {
       if (!command.comment) return;
 
-      const comment = command.comment.trim();
+      const comment = command.comment;
 
       // Check for layer marker
       const layerMatch = comment.match(/^LAYER:(\d+)/);
