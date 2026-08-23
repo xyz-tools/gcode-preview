@@ -138,7 +138,16 @@
                     :disabled="!settings.renderExtrusion"
                   />
                 </div>
-                
+                  <div class="controls" v-show="!settings.renderTubes">
+                    <label for="disable-gradient">Disable layer gradient</label
+                    ><input
+                      type="checkbox"
+                      id="disable-gradient"
+                      v-model="settings.disableGradient"
+                      :disabled="!settings.renderExtrusion"
+                    />
+                  </div>
+
                 <div class="controls" v-show="settings.renderTubes">
                   <label>Extrusion width <output>{{settings.extrusionWidth}}</output></label>&nbsp;
                   <input
