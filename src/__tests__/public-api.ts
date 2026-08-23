@@ -98,7 +98,6 @@ describe('public API surface', () => {
       animate: 0,
       render: 0,
       renderAnimated: 0,
-      createBoundingBox: 0,
       clear: 0,
       resize: 0,
       dispose: 0,
@@ -132,7 +131,6 @@ describe('public API surface', () => {
       'renderExtrusion',
       'renderTravel',
       'renderTubes',
-      'boundingBoxMesh',
       'lineWidth',
       'lineHeight',
       'extrusionWidth',
@@ -146,6 +144,11 @@ describe('public API surface', () => {
     it.each(accessors)('has getter and setter %s', (name) => {
       expect(getterNames(SceneManager.prototype)).toContain(name);
       expect(setterNames(SceneManager.prototype)).toContain(name);
+    });
+
+    // Read-only since #380 moved the bounding box into the ObjectsManager.
+    it('has read-only getter boundingBoxMesh', () => {
+      expect(getterNames(SceneManager.prototype)).toContain('boundingBoxMesh');
     });
   });
 
@@ -236,7 +239,7 @@ describe('public API surface', () => {
     });
 
     it('keeps SceneManager prototype members visible', () => {
-      expect(methodNames(SceneManager.prototype).length).toBeGreaterThanOrEqual(11);
+      expect(methodNames(SceneManager.prototype).length).toBeGreaterThanOrEqual(10);
     });
   });
 });
