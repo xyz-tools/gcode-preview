@@ -183,6 +183,71 @@ describe('ObjectsManager', () => {
         expect(positionsOf(objectsManager.extrusionsGroup.children[0] as LineSegments2)).toBeInstanceOf(Float32Array);
       });
     });
+
+    describe('layer gradient', () => {
+      test('leaves lines flat when the gradient is off', () => {
+        objectsManager.renderExtrusionLines([layerPath(0)], new Color(0x00ff00));
+
+        const line = objectsManager.extrusionsGroup.children[0] as LineSegments2;
+        expect((line.material as LineMaterial).vertexColors).toBe(false);
+        expect(line.geometry.attributes.instanceColorStart).toBeUndefined();
+      });
+
+      test('bakes a per-layer brightness into the vertex colors when enabled', () => {
+        objectsManager.gradientEnabled = true;
+        objectsManager.layerCount = 2;
+
+        objectsManager.renderExtrusionLines([layerPath(0)], new Color(0x00ff00));
+
+        const line = objectsManager.extrusionsGroup.children[0] as LineSegments2;
+        expect((line.material as LineMaterial).vertexColors).toBe(true);
+        // 3 points -> 2 segments -> 6 grayscale floats per segment
+        const colors = colorsOf(line);
+        expect(colors).toHaveLength(12);
+        // layer 0 of 2 -> 0.1 + 0.7 * 0 / 2 = 0.1, the same grayscale on every channel
+        colors.forEach((channel) => expect(channel).toBeCloseTo(0.1));
+      });
+
+      test('brightens higher layers', () => {
+        objectsManager.gradientEnabled = true;
+        objectsManager.layerCount = 2;
+
+        objectsManager.renderExtrusionLines([layerPath(1)], new Color(0x00ff00));
+
+        // layer 1 of 2 -> 0.1 + 0.7 * 1 / 2 = 0.45
+        expect(colorsOf(objectsManager.extrusionsGroup.children[0] as LineSegments2)[0]).toBeCloseTo(0.45);
+      });
+
+      test('keeps lines flat for a non-planar job with no layers', () => {
+        objectsManager.gradientEnabled = true;
+        objectsManager.layerCount = 0;
+
+        objectsManager.renderExtrusionLines([layerPath(0)], new Color(0x00ff00));
+
+        const line = objectsManager.extrusionsGroup.children[0] as LineSegments2;
+        expect((line.material as LineMaterial).vertexColors).toBe(false);
+      });
+
+      test('renders a path with no layer index at full brightness', () => {
+        objectsManager.gradientEnabled = true;
+        objectsManager.layerCount = 2;
+        const path = createTestPath(); // no layerIndex assigned
+
+        objectsManager.renderExtrusionLines([path], new Color(0x00ff00));
+
+        expect(colorsOf(objectsManager.extrusionsGroup.children[0] as LineSegments2)[0]).toBe(1);
+      });
+
+      test('never gradients travel moves', () => {
+        objectsManager.gradientEnabled = true;
+        objectsManager.layerCount = 2;
+
+        objectsManager.renderTravelLines([layerPath(0)], new Color(0xff0000));
+
+        const line = objectsManager.travelMovesGroup.children[0] as LineSegments2;
+        expect((line.material as LineMaterial).vertexColors).toBe(false);
+      });
+    });
   });
 
   describe('renderExtrusionTubes', () => {
@@ -876,6 +941,17 @@ describe('ObjectsManager', () => {
 /** The flat position buffer three.js interleaves the segment endpoints into. */
 function positionsOf(lines: LineSegments2): Float32Array {
   return lines.geometry.attributes.instanceStart.data.array as Float32Array;
+}
+
+function colorsOf(lines: LineSegments2): Float32Array {
+  return lines.geometry.attributes.instanceColorStart.data.array as Float32Array;
+}
+
+/** A three-point extrusion path tagged with the layer it belongs to. */
+function layerPath(layerIndex: number): Path {
+  const path = createTestPath();
+  path.layerIndex = layerIndex;
+  return path;
 }
 
 function createTestPath(): Path {

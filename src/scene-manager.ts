@@ -188,9 +188,9 @@ export class SceneManager {
     if (opts.lastSegmentColor !== undefined) {
       this._lastSegmentColor = new Color(opts.lastSegmentColor);
     }
-    if (opts.disableGradient !== undefined) {
-      this.disableGradient = opts.disableGradient;
-    }
+    // set the backing field directly: the setter re-renders, but initScene() below
+    // draws the scene once with this value already applied
+    this._disableGradient = opts.disableGradient ?? this._disableGradient;
 
     console.info('Using THREE r' + REVISION);
     console.debug('preview options', opts);
@@ -442,7 +442,22 @@ export class SceneManager {
     return this._disableGradient;
   }
   set disableGradient(value: boolean) {
+    if (value === this._disableGradient) return;
     this._disableGradient = value;
+    // the ramp is baked into the line geometry, so switching it on or off means
+    // rebuilding the extrusion lines
+    if (this.job) this.render();
+  }
+
+  /**
+   * Whether the per-layer brightness gradient should be baked into the extrusion lines.
+   * @remarks
+   * The gradient only applies to flat lines: tubes carry their own shading, and
+   * single-layer mode shows one layer that should read at full color. A non-planar
+   * job (no layers) is filtered out downstream, where the layer count is known.
+   */
+  private get gradientEnabled(): boolean {
+    return !this._disableGradient && !this._singleLayerMode && !this.renderTubes;
   }
 
   /**
@@ -522,6 +537,12 @@ export class SceneManager {
 
     // the visible range moved, so the clipping planes have to follow
     this.updateClippingPlanes();
+
+    // entering or leaving single-layer mode flips whether the gradient applies, so
+    // rebuild the lines to avoid leaving the lone visible layer dimmed by the ramp
+    if (!this._disableGradient && !this.renderTubes) {
+      this.render();
+    }
   }
 
   get ambientLight(): number {
@@ -789,6 +810,8 @@ export class SceneManager {
   private renderPaths(endPathNumber: number = Infinity): void {
     this.objectsManager.setTravelsVisible(this._renderTravel);
     this.objectsManager.setExtrusionsVisible(this._renderExtrusion);
+    this.objectsManager.gradientEnabled = this.gradientEnabled;
+    this.objectsManager.layerCount = this.job.countLayers;
 
     if (this._renderExtrusion && endPathNumber === Infinity) {
       this.renderTopLayerHighlight();
