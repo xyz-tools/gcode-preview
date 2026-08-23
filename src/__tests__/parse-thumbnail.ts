@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 
-import { Parser } from '../gcode-parser';
+import { Parser } from '../parser/gcode-parser';
 import { Thumbnail } from '../thumbnail';
 
 const gcodeCommentsWithThumbnail = `

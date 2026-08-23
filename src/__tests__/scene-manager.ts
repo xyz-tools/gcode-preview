@@ -3,7 +3,7 @@
 import { test, expect, vi, assert } from 'vitest';
 
 import { SceneManager } from '../scene-manager';
-import { GCodeCommand } from '../gcode-parser';
+import { GCodeCommand } from '../parser/gcode-parser';
 
 // add a test for destroying the scene manager which should cancel the render loop.
 test('destroying the scene manager should dispose renderer and controls', async () => {

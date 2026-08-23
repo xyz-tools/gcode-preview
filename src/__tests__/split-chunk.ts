@@ -1,7 +1,7 @@
 import { test, expect, describe } from 'vitest';
 
 import { splitChunk } from '../helpers/split-chunk';
-import { Parser } from '../gcode-parser';
+import { Parser } from '../parser/gcode-parser';
 
 describe('splitChunk', () => {
   test('keeps the newline out of the tail', () => {
