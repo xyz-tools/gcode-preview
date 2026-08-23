@@ -1,7 +1,8 @@
 import { test, expect, describe, vi, beforeEach, afterEach } from 'vitest';
 import { ObjectsManager } from '../objects-manager';
 import { Path, PathType } from '../path';
-import { Scene, Color, Group, BatchedMesh } from 'three';
+import { BoundingBox } from '../bounding-box';
+import { Scene, Color, Group, BatchedMesh, LineBasicMaterial } from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
@@ -612,6 +613,151 @@ describe('ObjectsManager', () => {
       vi.advanceTimersByTime(ObjectsManager.rebuildDebounce);
 
       expect(onRebuildNeeded).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('build volume', () => {
+    const dimensions = { x: 100, y: 120, z: 50, smallGrid: false };
+
+    test('setBuildVolume adds the visualization to the scene', () => {
+      objectsManager.setBuildVolume(dimensions);
+
+      expect(objectsManager.buildVolume?.x).toBe(100);
+      expect(scene.children.some((child) => child.name === 'BuildVolume')).toBe(true);
+    });
+
+    test('setBuildVolume replaces an existing volume', () => {
+      objectsManager.setBuildVolume(dimensions);
+      const first = objectsManager.buildVolume;
+
+      objectsManager.setBuildVolume({ x: 200, y: 200, z: 100, smallGrid: true });
+
+      expect(objectsManager.buildVolume).not.toBe(first);
+      expect(objectsManager.buildVolume?.x).toBe(200);
+      expect(scene.children.filter((child) => child.name === 'BuildVolume')).toHaveLength(1);
+    });
+
+    test('setBuildVolume without dimensions removes the volume', () => {
+      objectsManager.setBuildVolume(dimensions);
+
+      objectsManager.setBuildVolume();
+
+      expect(objectsManager.buildVolume).toBeUndefined();
+      expect(scene.children.some((child) => child.name === 'BuildVolume')).toBe(false);
+    });
+
+    test('the build volume survives a geometry reset', () => {
+      objectsManager.setBuildVolume(dimensions);
+      const volume = objectsManager.buildVolume;
+
+      objectsManager.reset();
+
+      expect(objectsManager.buildVolume).toBe(volume);
+      expect(scene.children.some((child) => child.name === 'BuildVolume')).toBe(true);
+    });
+
+    test('dispose removes the build volume from the scene', () => {
+      objectsManager.setBuildVolume(dimensions);
+
+      objectsManager.dispose();
+
+      expect(objectsManager.buildVolume).toBeUndefined();
+      expect(scene.children.some((child) => child.name === 'BuildVolume')).toBe(false);
+    });
+  });
+
+  describe('bounding box', () => {
+    function createBounds(): BoundingBox {
+      const bounds = new BoundingBox();
+      bounds.update(0, 0, 0);
+      bounds.update(10, 20, 5);
+      return bounds;
+    }
+
+    function meshesInScene(): number {
+      return scene.children.filter((child) => child.name === 'bounding-box').length;
+    }
+
+    test('updateBoundingBox creates a hidden mesh when no color is set', () => {
+      objectsManager.updateBoundingBox(createBounds());
+
+      expect(objectsManager.boundingBoxMesh?.visible).toBe(false);
+      expect(meshesInScene()).toBe(1);
+    });
+
+    test('updateBoundingBox draws the box at the model min corner in the configured color', () => {
+      objectsManager.setBoundingBoxColor(new Color(0x00ff00));
+
+      objectsManager.updateBoundingBox(createBounds());
+
+      const mesh = objectsManager.boundingBoxMesh;
+      expect(mesh?.visible).toBe(true);
+      expect((mesh?.material as LineBasicMaterial).color.getHex()).toBe(0x00ff00);
+      expect(mesh?.position.x).toBe(0);
+      expect(mesh?.position.y).toBe(0);
+    });
+
+    test('updateBoundingBox ignores invalid bounds', () => {
+      objectsManager.updateBoundingBox(new BoundingBox());
+
+      expect(objectsManager.boundingBoxMesh).toBeUndefined();
+    });
+
+    test('updateBoundingBox reuses the mesh while the bounds are unchanged', () => {
+      const bounds = createBounds();
+      objectsManager.updateBoundingBox(bounds);
+      const first = objectsManager.boundingBoxMesh;
+
+      objectsManager.updateBoundingBox(bounds);
+
+      expect(objectsManager.boundingBoxMesh).toBe(first);
+      expect(meshesInScene()).toBe(1);
+    });
+
+    test('grown bounds rebuild the mesh', () => {
+      const bounds = createBounds();
+      objectsManager.updateBoundingBox(bounds);
+      const first = objectsManager.boundingBoxMesh;
+
+      bounds.update(50, 60, 40);
+      objectsManager.updateBoundingBox(bounds);
+
+      expect(objectsManager.boundingBoxMesh).not.toBe(first);
+      expect(meshesInScene()).toBe(1);
+    });
+
+    test('setBoundingBoxColor recolors and toggles the existing mesh in place', () => {
+      objectsManager.updateBoundingBox(createBounds());
+      const mesh = objectsManager.boundingBoxMesh;
+
+      objectsManager.setBoundingBoxColor(new Color(0xff00ff));
+
+      expect(objectsManager.boundingBoxMesh).toBe(mesh);
+      expect(mesh?.visible).toBe(true);
+      expect((mesh?.material as LineBasicMaterial).color.getHex()).toBe(0xff00ff);
+
+      objectsManager.setBoundingBoxColor(undefined);
+
+      expect(mesh?.visible).toBe(false);
+    });
+
+    test('the bounding box survives a geometry reset', () => {
+      objectsManager.updateBoundingBox(createBounds());
+      const mesh = objectsManager.boundingBoxMesh;
+
+      objectsManager.reset();
+
+      expect(objectsManager.boundingBoxMesh).toBe(mesh);
+      expect(meshesInScene()).toBe(1);
+    });
+
+    test('dispose removes the bounding box from the scene', () => {
+      objectsManager.updateBoundingBox(createBounds());
+
+      objectsManager.dispose();
+
+      expect(objectsManager.boundingBoxMesh).toBeUndefined();
+      expect(meshesInScene()).toBe(0);
     });
   });
 

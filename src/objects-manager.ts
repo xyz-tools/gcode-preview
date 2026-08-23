@@ -1,5 +1,8 @@
 import { Path } from './path';
 import { type Disposable } from './helpers/three-utils';
+import { BuildVolume, type BuildVolumeDef } from './build-volume';
+import { type BoundingBox } from './bounding-box';
+import { LineBox } from './helpers/line-box';
 
 import {
   Group,
@@ -11,6 +14,7 @@ import {
   Euler,
   BatchedMesh,
   BufferGeometry,
+  LineBasicMaterial,
   Material
 } from 'three';
 
@@ -41,6 +45,15 @@ export class ObjectsManager {
   /** Width of extruded material. Undefined means each path uses its own width. */
   extrusionWidth?: number;
   renderTubes = false;
+
+  /** Build volume visualization, or undefined when none is drawn */
+  buildVolume?: BuildVolume;
+  /** Wireframe box around the model, created lazily on first draw */
+  boundingBoxMesh?: LineBox;
+  /** Color of the bounding box; undefined hides it */
+  boundingBoxColor?: Color;
+  /** Size the bounding box mesh was built for, to detect stale bounds */
+  private boundingBoxSize?: { x: number; y: number; z: number };
 
   /** How long to coalesce geometry rebuilds for, in ms */
   static readonly rebuildDebounce = 100;
@@ -131,6 +144,72 @@ export class ObjectsManager {
   setBrightness(value: number) {
     this.brightness = value;
     this.updateUniform('brightness', value);
+  }
+
+  // --- scene furniture: owned objects that survive geometry rebuilds ----------
+
+  /**
+   * Replaces the build volume visualization, or removes it when no dimensions are given.
+   * @param value - Build volume dimensions, or undefined to draw none
+   */
+  setBuildVolume(value?: BuildVolumeDef) {
+    this.buildVolume?.dispose();
+    this.buildVolume = undefined;
+    if (!value) return;
+
+    this.buildVolume = new BuildVolume(value.x, value.y, value.z, value.smallGrid, this.scene);
+    this.buildVolume.update();
+  }
+
+  /**
+   * Recolors the bounding box in place; undefined hides it.
+   * @param color - New color, or undefined to hide the box
+   */
+  setBoundingBoxColor(color?: Color) {
+    this.boundingBoxColor = color;
+    if (!this.boundingBoxMesh) return;
+
+    this.boundingBoxMesh.visible = color !== undefined;
+    if (color) (this.boundingBoxMesh.material as LineBasicMaterial).color = color;
+  }
+
+  /**
+   * Draws the bounding box for the given bounds, creating or resizing the mesh as needed.
+   * @remarks
+   * The mesh is kept across geometry rebuilds — only a change in the bounds themselves
+   * (a file streaming in) makes a new one. Visibility tracks whether a color is set.
+   */
+  updateBoundingBox(boundingBox: BoundingBox) {
+    if (!boundingBox.isValid) return;
+    const size = boundingBox.size;
+
+    const stale =
+      this.boundingBoxSize &&
+      (size.x !== this.boundingBoxSize.x || size.y !== this.boundingBoxSize.y || size.z !== this.boundingBoxSize.z);
+    if (stale) this.disposeBoundingBox();
+
+    if (!this.boundingBoxMesh) {
+      const mesh = new LineBox(size.x, size.z, size.y, this.boundingBoxColor, false);
+      mesh.name = 'bounding-box';
+      const min = boundingBox.corners.min.toVector3();
+      mesh.position.set(min.x, min.y, min.z);
+
+      this.boundingBoxMesh = mesh;
+      this.boundingBoxSize = { x: size.x, y: size.y, z: size.z };
+      this.scene.add(mesh);
+    }
+
+    this.boundingBoxMesh.visible = this.boundingBoxColor !== undefined;
+    if (this.boundingBoxColor) (this.boundingBoxMesh.material as LineBasicMaterial).color = this.boundingBoxColor;
+  }
+
+  private disposeBoundingBox() {
+    if (!this.boundingBoxMesh) return;
+
+    this.scene.remove(this.boundingBoxMesh);
+    this.boundingBoxMesh.dispose();
+    this.boundingBoxMesh = undefined;
+    this.boundingBoxSize = undefined;
   }
 
   // --- dimensions: baked into the buffers, so these need a rebuild ------------
@@ -282,6 +361,9 @@ export class ObjectsManager {
     this.rebuildTimeout = undefined;
     this.extrusionsGroup.removeFromParent();
     this.travelMovesGroup.removeFromParent();
+    this.buildVolume?.dispose();
+    this.buildVolume = undefined;
+    this.disposeBoundingBox();
     this.disposables.forEach((d) => d.dispose());
     this.disposables = [];
   }

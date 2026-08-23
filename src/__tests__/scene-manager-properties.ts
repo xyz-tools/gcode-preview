@@ -503,6 +503,26 @@ describe('SceneManager properties', () => {
       expect(current.lineWidth).toBe(3);
     });
 
+    test('keeps the build volume and bounding box color for the next job', () => {
+      sceneManager.boundingBoxColor = '#00ff00';
+
+      sceneManager.clear();
+
+      expect(sceneManager.buildVolume?.x).toBe(200);
+      expect(sceneManager.buildVolume?.smallGrid).toBe(true);
+      expect((sceneManager.boundingBoxColor as Color).getHex()).toBe(0x00ff00);
+      // the box itself belonged to the cleared job
+      expect(sceneManager.boundingBoxMesh).toBeUndefined();
+    });
+
+    test('does not resurrect a build volume that was removed', () => {
+      sceneManager.buildVolume = undefined;
+
+      sceneManager.clear();
+
+      expect(sceneManager.buildVolume).toBeUndefined();
+    });
+
     test('keeps renderTubes and the lighting for the next job', () => {
       sceneManager.renderTubes = true;
       sceneManager.ambientLight = 0.7;
