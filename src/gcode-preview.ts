@@ -35,6 +35,12 @@ type LibOptions = {
    * batch, so very low values cost draw calls on large files.
    */
   liveRenderInterval?: number;
+  /**
+   * Maximum deviation, in millimeters, between rendered G2/G3 arcs and the
+   * true arc (default 0.05). Lower values produce smoother arcs at the cost
+   * of more geometry; higher values trade smoothness for performance.
+   */
+  arcChordTolerance?: number;
 };
 
 export type GCodePreviewOptions = LibOptions & SceneManagerOptions;
@@ -145,6 +151,7 @@ export class GCodePreview {
    */
   constructor(opts: GCodePreviewOptions) {
     this.opts = opts;
+    this.interpreter = new Interpreter({ arcChordTolerance: opts.arcChordTolerance });
     this._parser = this.createParser();
     this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
     // note: reads opts.devMode because this.devMode is only assigned below,

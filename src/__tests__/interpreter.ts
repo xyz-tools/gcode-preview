@@ -174,6 +174,17 @@ describe('malformed coordinates through the whole pipeline', () => {
     expect(Math.max(...g3Ys)).toBeLessThanOrEqual(10);
   });
 
+  test('arcChordTolerance tunes how densely arcs are tessellated', () => {
+    const gcode = ['G1 X10 Y10 Z1 E1', 'G2 X20 Y10 I5 J0 E1'].join('\n');
+    const runWith = (tolerance?: number) =>
+      new Interpreter({ arcChordTolerance: tolerance }).execute(new Parser().parseGCode(gcode).commands);
+
+    const defaultCount = allVertices(runWith()).length;
+
+    expect(allVertices(runWith(0.005)).length).toBeGreaterThan(defaultCount);
+    expect(allVertices(runWith(0.5)).length).toBeLessThan(defaultCount);
+  });
+
   test('an arc ending on X0 or Y0 moves there instead of keeping the previous position', () => {
     // g2 used `x || state.x`, so a legitimate 0 endpoint was falsy and silently
     // discarded. This is ordinary valid gcode, not a malformed-input case.
