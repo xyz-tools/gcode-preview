@@ -48,15 +48,15 @@ describe('public API types', () => {
         | 'endLayer'
         | 'extrusionColor'
         | 'initialCameraPosition'
-        | 'lastSegmentColor' // no-op today — debated in #356
+        | 'lastSegmentColor'
         | 'lineWidth'
         | 'lineHeight'
         | 'renderExtrusion'
         | 'renderTravel'
         | 'startLayer'
-        | 'topLayerColor' // no-op today — debated in #356
+        | 'topLayerColor'
         | 'travelColor'
-        | 'disableGradient' // no-op today — debated in #356
+        | 'disableGradient'
         | 'extrusionWidth'
         | 'renderTubes'
         | 'boundingBoxColor'
@@ -75,10 +75,6 @@ describe('public API types', () => {
         ColorRepresentation | ColorRepresentation[] | undefined
       >();
       expectTypeOf<GCodePreviewOptions['travelColor']>().toEqualTypeOf<ColorRepresentation | undefined>();
-      // topLayerColor, lastSegmentColor and disableGradient are accepted and
-      // stored but never read by the render path today. Whether they are
-      // re-implemented or removed for 3.0 is debated in #356 — if removed,
-      // drop every pin marked "#356" as part of that breaking change.
       expectTypeOf<GCodePreviewOptions['topLayerColor']>().toEqualTypeOf<ColorRepresentation | undefined>();
       expectTypeOf<GCodePreviewOptions['lastSegmentColor']>().toEqualTypeOf<ColorRepresentation | undefined>();
       expectTypeOf<GCodePreviewOptions['boundingBoxColor']>().toEqualTypeOf<ColorRepresentation | undefined>();
@@ -91,7 +87,7 @@ describe('public API types', () => {
       expectTypeOf<GCodePreviewOptions['renderExtrusion']>().toEqualTypeOf<boolean | undefined>();
       expectTypeOf<GCodePreviewOptions['renderTravel']>().toEqualTypeOf<boolean | undefined>();
       expectTypeOf<GCodePreviewOptions['renderTubes']>().toEqualTypeOf<boolean | undefined>();
-      expectTypeOf<GCodePreviewOptions['disableGradient']>().toEqualTypeOf<boolean | undefined>(); // debated in #356
+      expectTypeOf<GCodePreviewOptions['disableGradient']>().toEqualTypeOf<boolean | undefined>();
       expectTypeOf<GCodePreviewOptions['orthographic']>().toEqualTypeOf<boolean | undefined>();
     });
 
@@ -113,16 +109,16 @@ describe('public API types', () => {
         | 'endLayer'
         | 'extrusionColor'
         | 'initialCameraPosition'
-        | 'lastSegmentColor' // no-op today — debated in #356
+        | 'lastSegmentColor'
         | 'lineWidth'
         | 'lineHeight'
         | 'minLayerThreshold'
         | 'renderExtrusion'
         | 'renderTravel'
         | 'startLayer'
-        | 'topLayerColor' // no-op today — debated in #356
+        | 'topLayerColor'
         | 'travelColor'
-        | 'disableGradient' // no-op today — debated in #356
+        | 'disableGradient'
         | 'extrusionWidth'
         | 'renderTubes'
         | 'boundingBoxColor'
@@ -195,8 +191,8 @@ describe('public API types', () => {
         sm.extrusionColor = ['#ff0000', '#00ff00'];
         sm.backgroundColor = '#000000';
         sm.travelColor = 0x123456;
-        sm.topLayerColor = 'red'; // no-op today — debated in #356
-        sm.lastSegmentColor = 'red'; // no-op today — debated in #356
+        sm.topLayerColor = 'red';
+        sm.lastSegmentColor = 'red';
         sm.boundingBoxColor = 'red';
         sm.buildVolume = { x: 200, y: 200, z: 200, smallGrid: undefined };
         sm.lineWidth = 2;
@@ -208,7 +204,7 @@ describe('public API types', () => {
         sm.renderExtrusion = true;
         sm.renderTravel = false;
         sm.renderTubes = true;
-        sm.disableGradient = false; // no-op today — debated in #356
+        sm.disableGradient = false;
         sm.brightness = 1;
         sm.orthographic = false;
       };

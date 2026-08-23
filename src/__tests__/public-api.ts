@@ -113,17 +113,13 @@ describe('public API surface', () => {
     });
 
     // Every accessor a consumer can both read and assign.
-    // topLayerColor, lastSegmentColor and disableGradient are stored but
-    // never read by the render path today; whether they are re-implemented
-    // or removed for 3.0 is debated in #356. If removed, drop them here as
-    // part of that breaking change.
     const accessors = [
       'buildVolume',
       'extrusionColor',
       'backgroundColor',
       'travelColor',
-      'topLayerColor', // no-op today — debated in #356
-      'lastSegmentColor', // no-op today — debated in #356
+      'topLayerColor',
+      'lastSegmentColor',
       'boundingBoxColor',
       'startLayer',
       'endLayer',
@@ -134,7 +130,7 @@ describe('public API surface', () => {
       'lineWidth',
       'lineHeight',
       'extrusionWidth',
-      'disableGradient', // no-op today — debated in #356
+      'disableGradient',
       'ambientLight',
       'directionalLight',
       'brightness',
