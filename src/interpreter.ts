@@ -2,9 +2,7 @@ import { Path, PathType } from './path';
 import { GCodeCommand } from './gcode-parser';
 import { Job } from './job';
 
-// eslint-disable-next-line no-unused-vars
-type Method = (...args: unknown[]) => unknown;
-// type LookupTable = { [key: string]: Method | undefined };
+type Method = (..._args: unknown[]) => unknown;
 
 /**
  * Interprets and executes G-code commands, updating the job state accordingly
@@ -15,8 +13,7 @@ type Method = (...args: unknown[]) => unknown;
  * including linear moves (G0/G1), arcs (G2/G3), unit changes (G20/G21), and tool selection.
  */
 export class Interpreter {
-  // eslint-disable-next-line no-unused-vars
-  [key: string]: (...args: unknown[]) => unknown;
+  [key: string]: Method;
 
   // TODO: maybe these props should move to the Job class
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment

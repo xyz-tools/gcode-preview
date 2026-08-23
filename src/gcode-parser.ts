@@ -85,7 +85,6 @@ export interface GCodeParameters {
  * Represents a parsed G-code command
  */
 export class GCodeCommand {
-  /* eslint-disable no-unused-vars */
   /**
    * Creates a new GCodeCommand instance
    * @param src - The original G-code line
@@ -99,7 +98,6 @@ export class GCodeCommand {
     public params: GCodeParameters,
     public comment?: string
   ) {}
-  /* eslint-enable no-unused-vars */
 }
 
 export type ParseResult = { metadata: Metadata; commands: GCodeCommand[] };

@@ -55,7 +55,7 @@ describe('GCodePreview', () => {
       resize: vi.fn(),
       processGCode: vi.fn().mockResolvedValue(undefined),
       render: vi.fn(),
-      renderAnimated: vi.fn(),
+      renderAnimated: vi.fn().mockResolvedValue(undefined),
       dispose: vi.fn()
     };
 
@@ -106,7 +106,7 @@ describe('GCodePreview', () => {
 
       expect(Job).toHaveBeenCalledWith({ minLayerThreshold: undefined });
       expect(Interpreter).toHaveBeenCalled();
-      expect(SceneManager).toHaveBeenCalledWith(options, mockJob, expect.any(Function));
+      expect(SceneManager).toHaveBeenCalledWith(options, mockJob);
       expect(Parser).toHaveBeenCalled();
       expect(preview).toBeInstanceOf(GCodePreview);
     });
@@ -126,6 +126,8 @@ describe('GCodePreview', () => {
       preview = new GCodePreview(options);
 
       expect(DevGUI).toHaveBeenCalledWith(preview);
+      // the devMode setter is the only construction site, so exactly one GUI
+      expect(DevGUI).toHaveBeenCalledTimes(1);
     });
 
     it('should initialize dev GUI with options when devMode is an object', () => {
@@ -134,6 +136,7 @@ describe('GCodePreview', () => {
       preview = new GCodePreview(options);
 
       expect(DevGUI).toHaveBeenCalledWith(preview, devModeOptions);
+      expect(DevGUI).toHaveBeenCalledTimes(1);
     });
 
     it('should not initialize dev GUI when devMode is false', () => {
@@ -214,6 +217,19 @@ describe('GCodePreview', () => {
         expect(mockInterpreter.execute).toHaveBeenCalled();
         expect(mockSceneManager.renderAnimated).toHaveBeenCalled();
       });
+
+      it('should resolve only after the animated render has completed', async () => {
+        let renderDone = false;
+        mockSceneManager.renderAnimated.mockImplementation(() =>
+          Promise.resolve().then(() => {
+            renderDone = true;
+          })
+        );
+
+        await preview.processGCode('G0 X0 Y0');
+
+        expect(renderDone).toBe(true);
+      });
     });
 
     describe('processGCodeStream', () => {
@@ -235,6 +251,19 @@ describe('GCodePreview', () => {
         expect(mockSceneManager.renderAnimated).not.toHaveBeenCalled();
       });
 
+      it('should resolve only after the animated render has completed', async () => {
+        let renderDone = false;
+        mockSceneManager.renderAnimated.mockImplementation(() =>
+          Promise.resolve().then(() => {
+            renderDone = true;
+          })
+        );
+
+        await preview.processGCodeStream('G0 X0 Y0');
+
+        expect(renderDone).toBe(true);
+      });
+
       it('should handle ReadableStream', async () => {
         const stream = new ReadableStream({
           start(controller) {
@@ -250,13 +279,6 @@ describe('GCodePreview', () => {
         await preview.processGCodeStream(stream);
 
         expect(readStreamSpy).toHaveBeenCalledWith(stream);
-      });
-    });
-
-    describe('render', () => {
-      it('should call render on renderer', () => {
-        preview.render();
-        expect(mockSceneManager.render).toHaveBeenCalled();
       });
     });
 
@@ -333,7 +355,7 @@ describe('GCodePreview', () => {
       // Access renderer getter
       const renderer = lazyPreview.sceneManager;
 
-      expect(SceneManager).toHaveBeenCalledWith(options, mockJob, expect.any(Function));
+      expect(SceneManager).toHaveBeenCalledWith(options, mockJob);
       expect(renderer).toBe(mockSceneManager);
     });
 

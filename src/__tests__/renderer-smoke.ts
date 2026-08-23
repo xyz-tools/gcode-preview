@@ -73,7 +73,7 @@ describe('SceneManager runtime smoke test', () => {
     preview.processGCode(SAMPLE_GCODE);
     await nextFrame();
 
-    const group = preview.sceneManager.scene.getObjectByName('allLayers');
+    const group = preview.sceneManager.scene.getObjectByName('Extrusions');
     expect(group).toBeDefined();
     expect(group?.children.length).toBeGreaterThan(0);
 

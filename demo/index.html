@@ -217,7 +217,7 @@
                 </div>
                 <div class="controls">
                   <label for="bounding-color">Bounding box</label>
-                  <input type="checkbox" v-model="drawBoundingBox" />
+                  <input type="checkbox" v-model="settings.drawBoundingBox" />
                 </div>
                 <div class="controls">
                   <label for="bbx-color">Bounding box color</label>
@@ -249,11 +249,11 @@
         </footer>
       </div>
     </div>
+    <div class="widget top right glass p-3 is-size-7 slide-in-down border"><label class="mr-2">dev mode</label><input
+        v-model="enableDevMode" type="checkbox" /> </div>
     <div class="absolute left bottom m-3 has-text-grey slide-in-up">Drop a gcode file to preview it</div>
     <div class="wrapper">
-      <canvas class="preview" :class="{ 'dragging': settings.dragging }" 
-        @update.prevent="update"
-        ></canvas>
+      <canvas class="preview" :class="{ 'dragging': settings.dragging }"></canvas>
     </div>
   </div>
   <script type="importmap">
