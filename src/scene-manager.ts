@@ -6,6 +6,7 @@ import { LineBox } from './helpers/line-box';
 
 import { Job } from './job';
 import { ObjectsManager } from './objects-manager';
+import { Path, PathType } from './path';
 
 import {
   Color,
@@ -179,11 +180,13 @@ export class SceneManager {
     if (opts.travelColor !== undefined) {
       this.travelColor = new Color(opts.travelColor);
     }
+    // assign the backing fields directly: the setters would draw the scene before
+    // initScene() does, and it walks the paths once anyway
     if (opts.topLayerColor !== undefined) {
-      this.topLayerColor = new Color(opts.topLayerColor);
+      this._topLayerColor = new Color(opts.topLayerColor);
     }
     if (opts.lastSegmentColor !== undefined) {
-      this.lastSegmentColor = new Color(opts.lastSegmentColor);
+      this._lastSegmentColor = new Color(opts.lastSegmentColor);
     }
     if (opts.disableGradient !== undefined) {
       this.disableGradient = opts.disableGradient;
@@ -305,10 +308,16 @@ export class SceneManager {
 
   /**
    * Sets the top layer color
+   * @remarks
+   * Highlighting the top layer picks specific paths out of the per-tool batches,
+   * so a change redraws the scene rather than recoloring in place.
    * @param value - Color value or undefined to clear
    */
   set topLayerColor(value: ColorRepresentation | undefined) {
-    this._topLayerColor = value !== undefined ? new Color(value) : undefined;
+    const next = value !== undefined ? new Color(value) : undefined;
+    if (this.sameColor(this._topLayerColor, next)) return;
+    this._topLayerColor = next;
+    if (this.job) this.render();
   }
 
   /**
@@ -321,10 +330,22 @@ export class SceneManager {
 
   /**
    * Sets the last segment color
+   * @remarks
+   * Highlighting the last segment splits the final path out of its batch, so a
+   * change redraws the scene rather than recoloring in place.
    * @param value - Color value or undefined to clear
    */
   set lastSegmentColor(value: ColorRepresentation | undefined) {
-    this._lastSegmentColor = value !== undefined ? new Color(value) : undefined;
+    const next = value !== undefined ? new Color(value) : undefined;
+    if (this.sameColor(this._lastSegmentColor, next)) return;
+    this._lastSegmentColor = next;
+    if (this.job) this.render();
+  }
+
+  /** Compares two optional colors, treating two unset colors as equal. */
+  private sameColor(a?: Color, b?: Color): boolean {
+    if (a === undefined || b === undefined) return a === b;
+    return a.equals(b);
   }
 
   /**
@@ -758,17 +779,94 @@ export class SceneManager {
   }
 
   /**
-   * Draws the job's paths up to the given index of its combined path list
+   * Draws the job's paths up to the given index of its combined path list.
    * @param endPathNumber - End index into job.paths (default: all of them)
+   * @remarks
+   * On a full render the top layer and last segment highlights claim their paths
+   * first, so the per-tool batches leave them alone. During progressive rendering
+   * the highlight is skipped: the top layer may not have been reached yet.
    */
   private renderPaths(endPathNumber: number = Infinity): void {
     this.objectsManager.setTravelsVisible(this._renderTravel);
     this.objectsManager.setExtrusionsVisible(this._renderExtrusion);
 
+    if (this._renderExtrusion && endPathNumber === Infinity) {
+      this.renderTopLayerHighlight();
+    }
+
     this.objectsManager.renderPaths(this.job.paths.slice(0, endPathNumber), {
       travels: this._renderTravel,
       extrusions: this._renderExtrusion
     });
+  }
+
+  /**
+   * Draws the topmost visible layer, and its final segment, in their highlight
+   * colors before the per-tool batches run.
+   * @remarks
+   * Whichever draw claims a path first wins, so running before the per-tool
+   * batches is what lets the highlight colors take precedence. Only runs on a
+   * full render: during progressive rendering the top layer may not have been
+   * reached yet.
+   *
+   * `topLayerColor` recolors the whole visible top layer; `lastSegmentColor`
+   * recolors just the final segment of that layer's last path. When both are set
+   * the last segment is split off so it keeps its own color. When only
+   * `lastSegmentColor` is set the rest of the layer keeps its normal tool color.
+   */
+  private renderTopLayerHighlight(): void {
+    const topColor = this._topLayerColor;
+    const segColor = this._lastSegmentColor;
+    if (topColor === undefined && segColor === undefined) return;
+
+    const layers = this.job.layers;
+    // the visible top follows the end-layer clip so the highlight is never hidden
+    const topLayer = layers[(this._endLayer ?? layers.length) - 1];
+    if (!topLayer) return;
+
+    const extrusions = topLayer.paths.filter((path) => path.travelType === PathType.Extrusion);
+    if (extrusions.length === 0) return;
+
+    const lastPath = extrusions[extrusions.length - 1];
+    // a segment needs two points; a shorter final path cannot be split
+    const splitSegment = segColor !== undefined && lastPath.vertices.length >= 6;
+
+    if (topColor !== undefined) {
+      const body = splitSegment ? extrusions.slice(0, -1) : extrusions;
+      if (body.length > 0) this.objectsManager.renderExtrusionsInColor(body, topColor);
+    }
+
+    // hasRendered guards a second pass (renderMissingPaths) from splitting again,
+    // which would draw duplicate segment pieces the dedup set cannot catch
+    if (!splitSegment || this.objectsManager.hasRendered(lastPath)) return;
+
+    this.objectsManager.claimPaths([lastPath]);
+    const bodyColor = topColor ?? this.objectsManager.colorForTool(lastPath.tool);
+    const { body, segment } = this.splitLastSegment(lastPath);
+    if (body) this.objectsManager.renderExtrusionsInColor([body], bodyColor);
+    this.objectsManager.renderExtrusionsInColor([segment], segColor);
+  }
+
+  /**
+   * Splits a path into its final segment and the body that precedes it.
+   * @param path - Path to split
+   * @returns The last two points as `segment`, and everything up to and including
+   * the segment's first point as `body` (null when the path is a single segment)
+   */
+  private splitLastSegment(path: Path): { body: Path | null; segment: Path } {
+    const vertices = path.vertices;
+    const segment = this.subPath(path, vertices.slice(vertices.length - 6));
+    const body = vertices.length > 6 ? this.subPath(path, vertices.slice(0, vertices.length - 3)) : null;
+    return { body, segment };
+  }
+
+  /** Builds a path carrying `source`'s extrusion settings over a slice of vertices. */
+  private subPath(source: Path, vertices: number[]): Path {
+    const path = new Path(source.travelType, source.extrusionWidth, source.lineHeight, source.tool);
+    for (let i = 0; i < vertices.length; i += 3) {
+      path.addPoint(vertices[i], vertices[i + 1], vertices[i + 2]);
+    }
+    return path;
   }
 
   saveCamera() {

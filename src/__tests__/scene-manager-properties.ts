@@ -62,7 +62,7 @@ import { SceneManager, type SceneManagerOptions } from '../scene-manager';
 import { ObjectsManager } from '../objects-manager';
 import { Job } from '../job';
 import { Path, PathType } from '../path';
-import { Color, Group, OrthographicCamera, PerspectiveCamera } from 'three';
+import { Color, Group, Object3D, OrthographicCamera, PerspectiveCamera, ShaderMaterial } from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
@@ -312,6 +312,205 @@ describe('SceneManager properties', () => {
       sceneManager.boundingBoxColor = undefined;
       expect(sceneManager.boundingBoxMesh?.visible).toBe(false);
     });
+  });
+
+  describe('top layer and last segment highlight', () => {
+    test('topLayerColor draws the top layer as a highlight overlay', () => {
+      const fresh = createSceneManager({ topLayerColor: '#00ff00' });
+
+      const highlights = highlights_(fresh);
+      expect(highlights.length).toBe(1);
+      expect(lineColor(highlights[0])).toBe(0x00ff00);
+
+      fresh.dispose();
+    });
+
+    test('setting topLayerColor at runtime redraws with the highlight', () => {
+      expect(highlights_(sceneManager).length).toBe(0);
+
+      sceneManager.topLayerColor = '#123456';
+
+      const highlights = highlights_(sceneManager);
+      expect(highlights.length).toBe(1);
+      expect(lineColor(highlights[0])).toBe(0x123456);
+    });
+
+    test('lastSegmentColor splits the final segment off the top layer', () => {
+      // the top layer's only path has three points, so it splits into a body and
+      // the final segment, each its own overlay
+      sceneManager.lastSegmentColor = '#ff0000';
+
+      const colors = highlights_(sceneManager).map(lineColor);
+      expect(colors).toContain(0xff0000);
+      // the body keeps the normal (default) extrusion color
+      expect(colors).toContain(SceneManager.defaultExtrusionColor.getHex());
+    });
+
+    test('both colors: the top layer highlights, the last segment overrides it', () => {
+      const fresh = createSceneManager({
+        job: multiPathTopLayerJob(),
+        topLayerColor: '#00ff00',
+        lastSegmentColor: '#0000ff'
+      });
+
+      const colors = highlights_(fresh).map(lineColor);
+      // two green overlays (the first path, and the last path's body), one blue segment
+      expect(colors.filter((c) => c === 0x00ff00).length).toBe(2);
+      expect(colors.filter((c) => c === 0x0000ff).length).toBe(1);
+
+      fresh.dispose();
+    });
+
+    test('a two-point final path highlights the segment with no body', () => {
+      const fresh = createSceneManager({ job: shortTopLayerJob(), lastSegmentColor: '#ff0000' });
+
+      const highlights = highlights_(fresh);
+      expect(highlights.length).toBe(1);
+      expect(lineColor(highlights[0])).toBe(0xff0000);
+
+      fresh.dispose();
+    });
+
+    test('a final path too short for a segment is left un-highlighted', () => {
+      const fresh = createSceneManager({ job: singlePointFinalJob(), lastSegmentColor: '#ff0000' });
+
+      expect(highlights_(fresh).length).toBe(0);
+
+      fresh.dispose();
+    });
+
+    test('re-enabling extrusions does not duplicate the highlight', () => {
+      const fresh = createSceneManager({
+        job: multiPathTopLayerJob(),
+        topLayerColor: '#00ff00',
+        lastSegmentColor: '#0000ff'
+      });
+      const before = highlights_(fresh).length;
+
+      fresh.renderExtrusion = false;
+      fresh.renderExtrusion = true;
+
+      expect(highlights_(fresh).length).toBe(before);
+
+      fresh.dispose();
+    });
+
+    test('the last segment body keeps the tool color from a color array', () => {
+      const fresh = createSceneManager({ extrusionColor: ['#123456'], lastSegmentColor: '#ff0000' });
+
+      const colors = highlights_(fresh).map(lineColor);
+      expect(colors).toContain(0x123456);
+      expect(colors).toContain(0xff0000);
+
+      fresh.dispose();
+    });
+
+    test('the last segment body falls back when the tool has no configured color', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const fresh = createSceneManager({
+        job: highToolTopLayerJob(),
+        extrusionColor: ['#00ff00'],
+        lastSegmentColor: '#ff0000'
+      });
+
+      const colors = highlights_(fresh).map(lineColor);
+      expect(colors).toContain(0x00ff00);
+      expect(colors).toContain(0xff0000);
+      expect(warn).toHaveBeenCalledWith('No extrusionColor configured for tool index 2, falling back to another color');
+
+      fresh.dispose();
+      warn.mockRestore();
+    });
+
+    test('renders the highlight as a tube with its own material', () => {
+      const fresh = createSceneManager({ renderTubes: true, topLayerColor: '#00ff00' });
+
+      const highlights = highlights_(fresh);
+      expect(highlights.length).toBe(1);
+      expect((highlights[0] as { material: ShaderMaterial }).material.uniforms.uColor.value.getHex()).toBe(0x00ff00);
+
+      fresh.dispose();
+    });
+
+    test('a clipped tube highlight inherits the layer range', () => {
+      const fresh = createSceneManager({
+        job: threeLayerJob(),
+        renderTubes: true,
+        topLayerColor: '#00ff00',
+        startLayer: 2,
+        endLayer: 2
+      });
+
+      const material = (highlights_(fresh)[0] as { material: ShaderMaterial }).material;
+      expect(material.uniforms.clipMinY.value).not.toBe(-Infinity);
+      expect(material.uniforms.clipMaxY.value).not.toBe(Infinity);
+
+      fresh.dispose();
+    });
+
+    test('a scalar extrusionColor leaves the highlight color untouched', () => {
+      const fresh = createSceneManager({ topLayerColor: '#00ff00' });
+
+      fresh.extrusionColor = '#0000ff';
+
+      expect(highlights_(fresh).map(lineColor)).toContain(0x00ff00);
+
+      fresh.dispose();
+    });
+
+    test('an emptied top layer draws no highlight', () => {
+      const job = shortTopLayerJob();
+      // resumeLastPath pulls the top layer's only extrusion back out, leaving the
+      // layer present but empty of extrusions
+      job.resumeLastPath();
+      const fresh = createSceneManager({ job, topLayerColor: '#00ff00' });
+
+      expect(highlights_(fresh).length).toBe(0);
+
+      fresh.dispose();
+    });
+
+    test('a non-planar job (no layers) draws no highlight', () => {
+      const fresh = createSceneManager({ job: nonPlanarJob(), topLayerColor: '#00ff00' });
+
+      expect(highlights_(fresh).length).toBe(0);
+
+      fresh.dispose();
+    });
+
+    test.each(['topLayerColor', 'lastSegmentColor'] as const)('%s redraws only when the color changes', (property) => {
+      const fresh = createSceneManager({ [property]: '#00ff00' });
+      const spy = vi.spyOn(fresh, 'render');
+
+      fresh[property] = '#00ff00';
+      expect(spy).not.toHaveBeenCalled();
+
+      fresh[property] = '#0000ff';
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      fresh.dispose();
+    });
+
+    test.each(['topLayerColor', 'lastSegmentColor'] as const)('clearing an unset %s does nothing', (property) => {
+      const spy = vi.spyOn(sceneManager, 'render');
+
+      sceneManager[property] = undefined;
+
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    test.each(['topLayerColor', 'lastSegmentColor'] as const)(
+      '%s is safe to set after clear drops the job',
+      (property) => {
+        sceneManager.clear();
+        const spy = vi.spyOn(sceneManager, 'render');
+
+        expect(() => {
+          sceneManager[property] = '#ff0000';
+        }).not.toThrow();
+        expect(spy).not.toHaveBeenCalled();
+      }
+    );
   });
 
   describe('lighting', () => {
@@ -994,8 +1193,107 @@ function createJob(): Job {
   return job;
 }
 
-function appendPath(job: Job, type: PathType, points: [number, number, number][]): void {
-  const path = new Path(type, 0.6, 0.2, 0);
+function appendPath(job: Job, type: PathType, points: [number, number, number][], tool = 0): void {
+  const path = new Path(type, 0.6, 0.2, tool);
   points.forEach((point) => path.addPoint(...point));
   job.addPath(path);
+}
+
+/** The highlight overlays drawn for the top layer / last segment. */
+function highlights_(sceneManager: SceneManager): Object3D[] {
+  return extrusionGroup(sceneManager).children.filter((child) => child.userData.highlight);
+}
+
+/** The hex color of a highlight line overlay. */
+function lineColor(object: Object3D): number {
+  return ((object as LineSegments2).material as LineMaterial).color.getHex();
+}
+
+/** A two layer job whose top layer holds two extrusion paths. */
+function multiPathTopLayerJob(): Job {
+  const job = new Job();
+  appendPath(job, PathType.Extrusion, [
+    [0, 0, 0],
+    [10, 0, 0]
+  ]);
+  appendPath(job, PathType.Extrusion, [
+    [0, 0, 0.2],
+    [10, 0, 0.2],
+    [10, 10, 0.2]
+  ]);
+  appendPath(job, PathType.Extrusion, [
+    [10, 10, 0.2],
+    [0, 10, 0.2],
+    [0, 0, 0.2]
+  ]);
+  return job;
+}
+
+/** A job whose top layer's final path is a single two-point segment. */
+function shortTopLayerJob(): Job {
+  const job = new Job();
+  appendPath(job, PathType.Extrusion, [
+    [0, 0, 0],
+    [10, 0, 0]
+  ]);
+  appendPath(job, PathType.Extrusion, [
+    [0, 0, 0.2],
+    [10, 0, 0.2]
+  ]);
+  return job;
+}
+
+/** A job whose top layer ends on a one-point path, too short to form a segment. */
+function singlePointFinalJob(): Job {
+  const job = new Job();
+  appendPath(job, PathType.Extrusion, [
+    [0, 0, 0],
+    [10, 0, 0],
+    [10, 10, 0]
+  ]);
+  const stub = new Path(PathType.Extrusion, 0.6, 0.2, 0);
+  stub.addPoint(10, 10, 0);
+  job.addPath(stub);
+  return job;
+}
+
+/** A single-layer job whose only extrusion is on tool 2. */
+function highToolTopLayerJob(): Job {
+  const job = new Job();
+  appendPath(
+    job,
+    PathType.Extrusion,
+    [
+      [0, 0, 0],
+      [10, 0, 0],
+      [10, 10, 0]
+    ],
+    2
+  );
+  return job;
+}
+
+/** A three layer job, for exercising the clipping planes on a highlight. */
+function threeLayerJob(): Job {
+  const job = new Job();
+  [0, 0.2, 0.4].forEach((z) => {
+    appendPath(job, PathType.Extrusion, [
+      [0, 0, z],
+      [10, 0, z],
+      [10, 10, z]
+    ]);
+    job.boundingBox.update(0, 0, z);
+    job.boundingBox.update(10, 10, z);
+  });
+  return job;
+}
+
+/** A job with a non-planar extrusion, which clears the layer index. */
+function nonPlanarJob(): Job {
+  const job = new Job();
+  appendPath(job, PathType.Extrusion, [
+    [0, 0, 0],
+    [10, 0, 5]
+  ]);
+  return job;
 }

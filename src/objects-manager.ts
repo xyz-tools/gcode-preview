@@ -144,7 +144,7 @@ export class ObjectsManager {
    * last configured color — or the default when the array is empty — is used
    * instead, warning once per tool index rather than throwing.
    */
-  private colorForTool(toolIndex: number): Color {
+  colorForTool(toolIndex: number): Color {
     if (!Array.isArray(this.extrusionColor)) return this.extrusionColor;
 
     return this.extrusionColor[toolIndex] ?? this.fallbackExtrusionColor(toolIndex);
@@ -167,7 +167,9 @@ export class ObjectsManager {
         if (material?.uniforms) material.uniforms.uColor.value = color;
       });
       this.extrusionsGroup.children.forEach((child) => {
-        if (child instanceof LineSegments2) (child.material as LineMaterial).color.set(color);
+        // highlight overlays keep their own color, so a tool recolor skips them
+        if (child instanceof LineSegments2 && !child.userData.highlight)
+          (child.material as LineMaterial).color.set(color);
       });
       return;
     }
@@ -366,9 +368,46 @@ export class ObjectsManager {
     const unrenderedPaths = this.takeUnrendered(paths);
     if (unrenderedPaths.length === 0) return;
 
-    const tubes = this.renderPathsAsTubes(unrenderedPaths, color, toolIndex);
+    const tubes = this.renderPathsAsTubes(unrenderedPaths, this.getOrCreateToolMaterial(toolIndex, color));
     tubes.userData.toolIndex = toolIndex;
     this.extrusionsGroup.add(tubes);
+  }
+
+  /**
+   * Draws `paths` in a single `color` with a dedicated material, independent of
+   * the per-tool colors, and records them as rendered.
+   * @remarks
+   * Used for highlight overlays — the top layer and the last segment — that must
+   * win over the tool color. Because the material is not the cached per-tool one,
+   * recoloring a tool later leaves the highlight untouched. The object is tagged
+   * so {@link setExtrusionColor} skips it for the same reason.
+   */
+  renderExtrusionsInColor(paths: Path[], color: Color) {
+    const unrenderedPaths = this.takeUnrendered(paths);
+    if (unrenderedPaths.length === 0) return;
+
+    const object = this.renderTubes
+      ? this.renderPathsAsTubes(unrenderedPaths, this.createHighlightMaterial(color))
+      : this.renderPathsAsLines(unrenderedPaths, color);
+    object.userData.highlight = true;
+    this.extrusionsGroup.add(object);
+  }
+
+  /**
+   * Records paths as rendered without drawing them, so later batches skip them.
+   * @remarks
+   * Used when a highlight redraws part of a path — its final segment in its own
+   * color — so the per-tool batch does not also draw the original whole path.
+   */
+  claimPaths(paths: Path[]) {
+    paths.forEach((path) => this.renderedPaths.add(path));
+  }
+
+  /**
+   * Whether a path has already been drawn (or claimed) in the current scene.
+   */
+  hasRendered(path: Path): boolean {
+    return this.renderedPaths.has(path);
   }
 
   /**
@@ -525,13 +564,32 @@ export class ObjectsManager {
   }
 
   /**
+   * Builds a fresh tube material for a highlight overlay in the given color.
+   * @remarks
+   * Unlike {@link getOrCreateToolMaterial} this is never cached or shared, so a
+   * later tool recolor cannot bleed into the highlight. The current layer range
+   * still has to be respected, so the clip uniforms are seeded here.
+   */
+  private createHighlightMaterial(color: Color): ShaderMaterial {
+    const material = createColorMaterial(
+      Number(color.getHex()),
+      this.ambientLight,
+      this.directionalLight,
+      this.brightness
+    );
+    if (this.clipMinZ !== undefined) material.uniforms.clipMinY.value = this.clipMinZ;
+    if (this.clipMaxZ !== undefined) material.uniforms.clipMaxY.value = this.clipMaxZ;
+    this.disposables.push(material);
+    return material;
+  }
+
+  /**
    * Renders paths as 3D tubes
    * @param paths - Array of paths to render
-   * @param color - Color to use for the tubes
+   * @param material - Shader material shared by the batched tubes
    */
-  private renderPathsAsTubes(paths: Path[], color: Color, toolIndex: number): BatchedMesh {
+  private renderPathsAsTubes(paths: Path[], material: ShaderMaterial): BatchedMesh {
     const geometries: BufferGeometry[] = [];
-    const material = this.getOrCreateToolMaterial(toolIndex, color);
 
     paths.forEach((path) => {
       const geometry = path.geometry({
