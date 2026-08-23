@@ -1,7 +1,7 @@
 import { readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vitest/config';
+import { defineConfig, defaultExclude } from 'vitest/config';
 
 const root = dirname(fileURLToPath(import.meta.url));
 
@@ -15,8 +15,21 @@ const sourceFiles = readdirSync(join(root, 'src'), { recursive: true })
 export default defineConfig({
   test: {
     include: ['src/__tests__/**/*.ts'],
+    // *.test-d.ts files are compile-time-only pins, run by the typecheck
+    // pass below rather than as runtime tests.
+    exclude: [...defaultExclude, 'src/__tests__/**/*.test-d.ts'],
     environment: 'happy-dom',
     globals: true,
+    typecheck: {
+      enabled: true,
+      include: ['src/__tests__/**/*.test-d.ts'],
+      // Strict mode so expect-type assertions actually bite (they silently
+      // pass without strictNullChecks). Source files stay on the main
+      // tsconfig via `npm run typeCheck`, so their strict errors are noise
+      // here and are ignored.
+      tsconfig: './tsconfig.typecheck.json',
+      ignoreSourceErrors: true
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
