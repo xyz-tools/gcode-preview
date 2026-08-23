@@ -1,3 +1,5 @@
+import { Units, MM_PER_INCH } from './units';
+
 /** A point along a tessellated arc, in absolute G-code coordinates */
 export interface ArcPoint {
   x: number;
@@ -44,9 +46,6 @@ const DEFAULT_CHORD_TOLERANCE = 0.05;
  */
 const MAX_SEGMENT_ANGLE = Math.PI / 8;
 
-/** Millimeters per inch, for applying the tolerance to inch-based moves */
-const MM_PER_INCH = 25.4;
-
 /**
  * Tessellates G2/G3 arc moves into straight line segments
  *
@@ -79,7 +78,7 @@ export class ArcTessellator {
    * @returns The arc's exact endpoint (also the last point emitted). Emits at
    * least the endpoint, even for degenerate arcs.
    */
-  tessellate(start: ArcPoint, move: ArcMove, emit: EmitPoint, units: 'mm' | 'in' = 'mm'): ArcPoint {
+  tessellate(start: ArcPoint, move: ArcMove, emit: EmitPoint, units: Units = 'mm'): ArcPoint {
     const { cw, x, y, z } = move;
     let { i, j, r } = move;
     // Set when the arc cannot be described at all, so only the endpoint is emitted.

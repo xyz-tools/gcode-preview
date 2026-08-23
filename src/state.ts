@@ -1,3 +1,5 @@
+import { Units } from './units';
+
 /**
  * Represents the current state of the print job
  * @remarks
@@ -15,7 +17,7 @@ export class State {
   /** Currently active tool */
   tool = 0;
   /** Current units (millimeters or inches) */
-  units: 'mm' | 'in' = 'mm';
+  units: Units = 'mm';
   /**
    * Whether the axes have been homed (G28).
    * @remarks
