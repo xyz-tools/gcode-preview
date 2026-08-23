@@ -27,7 +27,7 @@ export const defaultSettings = {
   highlightTopLayer: false,
   topLayerColor: '#40BFBF',
   highlightLastSegment: false,
-  lastSegmentColor: null,
+  lastSegmentColor: '#FFFFFF',
   drawBuildVolume: true,
   backgroundColor: '#141414',
   boundingBoxColor: '#A830F8',
