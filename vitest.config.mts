@@ -1,4 +1,16 @@
+import { readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
+
+const root = dirname(fileURLToPath(import.meta.url));
+
+const fullCoverage = { statements: 100, branches: 100, functions: 100, lines: 100 };
+
+const sourceFiles = readdirSync(join(root, 'src'), { recursive: true })
+  .map((file) => String(file).replaceAll('\\', '/'))
+  .filter((file) => file.endsWith('.ts') && !file.startsWith('__tests__/'))
+  .map((file) => `src/${file}`);
 
 export default defineConfig({
   test: {
@@ -10,16 +22,22 @@ export default defineConfig({
       reporter: ['text', 'html', 'lcov'],
       include: ['src/**/*.ts'],
       exclude: ['src/__tests__/**'],
-      // Files that have reached full coverage. These thresholds fail CI if
-      // coverage ever regresses. Add more files here as they hit 100%.
+      // 100% coverage is the default for every file under src/. Files listed
+      // below are grandfathered at their current coverage and fail CI if they
+      // regress. Raise (and eventually remove) an entry as coverage improves.
       thresholds: {
-        'src/gcode-parser.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
-        'src/extrusion-geometry.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
-        'src/scene-manager.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
-        'src/objects-manager.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
-        'src/bounding-box.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
-        'src/job.ts': { statements: 100, branches: 100, functions: 100, lines: 100 },
-        'src/interpreter.ts': { statements: 100, branches: 100, functions: 100, lines: 100 }
+        perFile: true,
+        ...Object.fromEntries(sourceFiles.map((file) => [file, fullCoverage])),
+        'src/build-volume.ts': { statements: 65.07, branches: 39.13, functions: 70.58, lines: 66.12 },
+        'src/dev-gui.ts': { statements: 0, branches: 0, functions: 0, lines: 0 },
+        'src/gcode-preview.ts': { statements: 93.9, branches: 79.48, functions: 100, lines: 94.87 },
+        'src/indexers.ts': { statements: 96.66, branches: 96.15, functions: 100, lines: 96.66 },
+        'src/path.ts': { statements: 93.93, branches: 88.23, functions: 80, lines: 96.66 },
+        'src/thumbnail.ts': { statements: 92.3, branches: 100, functions: 75, lines: 92.3 },
+        'src/extra/dom-utils.ts': { statements: 0, branches: 0, functions: 0, lines: 0 },
+        'src/helpers/grid.ts': { statements: 93.33, branches: 66.66, functions: 66.66, lines: 96.29 },
+        'src/helpers/line-box.ts': { statements: 80, branches: 57.14, functions: 75, lines: 85.71 },
+        'src/helpers/split-chunk.ts': { statements: 75, branches: 50, functions: 100, lines: 75 }
       }
     }
   }
