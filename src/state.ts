@@ -4,26 +4,33 @@
  * Tracks the current position, extrusion state, active tool, and units
  */
 export class State {
-  /** Current X position */
-  x: number;
-  /** Current Y position */
-  y: number;
-  /** Current Z position */
-  z: number;
+  /** Current X position, or `undefined` until the axis is homed (G28) */
+  x: number | undefined = undefined;
+  /** Current Y position, or `undefined` until the axis is homed (G28) */
+  y: number | undefined = undefined;
+  /** Current Z position, or `undefined` until the axis is homed (G28) */
+  z: number | undefined = undefined;
   /** Current extrusion amount */
-  e: number;
+  e = 0;
   /** Currently active tool */
-  tool: number;
+  tool = 0;
   /** Current units (millimeters or inches) */
-  units: 'mm' | 'in';
+  units: 'mm' | 'in' = 'mm';
+  /**
+   * Whether the axes have been homed (G28).
+   * @remarks
+   * Until an axis is homed its real position is unknown, which is why `x`/`y`/`z`
+   * can be `undefined`. Consumers can read this flag to tell real coordinates
+   * from ones a renderer may have assumed. How to render an un-homed position is
+   * the interpreter's decision, not the state's.
+   */
+  isHomed = false;
 
   /**
    * Gets a new State instance with default initial values
-   * @returns New State instance with x=0, y=0, z=0, e=0, tool=0, units='mm'
+   * @returns New State with an un-homed (unknown) position, e=0, tool=0, units='mm'
    */
   static get initial(): State {
-    const state = new State();
-    Object.assign(state, { x: 0, y: 0, z: 0, e: 0, tool: 0, units: 'mm' });
-    return state;
+    return new State();
   }
 }

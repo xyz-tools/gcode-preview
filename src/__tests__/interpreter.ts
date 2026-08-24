@@ -26,7 +26,9 @@ describe('.execute', () => {
     const result = interpreter.execute([command]);
 
     expect(result.paths.length).toEqual(0);
-    expect(result.state.x).toEqual(0);
+    // Nothing ran, so the axes are still un-homed and the position is unknown.
+    expect(result.state.x).toBeUndefined();
+    expect(result.state.isHomed).toBe(false);
   });
 
   test('ignores unknown commands', () => {
@@ -37,9 +39,11 @@ describe('.execute', () => {
 
     expect(result).not.toBeNull();
     expect(result).toBeInstanceOf(Job);
-    expect(result.state.x).toEqual(0);
-    expect(result.state.y).toEqual(0);
-    expect(result.state.z).toEqual(0);
+    // An unknown command leaves the axes un-homed, so the position stays unknown.
+    expect(result.state.x).toBeUndefined();
+    expect(result.state.y).toBeUndefined();
+    expect(result.state.z).toBeUndefined();
+    expect(result.state.isHomed).toBe(false);
   });
 
   test('runs multiple commands', () => {
@@ -264,18 +268,37 @@ test('.G21 sets the units to millimeters', () => {
   expect(job.state.units).toEqual('mm');
 });
 
-test('.g28 moves the state to the origin', () => {
+test('.g28 moves the state to the origin and marks it homed', () => {
   const command = new GCodeCommand('G28', 'g28', {});
   const interpreter = new Interpreter();
   const job = new Job();
   job.state.x = 3;
   job.state.y = 4;
+  expect(job.state.isHomed).toBe(false);
 
   interpreter.g28(command, job);
 
   expect(job.state.x).toEqual(0);
   expect(job.state.y).toEqual(0);
   expect(job.state.z).toEqual(0);
+  expect(job.state.isHomed).toBe(true);
+});
+
+test('an un-homed state assumes the origin so a move can still render', () => {
+  // Before G28 the position is unknown; we assume (0,0,0) to render best-effort
+  // (see #361) while isHomed stays false so callers can tell it is assumed.
+  const command = new GCodeCommand('G1 Y5 E1', 'g1', { y: 5, e: 1 });
+  const interpreter = new Interpreter();
+  const job = new Job();
+
+  interpreter.g1(command, job);
+
+  // X and Z were never given and never homed -> assumed origin in the geometry.
+  expect(job.inprogressPath?.vertices.slice(0, 3)).toEqual([0, 0, 0]);
+  expect(job.inprogressPath?.vertices.slice(3, 6)).toEqual([0, 5, 0]);
+  expect(job.state.x).toBeUndefined();
+  expect(job.state.z).toBeUndefined();
+  expect(job.state.isHomed).toBe(false);
 });
 
 test('.t0 sets the tool to 0', () => {
