@@ -41,7 +41,6 @@ export default defineConfig({
       thresholds: {
         perFile: true,
         ...Object.fromEntries(sourceFiles.map((file) => [file, fullCoverage])),
-        'src/build-volume.ts': { statements: 65.07, branches: 39.13, functions: 70.58, lines: 66.12 },
         'src/dev-gui.ts': { statements: 0, branches: 0, functions: 0, lines: 0 },
         'src/gcode-preview.ts': { statements: 93.9, branches: 79.48, functions: 100, lines: 94.87 },
         'src/indexers.ts': { statements: 96.66, branches: 96.15, functions: 100, lines: 96.66 },
