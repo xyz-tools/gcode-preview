@@ -5,25 +5,23 @@
  */
 export class State {
   /** Current X position */
-  x: number;
+  x = 0;
   /** Current Y position */
-  y: number;
+  y = 0;
   /** Current Z position */
-  z: number;
+  z = 0;
   /** Current extrusion amount */
-  e: number;
+  e = 0;
   /** Currently active tool */
-  tool: number;
+  tool = 0;
   /** Current units (millimeters or inches) */
-  units: 'mm' | 'in';
+  units: 'mm' | 'in' = 'mm';
 
   /**
    * Gets a new State instance with default initial values
    * @returns New State instance with x=0, y=0, z=0, e=0, tool=0, units='mm'
    */
   static get initial(): State {
-    const state = new State();
-    Object.assign(state, { x: 0, y: 0, z: 0, e: 0, tool: 0, units: 'mm' });
-    return state;
+    return new State();
   }
 }
