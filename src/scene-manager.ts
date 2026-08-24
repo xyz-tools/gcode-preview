@@ -676,6 +676,22 @@ export class SceneManager {
   }
 
   /**
+   * Draws the paths parsed so far on top of what is already on screen
+   * @remarks
+   * Called repeatedly while a G-code stream is read, so the model grows on
+   * screen as chunks arrive. Only paths that have not been drawn yet are
+   * built, and the last path is held back: it may still be growing, and a
+   * path is only ever built once. The top-layer highlight is skipped because
+   * the top layer may not have arrived yet. The continuous animation loop
+   * presents the new geometry on the next frame.
+   */
+  renderProgressive(): void {
+    if (!this.job) return;
+
+    this.renderPaths(Math.max(0, this.job.paths.length - 1));
+  }
+
+  /**
    * Animation loop that renders paths incrementally
    * @param pathCount - Number of paths to render per frame
    * @returns Promise that resolves when all paths are rendered

@@ -56,6 +56,7 @@ describe('GCodePreview', () => {
       processGCode: vi.fn().mockResolvedValue(undefined),
       render: vi.fn(),
       renderAnimated: vi.fn().mockResolvedValue(undefined),
+      renderProgressive: vi.fn(),
       dispose: vi.fn()
     };
 
@@ -278,7 +279,43 @@ describe('GCodePreview', () => {
 
         await preview.processGCodeStream(stream);
 
-        expect(readStreamSpy).toHaveBeenCalledWith(stream);
+        expect(readStreamSpy).toHaveBeenCalledWith(stream, { render: true });
+      });
+
+      const makeStream = (chunks: string[]) =>
+        new ReadableStream({
+          start(controller) {
+            chunks.forEach((chunk) => controller.enqueue(chunk));
+            controller.close();
+          }
+        });
+
+      it('should draw progressively while reading a stream', async () => {
+        // advance the clock past the throttle interval on every call
+        let now = 0;
+        const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => (now += 1000));
+
+        await preview.processGCodeStream(makeStream(['G0 X0 Y0\n', 'G1 X10 Y10\n', 'G1 X20 Y20\n']));
+
+        expect(mockSceneManager.renderProgressive).toHaveBeenCalledTimes(3);
+        expect(mockSceneManager.renderAnimated).toHaveBeenCalled();
+        nowSpy.mockRestore();
+      });
+
+      it('should throttle progressive draws to the render interval', async () => {
+        // the clock never advances, so only the first chunk triggers a draw
+        const nowSpy = vi.spyOn(performance, 'now').mockReturnValue(0);
+
+        await preview.processGCodeStream(makeStream(['G0 X0 Y0\n', 'G1 X10 Y10\n', 'G1 X20 Y20\n']));
+
+        expect(mockSceneManager.renderProgressive).toHaveBeenCalledTimes(1);
+        nowSpy.mockRestore();
+      });
+
+      it('should not draw progressively when render is false', async () => {
+        await preview.processGCodeStream(makeStream(['G0 X0 Y0\n']), { render: false });
+
+        expect(mockSceneManager.renderProgressive).not.toHaveBeenCalled();
       });
     });
 

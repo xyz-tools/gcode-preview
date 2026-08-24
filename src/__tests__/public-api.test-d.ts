@@ -163,7 +163,9 @@ describe('public API types', () => {
       expectTypeOf<GCodePreview['processGCodeStream']>().toEqualTypeOf<
         (gcode: string | string[] | ReadableStream, options?: { render?: boolean }) => Promise<void>
       >();
-      expectTypeOf<GCodePreview['readStream']>().toEqualTypeOf<(stream: ReadableStream) => Promise<void>>();
+      expectTypeOf<GCodePreview['readStream']>().toEqualTypeOf<
+        (stream: ReadableStream, options?: { render?: boolean }) => Promise<void>
+      >();
     });
   });
 
@@ -177,6 +179,7 @@ describe('public API types', () => {
       expectTypeOf<SceneManager['canvas']>().toEqualTypeOf<HTMLCanvasElement>();
       expectTypeOf<SceneManager['render']>().toEqualTypeOf<() => void>();
       expectTypeOf<SceneManager['renderAnimated']>().toEqualTypeOf<(pathCount?: number) => Promise<void>>();
+      expectTypeOf<SceneManager['renderProgressive']>().toEqualTypeOf<() => void>();
       expectTypeOf<SceneManager['dispose']>().toEqualTypeOf<() => void>();
       expectTypeOf<SceneManager['resize']>().toEqualTypeOf<() => void>();
       expectTypeOf<SceneManager['clear']>().toEqualTypeOf<() => void>();
