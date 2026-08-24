@@ -68,10 +68,11 @@ export const app = (window.app = createApp({
         return;
       }
 
-      const gcodeStream = response.body.pipeThrough(new TextDecoderStream());
+      // drop the previous job before streaming in the new one, otherwise
+      // processGCodeStream appends to the existing job and doubles memory
+      preview.clear();
 
-      const prevDevMode = preview.devMode;
-      preview.devMode = prevDevMode;
+      const gcodeStream = response.body.pipeThrough(new TextDecoderStream());
 
       await preview.processGCodeStream(gcodeStream); // rendering will be done reactively
       updateUI();
