@@ -98,7 +98,6 @@ describe('public API surface', () => {
       animate: 0,
       render: 0,
       renderAnimated: 0,
-      renderProgressive: 0,
       clear: 0,
       resize: 0,
       dispose: 0,
