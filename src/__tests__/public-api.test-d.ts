@@ -181,7 +181,6 @@ describe('public API types', () => {
       expectTypeOf<SceneManager['canvas']>().toEqualTypeOf<HTMLCanvasElement>();
       expectTypeOf<SceneManager['render']>().toEqualTypeOf<() => void>();
       expectTypeOf<SceneManager['renderAnimated']>().toEqualTypeOf<(pathCount?: number) => Promise<void>>();
-      expectTypeOf<SceneManager['renderProgressive']>().toEqualTypeOf<() => void>();
       expectTypeOf<SceneManager['dispose']>().toEqualTypeOf<() => void>();
       expectTypeOf<SceneManager['resize']>().toEqualTypeOf<() => void>();
       expectTypeOf<SceneManager['clear']>().toEqualTypeOf<() => void>();

@@ -688,9 +688,11 @@ export class SceneManager {
 
   /**
    * Draws the paths parsed so far on top of what is already on screen
+   * @internal
    * @remarks
-   * Called repeatedly while a G-code stream is read, so the model grows on
-   * screen as chunks arrive. Only paths that have not been drawn yet are
+   * Called by GCodePreview.readStream while a G-code stream is read, so the
+   * model grows on screen as chunks arrive — use processGCodeStream rather
+   * than calling this directly. Only paths that have not been drawn yet are
    * built, and the last path is held back: it may still be growing, and a
    * path is only ever built once. The top-layer/last-segment highlight, if
    * configured, moves onto whatever has most recently arrived. The continuous
