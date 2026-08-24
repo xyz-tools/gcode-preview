@@ -41,6 +41,7 @@ describe('public API types', () => {
         | 'minLayerThreshold'
         | 'droppable'
         | 'keepLines'
+        | 'liveRenderInterval'
         // SceneManagerOptions
         | 'buildVolume'
         | 'backgroundColor'
@@ -69,6 +70,7 @@ describe('public API types', () => {
       expectTypeOf<GCodePreviewOptions['minLayerThreshold']>().toEqualTypeOf<number | undefined>();
       expectTypeOf<GCodePreviewOptions['droppable']>().toEqualTypeOf<boolean | undefined>();
       expectTypeOf<GCodePreviewOptions['keepLines']>().toEqualTypeOf<boolean | undefined>();
+      expectTypeOf<GCodePreviewOptions['liveRenderInterval']>().toEqualTypeOf<number | undefined>();
       expectTypeOf<GCodePreviewOptions['canvas']>().toEqualTypeOf<HTMLCanvasElement | undefined>();
       expectTypeOf<GCodePreviewOptions['backgroundColor']>().toEqualTypeOf<ColorRepresentation | undefined>();
       expectTypeOf<GCodePreviewOptions['extrusionColor']>().toEqualTypeOf<

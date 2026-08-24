@@ -312,6 +312,17 @@ describe('GCodePreview', () => {
         nowSpy.mockRestore();
       });
 
+      it('should draw on every chunk when liveRenderInterval is 0', async () => {
+        // the clock never advances, so only the interval of 0 lets every chunk draw
+        const nowSpy = vi.spyOn(performance, 'now').mockReturnValue(0);
+        preview = new GCodePreview({ canvas: mockCanvas, liveRenderInterval: 0 });
+
+        await preview.processGCodeStream(makeStream(['G0 X0 Y0\n', 'G1 X10 Y10\n', 'G1 X20 Y20\n']));
+
+        expect(mockSceneManager.renderProgressive).toHaveBeenCalledTimes(3);
+        nowSpy.mockRestore();
+      });
+
       it('should not draw progressively when render is false', async () => {
         await preview.processGCodeStream(makeStream(['G0 X0 Y0\n']), { render: false });
 
