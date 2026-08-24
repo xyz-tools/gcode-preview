@@ -19,24 +19,12 @@ export class State {
   /**
    * Whether the axes have been homed (G28).
    * @remarks
-   * Until an axis is homed its real position is unknown. While `isHomed` is
-   * `false`, {@link State.position} assumes the origin so the viewer can still
-   * render best-effort (see https://github.com/xyz-tools/gcode-preview/issues/361).
-   * Consumers can read this flag to tell real coordinates from assumed ones.
+   * Until an axis is homed its real position is unknown, which is why `x`/`y`/`z`
+   * can be `undefined`. Consumers can read this flag to tell real coordinates
+   * from ones a renderer may have assumed. How to render an un-homed position is
+   * the interpreter's decision, not the state's.
    */
   isHomed = false;
-
-  /**
-   * The current position, with any un-homed axis assumed to be at the origin.
-   * @remarks
-   * `x`/`y`/`z` are `undefined` until homed; rendering needs concrete numbers,
-   * so an unknown axis falls back to `0`. Check {@link State.isHomed} to know
-   * whether these coordinates are real or assumed.
-   * @returns The position as concrete `x`, `y`, `z` numbers
-   */
-  get position(): { x: number; y: number; z: number } {
-    return { x: this.x ?? 0, y: this.y ?? 0, z: this.z ?? 0 };
-  }
 
   /**
    * Gets a new State instance with default initial values

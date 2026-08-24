@@ -1,8 +1,23 @@
 import { Path, PathType } from './path';
 import { GCodeCommand } from './gcode-parser';
 import { Job } from './job';
+import { State } from './state';
 
 type Method = (..._args: unknown[]) => unknown;
+
+/**
+ * Resolves a state's position for rendering.
+ * @param state - Current job state
+ * @returns The position as concrete `x`, `y`, `z` numbers
+ * @remarks
+ * An axis that has not been homed has an unknown (`undefined`) position. The
+ * interpreter chooses to assume the origin (`0`) for such axes so the viewer can
+ * still render best-effort (see #361); `state.isHomed` lets a consumer tell these
+ * assumed coordinates from real ones.
+ */
+function resolvePosition(state: State): { x: number; y: number; z: number } {
+  return { x: state.x ?? 0, y: state.y ?? 0, z: state.z ?? 0 };
+}
 
 /**
  * Interprets and executes G-code commands, updating the job state accordingly
@@ -109,7 +124,7 @@ export class Interpreter {
     state.y = y ?? state.y;
     state.z = z ?? state.z;
 
-    const pos = state.position;
+    const pos = resolvePosition(state);
     currentPath.addPoint(pos.x, pos.y, pos.z);
     if (pathType === PathType.Extrusion) {
       job.boundingBox.update(pos.x, pos.y, pos.z);
@@ -134,9 +149,8 @@ export class Interpreter {
     // Set when the arc cannot be described at all, so only the endpoint is emitted.
     let arcIsDegenerate = false;
     const { state } = job;
-    // Starting position for the arc. Any un-homed axis is unknown, so it is
-    // assumed to be at the origin (see #361) to allow best-effort rendering.
-    const from = state.position;
+    // Starting position for the arc, with any un-homed axis assumed at the origin.
+    const from = resolvePosition(state);
 
     const cw = command.gcode === 'g2';
     let currentPath = job.inprogressPath;
@@ -255,7 +269,7 @@ export class Interpreter {
     state.y = y ?? state.y;
     state.z = z ?? state.z;
 
-    const pos = state.position;
+    const pos = resolvePosition(state);
     currentPath.addPoint(pos.x, pos.y, pos.z);
     if (pathType === PathType.Extrusion) {
       job.boundingBox.update(pos.x, pos.y, pos.z);
@@ -399,7 +413,7 @@ export class Interpreter {
   private breakPath(job: Job, newType: PathType): Path {
     job.finishPath();
     const currentPath = new Path(newType, 0.6, 0.2, job.state.tool);
-    const pos = job.state.position;
+    const pos = resolvePosition(job.state);
     currentPath.addPoint(pos.x, pos.y, pos.z);
     job.inprogressPath = currentPath;
     return currentPath;
