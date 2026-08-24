@@ -11,7 +11,6 @@ import { Path, PathType } from './path';
 import {
   Color,
   ColorRepresentation,
-  Object3D,
   OrthographicCamera,
   PerspectiveCamera,
   REVISION,
@@ -131,10 +130,6 @@ export class SceneManager {
   private _highlightedLayerIndex?: number;
   /** The path the highlight last treated as the layer's last-received path */
   private _highlightedLastPath?: Path;
-  /** Scene objects the current highlight drew, so they can be reverted */
-  private _highlightObjects: Object3D[] = [];
-  /** Paths the current highlight claimed, so they can be unclaimed on revert */
-  private _highlightedPaths: Path[] = [];
   /** Last render time in milliseconds */
   lastRenderTime = 0;
   /** Whether to render in wireframe mode */
@@ -908,9 +903,7 @@ export class SceneManager {
     // (including both being empty, e.g. a non-planar job with no layers at all)
     if (topLayerIndex === this._highlightedLayerIndex && lastPath === this._highlightedLastPath) return;
 
-    this.objectsManager.revertHighlight(this._highlightObjects, this._highlightedPaths);
-    this._highlightObjects = [];
-    this._highlightedPaths = [...layerExtrusions];
+    this.objectsManager.revertHighlight();
     this._highlightedLayerIndex = topLayerIndex;
     this._highlightedLastPath = lastPath;
 
@@ -921,60 +914,28 @@ export class SceneManager {
 
     if (topColor !== undefined) {
       const body = splitSegment ? layerExtrusions.slice(0, -1) : layerExtrusions;
-      this.pushHighlight(body, topColor);
+      this.objectsManager.renderExtrusionsInColor(body, topColor);
     }
 
     if (!splitSegment) return;
 
     this.objectsManager.claimPaths([lastPath]);
     const bodyColor = topColor ?? this.objectsManager.colorForTool(lastPath.tool);
-    const { body, segment } = this.splitLastSegment(lastPath);
-    if (body) this.pushHighlight([body], bodyColor);
-    this.pushHighlight([segment], segColor);
+    const { body, segment } = lastPath.splitLastSegment();
+    if (body) this.objectsManager.renderExtrusionsInColor([body], bodyColor);
+    this.objectsManager.renderExtrusionsInColor([segment], segColor);
   }
 
-  /** Draws `paths` in `color` and tracks the result for the next revert. */
-  private pushHighlight(paths: Path[], color: Color): void {
-    if (paths.length === 0) return;
-    // paths here are always freshly computed from the job, or freshly split
-    // off one, never ones an earlier call in this same pass already drew —
-    // renderExtrusionsInColor only returns undefined for paths it is asked
-    // to draw a second time, which cannot happen here
-    this._highlightObjects.push(this.objectsManager.renderExtrusionsInColor(paths, color) as Object3D);
-  }
-
-  /** Forgets the current top-layer/last-segment highlight without reverting it.
+  /** Forgets which layer and path the highlight was last drawn on.
    * @remarks
-   * Used when the scene it was drawn into is already being discarded wholesale
-   * (a full reset or a fresh ObjectsManager), so there is nothing left to revert.
+   * Used when the scene it was drawn into is being discarded wholesale (a
+   * full reset or a fresh ObjectsManager), which drops the overlay objects
+   * themselves — without this the next draw would think the highlight is
+   * still in place and skip redrawing it.
    */
   private resetHighlightTracking(): void {
     this._highlightedLayerIndex = undefined;
     this._highlightedLastPath = undefined;
-    this._highlightObjects = [];
-    this._highlightedPaths = [];
-  }
-
-  /**
-   * Splits a path into its final segment and the body that precedes it.
-   * @param path - Path to split
-   * @returns The last two points as `segment`, and everything up to and including
-   * the segment's first point as `body` (null when the path is a single segment)
-   */
-  private splitLastSegment(path: Path): { body: Path | null; segment: Path } {
-    const vertices = path.vertices;
-    const segment = this.subPath(path, vertices.slice(vertices.length - 6));
-    const body = vertices.length > 6 ? this.subPath(path, vertices.slice(0, vertices.length - 3)) : null;
-    return { body, segment };
-  }
-
-  /** Builds a path carrying `source`'s extrusion settings over a slice of vertices. */
-  private subPath(source: Path, vertices: number[]): Path {
-    const path = new Path(source.travelType, source.extrusionWidth, source.lineHeight, source.tool);
-    for (let i = 0; i < vertices.length; i += 3) {
-      path.addPoint(vertices[i], vertices[i + 1], vertices[i + 2]);
-    }
-    return path;
   }
 
   saveCamera() {

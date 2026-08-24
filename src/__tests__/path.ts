@@ -164,3 +164,45 @@ describe('.line', () => {
     expect(points.length).toEqual(0);
   });
 });
+
+describe('.splitLastSegment', () => {
+  test('splits a multi-segment path into a body and the final segment', () => {
+    const path = new Path(PathType.Extrusion, 0.5, 0.3, 2);
+    path.addPoint(0, 0, 0);
+    path.addPoint(10, 0, 0);
+    path.addPoint(10, 10, 0);
+
+    const { body, segment } = path.splitLastSegment();
+
+    expect(segment.vertices).toEqual([10, 0, 0, 10, 10, 0]);
+    // the body ends on the segment's first point, so no gap opens between them
+    expect(body?.vertices).toEqual([0, 0, 0, 10, 0, 0]);
+  });
+
+  test('a two-point path splits into the segment alone', () => {
+    const path = new Path(PathType.Extrusion, 0.5, 0.3, 0);
+    path.addPoint(0, 0, 0);
+    path.addPoint(10, 0, 0);
+
+    const { body, segment } = path.splitLastSegment();
+
+    expect(body).toBeNull();
+    expect(segment.vertices).toEqual([0, 0, 0, 10, 0, 0]);
+  });
+
+  test('both halves carry the source travel type, extrusion settings and tool', () => {
+    const path = new Path(PathType.Extrusion, 0.5, 0.3, 2);
+    path.addPoint(0, 0, 0);
+    path.addPoint(10, 0, 0);
+    path.addPoint(10, 10, 0);
+
+    const { body, segment } = path.splitLastSegment();
+
+    [body, segment].forEach((half) => {
+      expect(half.travelType).toBe(PathType.Extrusion);
+      expect(half.extrusionWidth).toBe(0.5);
+      expect(half.lineHeight).toBe(0.3);
+      expect(half.tool).toBe(2);
+    });
+  });
+});

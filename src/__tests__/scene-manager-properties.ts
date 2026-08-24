@@ -590,6 +590,35 @@ describe('SceneManager properties', () => {
       fresh.dispose();
     });
 
+    test('a moving highlight never re-draws paths the per-tool batches already drew', () => {
+      // with only lastSegmentColor set, the rest of the layer is drawn by the
+      // normal per-tool batches; when the highlight moves to a newer path it
+      // must only unclaim its own draws, or those batches would be drawn again
+      const job = new Job();
+      const fresh = createSceneManager({ job, lastSegmentColor: '#0000ff' });
+      const addPath = () =>
+        appendPath(job, PathType.Extrusion, [
+          [0, 0, 0],
+          [10, 0, 0],
+          [10, 10, 0]
+        ]);
+
+      for (let i = 0; i < 5; i++) {
+        addPath();
+        fresh.renderProgressive();
+      }
+
+      // 4 paths are visible (the 5th is the held-back tail); the newest visible
+      // one belongs to the highlight, the other 3 to the per-tool batches —
+      // each exactly once, at 2 segments per path
+      const normalSegments = (extrusionGroup(fresh).children as LineSegments2[])
+        .filter((child) => !child.userData.highlight)
+        .reduce((total, line) => total + positionCountOf(line) / 6, 0);
+      expect(normalSegments).toBe(6);
+
+      fresh.dispose();
+    });
+
     test('renderAnimated only highlights a layer once its own paths are actually revealed', async () => {
       // the whole job is known upfront here (unlike a live stream), but the
       // highlight must still wait for the reveal to reach the top layer

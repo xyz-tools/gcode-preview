@@ -77,6 +77,10 @@ export class ObjectsManager {
   static readonly rebuildDebounce = 100;
 
   private renderedPaths = new Set<Path>();
+  /** Scene objects drawn by the current top-layer/last-segment highlight */
+  private highlightObjects: Object3D[] = [];
+  /** Paths the current highlight drew or claimed, to unclaim on revert */
+  private highlightedPaths: Path[] = [];
   private onRebuildNeeded?: RebuildRequest;
   private rebuildTimeout?: ReturnType<typeof setTimeout>;
   /** Current layer range, kept so materials created later start out clipped correctly */
@@ -391,9 +395,9 @@ export class ObjectsManager {
    * recoloring a tool later leaves the highlight untouched. The object is tagged
    * so {@link setExtrusionColor} skips it for the same reason.
    */
-  renderExtrusionsInColor(paths: Path[], color: Color): Object3D | undefined {
+  renderExtrusionsInColor(paths: Path[], color: Color): void {
     const unrenderedPaths = this.takeUnrendered(paths);
-    if (unrenderedPaths.length === 0) return undefined;
+    if (unrenderedPaths.length === 0) return;
 
     const object = this.renderTubes
       ? this.renderPathsAsTubes(unrenderedPaths, this.createHighlightMaterial(color))
@@ -401,28 +405,35 @@ export class ObjectsManager {
         this.renderPathsAsLines(unrenderedPaths, color, false);
     object.userData.highlight = true;
     this.extrusionsGroup.add(object);
-    return object;
+    // tracked so revertHighlight can undo exactly this draw later
+    this.highlightObjects.push(object);
+    this.highlightedPaths.push(...unrenderedPaths);
   }
 
   /**
-   * Removes a previously drawn highlight and forgets that its paths were
+   * Removes the currently drawn highlight and forgets that its paths were
    * rendered, so the next render call redraws them in their normal color.
    * @remarks
    * Used to move a live top-layer/last-segment highlight forward as newer
    * layers or segments arrive, without leaving stale highlighted geometry
-   * behind on the layer or path it has moved past. The object's own geometry
-   * and material are disposed; the per-path source geometries they were built
-   * from are left for the next full {@link reset} — the paths get redrawn
-   * through the normal path, which builds its own fresh geometry anyway.
+   * behind on the layer or path it has moved past. Only what the highlight
+   * itself drew or claimed is unclaimed — paths the per-tool batches drew
+   * stay rendered, so they are not drawn a second time. The overlay's own
+   * geometry and material are disposed; the per-path source geometries they
+   * were built from are left for the next full {@link reset} — the paths get
+   * redrawn through the normal path, which builds its own fresh geometry
+   * anyway.
    */
-  revertHighlight(objects: Object3D[], paths: Path[]): void {
-    objects.forEach((object) => {
+  revertHighlight(): void {
+    this.highlightObjects.forEach((object) => {
       object.removeFromParent();
       const disposable = object as unknown as Partial<Disposable>;
       this.disposables = this.disposables.filter((d) => d !== (disposable as Disposable));
       disposable.dispose?.();
     });
-    paths.forEach((path) => this.renderedPaths.delete(path));
+    this.highlightObjects = [];
+    this.highlightedPaths.forEach((path) => this.renderedPaths.delete(path));
+    this.highlightedPaths = [];
   }
 
   /**
@@ -430,9 +441,12 @@ export class ObjectsManager {
    * @remarks
    * Used when a highlight redraws part of a path — its final segment in its own
    * color — so the per-tool batch does not also draw the original whole path.
+   * The claim is part of the current highlight and is undone by
+   * {@link revertHighlight}.
    */
   claimPaths(paths: Path[]) {
     paths.forEach((path) => this.renderedPaths.add(path));
+    this.highlightedPaths.push(...paths);
   }
 
   /**
@@ -449,6 +463,9 @@ export class ObjectsManager {
     this.renderedPaths.clear();
     this.extrusionsGroup.clear();
     this.travelMovesGroup.clear();
+    // the groups and disposables above already dropped the highlight overlay
+    this.highlightObjects = [];
+    this.highlightedPaths = [];
   }
 
   /**

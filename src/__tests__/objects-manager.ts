@@ -322,57 +322,81 @@ describe('ObjectsManager', () => {
   });
 
   describe('renderExtrusionsInColor / revertHighlight', () => {
-    test('draws and returns the created object', () => {
+    const highlights = () => objectsManager.extrusionsGroup.children.filter((child) => child.userData.highlight);
+
+    test('draws the paths as a highlight overlay', () => {
       const path = createTestPath();
 
-      const object = objectsManager.renderExtrusionsInColor([path], new Color(0x00ff00));
+      objectsManager.renderExtrusionsInColor([path], new Color(0x00ff00));
 
-      expect(object).toBeDefined();
-      expect(objectsManager.extrusionsGroup.children).toContain(object);
-      expect(object?.userData.highlight).toBe(true);
+      expect(highlights().length).toBe(1);
     });
 
-    test('returns undefined and draws nothing for paths already claimed', () => {
+    test('draws nothing for paths already claimed', () => {
       const path = createTestPath();
       objectsManager.renderExtrusionsInColor([path], new Color(0x00ff00));
-      const childrenAfterFirstDraw = objectsManager.extrusionsGroup.children.length;
 
-      const object = objectsManager.renderExtrusionsInColor([path], new Color(0xff0000));
+      objectsManager.renderExtrusionsInColor([path], new Color(0xff0000));
 
-      expect(object).toBeUndefined();
-      expect(objectsManager.extrusionsGroup.children.length).toBe(childrenAfterFirstDraw);
+      expect(highlights().length).toBe(1);
     });
 
-    test('revertHighlight removes the object and forgets its paths were rendered', () => {
+    test('revertHighlight removes the overlay and forgets its paths were rendered', () => {
       const path = createTestPath();
-      const object = objectsManager.renderExtrusionsInColor([path], new Color(0x00ff00));
+      objectsManager.renderExtrusionsInColor([path], new Color(0x00ff00));
 
-      objectsManager.revertHighlight(object ? [object] : [], [path]);
+      objectsManager.revertHighlight();
 
-      expect(objectsManager.extrusionsGroup.children).not.toContain(object);
-      // the path is drawable again, in a different color, proving it was unclaimed
-      const redrawn = objectsManager.renderExtrusionsInColor([path], new Color(0x0000ff));
-      expect(redrawn).toBeDefined();
+      expect(highlights().length).toBe(0);
+      // the path is drawable again, proving it was unclaimed
+      objectsManager.renderExtrusionsInColor([path], new Color(0x0000ff));
+      expect(highlights().length).toBe(1);
+    });
+
+    test('revertHighlight leaves paths the per-tool batches drew rendered', () => {
+      // the highlight only claims its own draws — reverting must not unclaim a
+      // normally drawn path, or the next render would draw it a second time
+      const normal = createTestPath();
+      const highlighted = createTestPath();
+      objectsManager.renderExtrusions([normal]);
+      objectsManager.renderExtrusionsInColor([highlighted], new Color(0x00ff00));
+
+      objectsManager.revertHighlight();
+      const childrenBefore = objectsManager.extrusionsGroup.children.length;
+      objectsManager.renderPaths([normal], { travels: false, extrusions: true });
+
+      expect(objectsManager.extrusionsGroup.children.length).toBe(childrenBefore);
     });
 
     test('revertHighlight disposes a tube highlight', () => {
       objectsManager.renderTubes = true;
       const path = createTestPath();
-      const object = objectsManager.renderExtrusionsInColor([path], new Color(0x00ff00)) as BatchedMesh;
-      const disposeSpy = vi.spyOn(object, 'dispose');
+      objectsManager.renderExtrusionsInColor([path], new Color(0x00ff00));
+      const disposeSpy = vi.spyOn(highlights()[0] as BatchedMesh, 'dispose');
 
-      objectsManager.revertHighlight([object], [path]);
+      objectsManager.revertHighlight();
 
       expect(disposeSpy).toHaveBeenCalledTimes(1);
     });
 
-    test('revertHighlight on an already-reset manager is a no-op', () => {
+    test('revertHighlight unclaims paths recorded through claimPaths', () => {
       const path = createTestPath();
-      const object = objectsManager.renderExtrusionsInColor([path], new Color(0x00ff00));
+      objectsManager.claimPaths([path]);
+
+      objectsManager.revertHighlight();
+
+      objectsManager.renderExtrusionsInColor([path], new Color(0x0000ff));
+      expect(highlights().length).toBe(1);
+    });
+
+    test('reset drops the highlight tracking, making a later revert a no-op', () => {
+      const path = createTestPath();
+      objectsManager.renderExtrusionsInColor([path], new Color(0x00ff00));
 
       objectsManager.reset();
 
-      expect(() => objectsManager.revertHighlight(object ? [object] : [], [path])).not.toThrow();
+      expect(() => objectsManager.revertHighlight()).not.toThrow();
+      expect(objectsManager.extrusionsGroup.children.length).toBe(0);
     });
   });
 
