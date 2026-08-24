@@ -38,9 +38,10 @@ export class BuildVolume {
     private _smallGrid: boolean | undefined,
     private scene: Scene
   ) {
-    this._x = x;
-    this._y = y;
-    this._z = z;
+    // Negative dimensions clamp to 0, like the setters
+    this._x = Math.max(0, x);
+    this._y = Math.max(0, y);
+    this._z = Math.max(0, z);
   }
 
   get x(): number {
@@ -67,10 +68,10 @@ export class BuildVolume {
     return this._z;
   }
   set z(value: number) {
-    if (value < 0) {
-      throw new Error('Height (z) must be equal to or greater than 0');
-    }
     this._z = value;
+    if (this._z < 0) {
+      this._z = 0;
+    }
     this.update(); // Update the build volume when z changes
   }
   get smallGrid(): boolean | undefined {
