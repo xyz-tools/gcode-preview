@@ -109,9 +109,10 @@ export class Interpreter {
     state.y = y ?? state.y;
     state.z = z ?? state.z;
 
-    currentPath.addPoint(state.x, state.y, state.z);
+    const pos = state.position;
+    currentPath.addPoint(pos.x, pos.y, pos.z);
     if (pathType === PathType.Extrusion) {
-      job.boundingBox.update(state.x, state.y, state.z);
+      job.boundingBox.update(pos.x, pos.y, pos.z);
     }
   }
 
@@ -133,6 +134,9 @@ export class Interpreter {
     // Set when the arc cannot be described at all, so only the endpoint is emitted.
     let arcIsDegenerate = false;
     const { state } = job;
+    // Starting position for the arc. Any un-homed axis is unknown, so it is
+    // assumed to be at the origin (see #361) to allow best-effort rendering.
+    const from = state.position;
 
     const cw = command.gcode === 'g2';
     let currentPath = job.inprogressPath;
@@ -151,8 +155,8 @@ export class Interpreter {
 
     if (r) {
       // in r mode a minimum radius will be applied if the distance can otherwise not be bridged
-      const deltaX = x - state.x; // assume abs mode
-      const deltaY = y - state.y;
+      const deltaX = x - from.x; // assume abs mode
+      const deltaY = y - from.y;
 
       // apply a minimal radius to bridge the distance
       const minR = Math.sqrt(Math.pow(deltaX / 2, 2) + Math.pow(deltaY / 2, 2));
@@ -180,9 +184,9 @@ export class Interpreter {
       }
     }
 
-    const wholeCircle = state.x == x && state.y == y;
-    const centerX = state.x + i;
-    const centerY = state.y + j;
+    const wholeCircle = from.x == x && from.y == y;
+    const centerX = from.x + i;
+    const centerY = from.y + j;
 
     const arcRadius = Math.sqrt(i * i + j * j);
     const arcCurrentAngle = Math.atan2(-j, -i);
@@ -215,13 +219,13 @@ export class Interpreter {
     // Z0 into a flat arc at the old height. This matches the endpoint assignment
     // below, and is only safe because the parser now drops non-finite params -- `||`
     // was rejecting NaN here by accident, and `??` does not.
-    const zDist = (z ?? state.z) - state.z;
+    const zDist = (z ?? from.z) - from.z;
     const zStep = zDist / totalSegments;
 
     // get points for the arc
-    let px = state.x;
-    let py = state.y;
-    let pz = state.z;
+    let px = from.x;
+    let py = from.y;
+    let pz = from.z;
     // calculate segments
     let currentAngle = arcCurrentAngle;
 
@@ -251,9 +255,10 @@ export class Interpreter {
     state.y = y ?? state.y;
     state.z = z ?? state.z;
 
-    currentPath.addPoint(state.x, state.y, state.z);
+    const pos = state.position;
+    currentPath.addPoint(pos.x, pos.y, pos.z);
     if (pathType === PathType.Extrusion) {
-      job.boundingBox.update(state.x, state.y, state.z);
+      job.boundingBox.update(pos.x, pos.y, pos.z);
     }
   }
 
@@ -282,12 +287,14 @@ export class Interpreter {
    * @param command - GCodeCommand containing the command
    * @param job - Job instance to update
    * @remarks
-   * Moves all axes to their home positions (0,0,0) and updates the job state.
+   * Moves all axes to their home positions (0,0,0) and marks the state as homed,
+   * so the position is now known rather than assumed.
    */
   g28(command: GCodeCommand, job: Job): void {
     job.state.x = 0;
     job.state.y = 0;
     job.state.z = 0;
+    job.state.isHomed = true;
   }
 
   /**
@@ -392,7 +399,8 @@ export class Interpreter {
   private breakPath(job: Job, newType: PathType): Path {
     job.finishPath();
     const currentPath = new Path(newType, 0.6, 0.2, job.state.tool);
-    currentPath.addPoint(job.state.x, job.state.y, job.state.z);
+    const pos = job.state.position;
+    currentPath.addPoint(pos.x, pos.y, pos.z);
     job.inprogressPath = currentPath;
     return currentPath;
   }
