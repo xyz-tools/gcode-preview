@@ -511,6 +511,103 @@ describe('SceneManager properties', () => {
         expect(spy).not.toHaveBeenCalled();
       }
     );
+
+    test('a two-point final path with both colors set leaves the top layer with no body', () => {
+      // the top layer's only path splits entirely into the segment; there is
+      // nothing left over for a topColor "body" draw
+      const fresh = createSceneManager({
+        job: shortTopLayerJob(),
+        topLayerColor: '#00ff00',
+        lastSegmentColor: '#ff0000'
+      });
+
+      const highlights = highlights_(fresh);
+      expect(highlights.length).toBe(1);
+      expect(lineColor(highlights[0])).toBe(0xff0000);
+
+      fresh.dispose();
+    });
+
+    test('extrusions disabled at construction draws no highlight', () => {
+      const fresh = createSceneManager({
+        job: multiPathTopLayerJob(),
+        renderExtrusion: false,
+        topLayerColor: '#00ff00'
+      });
+
+      expect(highlights_(fresh).length).toBe(0);
+
+      fresh.dispose();
+    });
+
+    test('a live highlight follows a stream in, reverting the layer it moves off of', () => {
+      // simulates readStream: paths land on the job one at a time and
+      // renderProgressive draws in between, holding back whichever path just
+      // landed since it may still be growing
+      const job = new Job();
+      // tubes so the reverted highlight is a BatchedMesh, exercising its dispose()
+      const fresh = createSceneManager({ job, renderTubes: true, topLayerColor: '#00ff00' });
+      const tubeColor = (object: Object3D) =>
+        ((object as { material: ShaderMaterial }).material.uniforms.uColor.value as Color).getHex();
+
+      appendPath(job, PathType.Extrusion, [
+        [0, 0, 0],
+        [10, 0, 0]
+      ]);
+      fresh.renderProgressive();
+      // the only path so far is held back as the still-growing tail
+      expect(highlights_(fresh).length).toBe(0);
+
+      appendPath(job, PathType.Extrusion, [
+        [0, 0, 0],
+        [10, 0, 0]
+      ]);
+      fresh.renderProgressive();
+      // the first path is now safe and is layer 0's only visible content
+      let highlights = highlights_(fresh);
+      expect(highlights.length).toBe(1);
+      expect(tubeColor(highlights[0])).toBe(0x00ff00);
+
+      appendPath(job, PathType.Extrusion, [
+        [0, 0, 0.2],
+        [10, 0, 0.2]
+      ]);
+      fresh.renderProgressive();
+      // layer 1 has begun, but its only path is the new held-back tail: the
+      // highlight lets go of layer 0 rather than keep showing it as stale
+      expect(highlights_(fresh).length).toBe(0);
+
+      appendPath(job, PathType.Extrusion, [
+        [10, 0, 0.2],
+        [10, 10, 0.2]
+      ]);
+      fresh.renderProgressive();
+      // layer 1's first path is now safe and becomes the live highlight
+      highlights = highlights_(fresh);
+      expect(highlights.length).toBe(1);
+      expect(tubeColor(highlights[0])).toBe(0x00ff00);
+
+      fresh.dispose();
+    });
+
+    test('renderAnimated only highlights a layer once its own paths are actually revealed', async () => {
+      // the whole job is known upfront here (unlike a live stream), but the
+      // highlight must still wait for the reveal to reach the top layer
+      // instead of jumping ahead of the per-tool draw
+      const fresh = createSceneManager({ job: threeLayerJob(), topLayerColor: '#00ff00' });
+      let sawEmptyFrame = false;
+      const spy = vi.spyOn(objectsManager(fresh), 'renderExtrusionsInColor').mockImplementation((...args) => {
+        if (highlights_(fresh).length === 0) sawEmptyFrame = true;
+        return ObjectsManager.prototype.renderExtrusionsInColor.apply(objectsManager(fresh), args);
+      });
+
+      await fresh.renderAnimated(1);
+
+      expect(sawEmptyFrame).toBe(true); // the highlight was absent on at least one early frame
+      expect(highlights_(fresh).length).toBe(1); // and present once the reveal finished
+      spy.mockRestore();
+      fresh.dispose();
+    });
   });
 
   describe('lighting', () => {

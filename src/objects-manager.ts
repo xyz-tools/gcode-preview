@@ -6,6 +6,7 @@ import { LineBox } from './helpers/line-box';
 
 import {
   Group,
+  Object3D,
   Scene,
   Color,
   Plane,
@@ -390,9 +391,9 @@ export class ObjectsManager {
    * recoloring a tool later leaves the highlight untouched. The object is tagged
    * so {@link setExtrusionColor} skips it for the same reason.
    */
-  renderExtrusionsInColor(paths: Path[], color: Color) {
+  renderExtrusionsInColor(paths: Path[], color: Color): Object3D | undefined {
     const unrenderedPaths = this.takeUnrendered(paths);
-    if (unrenderedPaths.length === 0) return;
+    if (unrenderedPaths.length === 0) return undefined;
 
     const object = this.renderTubes
       ? this.renderPathsAsTubes(unrenderedPaths, this.createHighlightMaterial(color))
@@ -400,6 +401,28 @@ export class ObjectsManager {
         this.renderPathsAsLines(unrenderedPaths, color, false);
     object.userData.highlight = true;
     this.extrusionsGroup.add(object);
+    return object;
+  }
+
+  /**
+   * Removes a previously drawn highlight and forgets that its paths were
+   * rendered, so the next render call redraws them in their normal color.
+   * @remarks
+   * Used to move a live top-layer/last-segment highlight forward as newer
+   * layers or segments arrive, without leaving stale highlighted geometry
+   * behind on the layer or path it has moved past. The object's own geometry
+   * and material are disposed; the per-path source geometries they were built
+   * from are left for the next full {@link reset} — the paths get redrawn
+   * through the normal path, which builds its own fresh geometry anyway.
+   */
+  revertHighlight(objects: Object3D[], paths: Path[]): void {
+    objects.forEach((object) => {
+      object.removeFromParent();
+      const disposable = object as unknown as Partial<Disposable>;
+      this.disposables = this.disposables.filter((d) => d !== (disposable as Disposable));
+      disposable.dispose?.();
+    });
+    paths.forEach((path) => this.renderedPaths.delete(path));
   }
 
   /**
@@ -410,13 +433,6 @@ export class ObjectsManager {
    */
   claimPaths(paths: Path[]) {
     paths.forEach((path) => this.renderedPaths.add(path));
-  }
-
-  /**
-   * Whether a path has already been drawn (or claimed) in the current scene.
-   */
-  hasRendered(path: Path): boolean {
-    return this.renderedPaths.has(path);
   }
 
   /**
