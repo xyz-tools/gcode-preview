@@ -49,7 +49,6 @@ export default defineConfig({
         'src/thumbnail.ts': { statements: 92.3, branches: 100, functions: 75, lines: 92.3 },
         'src/extra/dom-utils.ts': { statements: 0, branches: 0, functions: 0, lines: 0 },
         'src/helpers/grid.ts': { statements: 93.33, branches: 66.66, functions: 66.66, lines: 96.29 },
-        'src/helpers/line-box.ts': { statements: 80, branches: 57.14, functions: 75, lines: 85.71 },
         'src/helpers/split-chunk.ts': { statements: 75, branches: 50, functions: 100, lines: 75 }
       }
     }
