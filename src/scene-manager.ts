@@ -126,6 +126,10 @@ export class SceneManager {
   private _topLayerColor?: Color;
   /** Last segment color */
   private _lastSegmentColor?: Color;
+  /** Layer index the top-layer/last-segment highlight is currently drawn on */
+  private _highlightedLayerIndex?: number;
+  /** The path the highlight last treated as the layer's last-received path */
+  private _highlightedLastPath?: Path;
   /** Last render time in milliseconds */
   lastRenderTime = 0;
   /** Whether to render in wireframe mode */
@@ -643,6 +647,8 @@ export class SceneManager {
    */
   private resetScene() {
     this.objectsManager.reset();
+    // reset() already disposed of any tracked highlight objects in bulk
+    this.resetHighlightTracking();
     this.initScene();
   }
 
@@ -673,6 +679,24 @@ export class SceneManager {
     } else {
       return this.renderFrameLoop(pathCount > 0 ? Math.min(pathCount, this.job.paths.length) : 1);
     }
+  }
+
+  /**
+   * Draws the paths parsed so far on top of what is already on screen
+   * @internal
+   * @remarks
+   * Called by GCodePreview.readStream while a G-code stream is read, so the
+   * model grows on screen as chunks arrive — use processGCodeStream rather
+   * than calling this directly. Only paths that have not been drawn yet are
+   * built, and the last path is held back: it may still be growing, and a
+   * path is only ever built once. The top-layer/last-segment highlight, if
+   * configured, moves onto whatever has most recently arrived. The continuous
+   * animation loop presents the new geometry on the next frame.
+   */
+  renderProgressive(): void {
+    if (!this.job) return;
+
+    this.renderPaths(Math.max(0, this.job.paths.length - 1));
   }
 
   /**
@@ -737,6 +761,8 @@ export class SceneManager {
     // drop the old manager from disposables too, or dispose() would revisit it
     this.disposables = this.disposables.filter((d) => d !== this.objectsManager);
     this.objectsManager.dispose();
+    // dispose() already tore down any tracked highlight objects with it
+    this.resetHighlightTracking();
     this.objectsManager = this.createObjectsManager(lineWidth, lineHeight, extrusionWidth);
     // assign the fields directly: the fresh manager has no materials or geometry
     // yet, so the setters' uniform writes and rebuild requests have nothing to do
@@ -803,9 +829,8 @@ export class SceneManager {
    * Draws the job's paths up to the given index of its combined path list.
    * @param endPathNumber - End index into job.paths (default: all of them)
    * @remarks
-   * On a full render the top layer and last segment highlights claim their paths
-   * first, so the per-tool batches leave them alone. During progressive rendering
-   * the highlight is skipped: the top layer may not have been reached yet.
+   * The top layer and last segment highlights claim their paths first, so the
+   * per-tool batches leave them alone.
    */
   private renderPaths(endPathNumber: number = Infinity): void {
     this.objectsManager.setTravelsVisible(this._renderTravel);
@@ -813,11 +838,13 @@ export class SceneManager {
     this.objectsManager.gradientEnabled = this.gradientEnabled;
     this.objectsManager.layerCount = this.job.countLayers;
 
-    if (this._renderExtrusion && endPathNumber === Infinity) {
-      this.renderTopLayerHighlight();
+    const paths = this.job.paths.slice(0, endPathNumber);
+
+    if (this._renderExtrusion) {
+      this.renderTopLayerHighlight(paths);
     }
 
-    this.objectsManager.renderPaths(this.job.paths.slice(0, endPathNumber), {
+    this.objectsManager.renderPaths(paths, {
       travels: this._renderTravel,
       extrusions: this._renderExtrusion
     });
@@ -826,70 +853,89 @@ export class SceneManager {
   /**
    * Draws the topmost visible layer, and its final segment, in their highlight
    * colors before the per-tool batches run.
+   * @param paths - The paths visible to this render call (the streaming-safe
+   * prefix during progressive rendering, or the whole job on a full render)
    * @remarks
    * Whichever draw claims a path first wins, so running before the per-tool
-   * batches is what lets the highlight colors take precedence. Only runs on a
-   * full render: during progressive rendering the top layer may not have been
-   * reached yet.
+   * batches is what lets the highlight colors take precedence.
+   *
+   * "Top layer" and "last segment" both mean the most recently *received* layer
+   * and segment, not the ones a finished print would settle on: while a stream
+   * is still being read the highlight keeps moving forward onto whatever just
+   * arrived, the same way it would on a printer's own live status display. Each
+   * time the highlighted layer or its last path changes, the previous highlight
+   * is reverted first so the layer it moved off of falls back to its normal
+   * tool color instead of staying stuck highlighted.
    *
    * `topLayerColor` recolors the whole visible top layer; `lastSegmentColor`
    * recolors just the final segment of that layer's last path. When both are set
    * the last segment is split off so it keeps its own color. When only
    * `lastSegmentColor` is set the rest of the layer keeps its normal tool color.
+   *
+   * A structurally new top layer reverts the old highlight even if the new
+   * layer has nothing visible yet (its only path may be the streaming-safe
+   * window's held-back tail) — otherwise the previous layer would stay
+   * highlighted for as long as the new one takes to produce anything to show.
    */
-  private renderTopLayerHighlight(): void {
+  private renderTopLayerHighlight(paths: Path[]): void {
     const topColor = this._topLayerColor;
     const segColor = this._lastSegmentColor;
     if (topColor === undefined && segColor === undefined) return;
 
     const layers = this.job.layers;
     // the visible top follows the end-layer clip so the highlight is never hidden
-    const topLayer = layers[(this._endLayer ?? layers.length) - 1];
-    if (!topLayer) return;
+    const topLayerIndex = (this._endLayer ?? layers.length) - 1;
+    const topLayer = layers[topLayerIndex];
 
-    const extrusions = topLayer.paths.filter((path) => path.travelType === PathType.Extrusion);
-    if (extrusions.length === 0) return;
+    // `paths` may be a prefix of the job — either the streaming-safe window
+    // during progressive rendering, or the current frame of a reveal animation
+    // — so a layer's paths only count once they have actually reached it
+    const layerExtrusions: Path[] = [];
+    if (topLayer) {
+      const visiblePaths = new Set(paths);
+      layerExtrusions.push(
+        ...topLayer.paths.filter((path) => path.travelType === PathType.Extrusion && visiblePaths.has(path))
+      );
+    }
+    const lastPath: Path | undefined = layerExtrusions[layerExtrusions.length - 1];
 
-    const lastPath = extrusions[extrusions.length - 1];
+    // nothing new has arrived since the last draw: same layer, same last path
+    // (including both being empty, e.g. a non-planar job with no layers at all)
+    if (topLayerIndex === this._highlightedLayerIndex && lastPath === this._highlightedLastPath) return;
+
+    this.objectsManager.revertHighlight();
+    this._highlightedLayerIndex = topLayerIndex;
+    this._highlightedLastPath = lastPath;
+
+    if (lastPath === undefined) return; // reverted; nothing visible yet to draw in its place
+
     // a segment needs two points; a shorter final path cannot be split
     const splitSegment = segColor !== undefined && lastPath.vertices.length >= 6;
 
     if (topColor !== undefined) {
-      const body = splitSegment ? extrusions.slice(0, -1) : extrusions;
-      if (body.length > 0) this.objectsManager.renderExtrusionsInColor(body, topColor);
+      const body = splitSegment ? layerExtrusions.slice(0, -1) : layerExtrusions;
+      this.objectsManager.renderExtrusionsInColor(body, topColor);
     }
 
-    // hasRendered guards a second pass (renderMissingPaths) from splitting again,
-    // which would draw duplicate segment pieces the dedup set cannot catch
-    if (!splitSegment || this.objectsManager.hasRendered(lastPath)) return;
+    if (!splitSegment) return;
 
     this.objectsManager.claimPaths([lastPath]);
     const bodyColor = topColor ?? this.objectsManager.colorForTool(lastPath.tool);
-    const { body, segment } = this.splitLastSegment(lastPath);
+    const { body, segment } = lastPath.splitLastSegment();
     if (body) this.objectsManager.renderExtrusionsInColor([body], bodyColor);
     this.objectsManager.renderExtrusionsInColor([segment], segColor);
   }
 
-  /**
-   * Splits a path into its final segment and the body that precedes it.
-   * @param path - Path to split
-   * @returns The last two points as `segment`, and everything up to and including
-   * the segment's first point as `body` (null when the path is a single segment)
+  /** Forgets which layer and path the highlight was last drawn on.
+   * @remarks
+   * Used when the scene it was drawn into is being discarded wholesale (a
+   * full reset or a fresh ObjectsManager), which drops the overlay objects
+   * themselves — without this the next draw would think the highlight is
+   * still in place and skip redrawing it.
    */
-  private splitLastSegment(path: Path): { body: Path | null; segment: Path } {
-    const vertices = path.vertices;
-    const segment = this.subPath(path, vertices.slice(vertices.length - 6));
-    const body = vertices.length > 6 ? this.subPath(path, vertices.slice(0, vertices.length - 3)) : null;
-    return { body, segment };
-  }
-
-  /** Builds a path carrying `source`'s extrusion settings over a slice of vertices. */
-  private subPath(source: Path, vertices: number[]): Path {
-    const path = new Path(source.travelType, source.extrusionWidth, source.lineHeight, source.tool);
-    for (let i = 0; i < vertices.length; i += 3) {
-      path.addPoint(vertices[i], vertices[i + 1], vertices[i + 2]);
-    }
-    return path;
+  private resetHighlightTracking(): void {
+    this._highlightedLayerIndex = undefined;
+    this._highlightedLastPath = undefined;
   }
 
   saveCamera() {

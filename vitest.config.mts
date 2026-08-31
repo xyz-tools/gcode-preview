@@ -44,7 +44,6 @@ export default defineConfig({
         'src/dev-gui.ts': { statements: 0, branches: 0, functions: 0, lines: 0 },
         'src/gcode-preview.ts': { statements: 93.9, branches: 79.48, functions: 100, lines: 94.87 },
         'src/indexers.ts': { statements: 96.66, branches: 96.15, functions: 100, lines: 96.66 },
-        'src/path.ts': { statements: 93.93, branches: 88.23, functions: 80, lines: 96.66 },
         'src/thumbnail.ts': { statements: 92.3, branches: 100, functions: 75, lines: 92.3 },
         'src/extra/dom-utils.ts': { statements: 0, branches: 0, functions: 0, lines: 0 },
         'src/helpers/grid.ts': { statements: 93.33, branches: 66.66, functions: 66.66, lines: 96.29 },

@@ -67,6 +67,45 @@ test('cancelAnimation should cancel the render loop', async () => {
   expect(callCountAfterDestroy).toBe(callCountAfterDestroy2);
 });
 
+test('renderProgressive draws the paths parsed so far, holding back the still-growing last one', () => {
+  const mock = createMockSceneManager() as ReturnType<typeof createMockSceneManager> & {
+    job?: { paths: number[] };
+    renderPaths: ReturnType<typeof vi.fn>;
+  };
+  mock.job = { paths: [1, 2, 3] };
+  mock.renderPaths = vi.fn();
+
+  SceneManager.prototype.renderProgressive.call(mock);
+
+  expect(mock.renderPaths).toHaveBeenCalledWith(2);
+});
+
+test('renderProgressive never passes a negative path count', () => {
+  const mock = createMockSceneManager() as ReturnType<typeof createMockSceneManager> & {
+    job?: { paths: number[] };
+    renderPaths: ReturnType<typeof vi.fn>;
+  };
+  mock.job = { paths: [] };
+  mock.renderPaths = vi.fn();
+
+  SceneManager.prototype.renderProgressive.call(mock);
+
+  expect(mock.renderPaths).toHaveBeenCalledWith(0);
+});
+
+test('renderProgressive does nothing without a job', () => {
+  const mock = createMockSceneManager() as ReturnType<typeof createMockSceneManager> & {
+    job?: { paths: number[] };
+    renderPaths: ReturnType<typeof vi.fn>;
+  };
+  mock.job = undefined;
+  mock.renderPaths = vi.fn();
+
+  SceneManager.prototype.renderProgressive.call(mock);
+
+  expect(mock.renderPaths).not.toHaveBeenCalled();
+});
+
 function createMockSceneManager() {
   const renderer = {
     render: vi.fn(() => {}),

@@ -7,6 +7,9 @@ import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { makeDroppable } from './extra/dom-utils';
 import { splitChunk } from './helpers/split-chunk';
 
+/** While streaming, how often (at most) the paths parsed so far are drawn. */
+const LIVE_RENDER_INTERVAL_MS = 250;
+
 /**
  * Options for configuring the G-code preview
  */
@@ -23,6 +26,15 @@ type LibOptions = {
    * it costs several megabytes on a large file.
    */
   keepLines?: boolean;
+  /**
+   * How often, in milliseconds, the paths parsed so far are drawn while a
+   * G-code stream is being read.
+   * @remarks
+   * Defaults to 250. Lower values grow the model more smoothly — 0 draws on
+   * every chunk, effectively once per frame — but every draw adds a geometry
+   * batch, so very low values cost draw calls on large files.
+   */
+  liveRenderInterval?: number;
 };
 
 export type GCodePreviewOptions = LibOptions & SceneManagerOptions;
@@ -185,7 +197,7 @@ export class GCodePreview {
     options: { render?: boolean } = { render: true }
   ): Promise<void> {
     if (gcode instanceof ReadableStream) {
-      await this.readStream(gcode);
+      await this.readStream(gcode, { render: options.render });
     } else {
       const { commands } = this.parser.parseGCode(gcode);
       this.executeCommands(commands);
@@ -202,11 +214,12 @@ export class GCodePreview {
     }
   }
 
-  async readStream(stream: ReadableStream): Promise<void> {
+  async readStream(stream: ReadableStream, options: { render?: boolean } = {}): Promise<void> {
     const reader = stream.getReader();
     let result;
     let tail = '';
     let size = 0;
+    let lastDrawnAt = -Infinity;
 
     do {
       result = await reader.read();
@@ -219,11 +232,22 @@ export class GCodePreview {
       const split = splitChunk(tail, result.value);
       tail = split.tail;
 
-      // parse increments but don't render yet
       const { commands } = this.parser.parseGCode(split.complete);
 
       // we'll execute the commands immediately, for now
       this.executeCommands(commands);
+
+      // draw what has arrived so far, so the model grows on screen while the
+      // stream is still coming in. Throttled: each call only builds the paths
+      // that are not drawn yet, but a geometry batch per chunk would still
+      // pile up draw calls
+      if (
+        options.render &&
+        performance.now() - lastDrawnAt >= (this.opts?.liveRenderInterval ?? LIVE_RENDER_INTERVAL_MS)
+      ) {
+        this.sceneManager.renderProgressive();
+        lastDrawnAt = performance.now();
+      }
     } while (!result.done);
 
     console.debug('total read from stream', Math.floor(size / 1024), 'kB');
