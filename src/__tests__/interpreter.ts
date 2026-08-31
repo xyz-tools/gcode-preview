@@ -1,10 +1,7 @@
 import { test, expect, describe } from 'vitest';
 import { GCodeCommand, Parser } from '../parser/gcode-parser';
 import { Interpreter, handlers } from '../interpreter';
-import { linearMove } from '../interpreter/commands/linear-move';
-import { setInchUnits, setMillimeterUnits } from '../interpreter/commands/set-units';
-import { home } from '../interpreter/commands/home';
-import { selectTool } from '../interpreter/commands/select-tool';
+import { linearMove, setInchUnits, setMillimeterUnits, home, selectTool } from '../interpreter/commands';
 import { Job } from '../job';
 import { PathType } from '../path';
 

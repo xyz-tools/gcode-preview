@@ -1,10 +1,6 @@
 import { GCodeCommand } from './parser/gcode-parser';
 import { Job } from './job';
-import { linearMove } from './interpreter/commands/linear-move';
-import { arcMove } from './interpreter/commands/arc-move';
-import { setInchUnits, setMillimeterUnits } from './interpreter/commands/set-units';
-import { home } from './interpreter/commands/home';
-import { selectTool } from './interpreter/commands/select-tool';
+import { linearMove, arcMove, setInchUnits, setMillimeterUnits, home, selectTool } from './interpreter/commands';
 
 /**
  * Executes a single G-code command against a job
