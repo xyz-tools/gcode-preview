@@ -11,6 +11,7 @@ import {
 } from './indexers';
 import { BoundingBox } from './bounding-box';
 import { Metadata } from './parser/gcode-parser';
+import { JobStats } from './job-stats';
 
 /**
  * Represents a complete print job containing paths, layers, and state
@@ -40,18 +41,8 @@ export class Job {
   public boundingBox: BoundingBox = new BoundingBox();
   private _metadata: Metadata | undefined;
 
-  /** Number of retraction moves (zero-length moves with positive E) */
-  public retractions = 0;
-  /** Number of deretraction moves (zero-length moves with negative E) */
-  public deretractions = 0;
-  /** Number of bare feedrate changes (F with no movement) */
-  public feedrateChanges = 0;
-  /** Number of zero-length moves that were neither a retraction nor a feedrate change */
-  public others = 0;
-  /** For reference, how many points were added to the job */
-  public points = 0;
-  /** Total extrusion distance over all extrusion moves */
-  public extrusionDistance = 0;
+  /** Statistics accumulated while interpreting the job's G-code */
+  public stats: JobStats = new JobStats();
 
   /**
    * Creates a new Job instance

@@ -33,7 +33,7 @@ export const arcMove: CommandHandler = (command, job, context) => {
   }
 
   if (e > 0) {
-    job.extrusionDistance += e;
+    job.stats.extrusionDistance += e;
   }
 
   if (r) {

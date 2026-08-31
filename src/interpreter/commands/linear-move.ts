@@ -17,19 +17,19 @@ export const linearMove: CommandHandler = (command, job, context) => {
   // discard zero length moves
   if (x === undefined && y === undefined && z === undefined) {
     if (e > 0) {
-      job.retractions++;
+      job.stats.retractions++;
     } else if (e < 0) {
-      job.deretractions++;
+      job.stats.deretractions++;
     } else if (f !== undefined) {
-      job.feedrateChanges++;
+      job.stats.feedrateChanges++;
     } else {
-      job.others++;
+      job.stats.others++;
     }
 
     return;
   }
 
-  job.points++;
+  job.stats.points++;
 
   const { state } = job;
   let currentPath = job.inprogressPath;
@@ -40,7 +40,7 @@ export const linearMove: CommandHandler = (command, job, context) => {
   }
 
   if (e > 0) {
-    job.extrusionDistance += e;
+    job.stats.extrusionDistance += e;
   }
 
   // e is omitted bc currently we're assuming relative extrusion distances

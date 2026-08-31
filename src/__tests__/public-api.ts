@@ -227,9 +227,9 @@ describe('public API surface', () => {
     });
 
     it.each(['retractions', 'deretractions', 'feedrateChanges', 'others', 'points', 'extrusionDistance'] as const)(
-      'starts counter %s at 0',
+      'starts stats counter %s at 0',
       (name) => {
-        expect(new Job()[name]).toBe(0);
+        expect(new Job().stats[name]).toBe(0);
       }
     );
   });
