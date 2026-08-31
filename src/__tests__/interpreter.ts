@@ -1,6 +1,11 @@
 import { test, expect, describe } from 'vitest';
 import { GCodeCommand, Parser } from '../parser/gcode-parser';
 import { Interpreter } from '../interpreter';
+import { handlers } from '../interpreter/registry';
+import { linearMove } from '../interpreter/commands/linear-move';
+import { setInchUnits, setMillimeterUnits } from '../interpreter/commands/set-units';
+import { home } from '../interpreter/commands/home';
+import { selectTool } from '../interpreter/commands/select-tool';
 import { Job } from '../job';
 import { PathType } from '../path';
 
@@ -100,7 +105,7 @@ describe('.execute', () => {
   });
 });
 
-describe('.g0', () => {
+describe('linearMove (G0/G1)', () => {
   test('starts a path if the job has none, starting at the job current state', () => {
     const command = new GCodeCommand('G0 X1 Y2', 'g0', { x: 1, y: 2 });
     const interpreter = new Interpreter();
@@ -109,7 +114,7 @@ describe('.g0', () => {
     job.state.y = 4;
     job.state.tool = 5;
 
-    interpreter.g0(command, job);
+    linearMove(command, job, interpreter);
 
     expect(job.paths.length).toEqual(0);
     expect(job.inprogressPath?.vertices.length).toEqual(6);
@@ -126,9 +131,9 @@ describe('.g0', () => {
     const job = new Job();
 
     job.state.z = 5;
-    interpreter.g0(command1, job);
+    linearMove(command1, job, interpreter);
 
-    interpreter.g0(command2, job);
+    linearMove(command2, job, interpreter);
 
     expect(job.paths.length).toEqual(0);
     expect(job.inprogressPath?.vertices.length).toEqual(9);
@@ -142,7 +147,7 @@ describe('.g0', () => {
     const interpreter = new Interpreter();
     const job = new Job();
 
-    interpreter.g0(command, job);
+    linearMove(command, job, interpreter);
 
     expect(job.paths.length).toEqual(0);
     expect(job.inprogressPath?.travelType).toEqual(PathType.Travel);
@@ -153,7 +158,7 @@ describe('.g0', () => {
     const interpreter = new Interpreter();
     const job = new Job();
 
-    interpreter.g0(command, job);
+    linearMove(command, job, interpreter);
 
     expect(job.paths.length).toEqual(0);
     expect(job.inprogressPath?.travelType).toEqual('Extrusion');
@@ -164,7 +169,7 @@ describe('.g0', () => {
     const interpreter = new Interpreter();
     const job = new Job();
 
-    interpreter.g0(command, job);
+    linearMove(command, job, interpreter);
 
     expect(job.paths.length).toEqual(0);
   });
@@ -174,7 +179,7 @@ describe('.g0', () => {
     const interpreter = new Interpreter();
     const job = new Job();
 
-    interpreter.g0(command, job);
+    linearMove(command, job, interpreter);
 
     expect(job.paths.length).toEqual(0);
   });
@@ -185,7 +190,7 @@ describe('.g0', () => {
     const job = new Job();
     job.state.y = 7;
 
-    interpreter.g0(command, job);
+    linearMove(command, job, interpreter);
 
     expect(job.state.x).toEqual(5);
     expect(job.state.y).toEqual(7);
@@ -196,7 +201,7 @@ describe('.g0', () => {
     const interpreter = new Interpreter();
     const job = new Job();
 
-    interpreter.g0(command, job);
+    linearMove(command, job, interpreter);
 
     expect(job.paths.length).toEqual(0);
     expect(interpreter.feedrateChanges).toEqual(1);
@@ -208,7 +213,7 @@ describe('.g0', () => {
     const interpreter = new Interpreter();
     const job = new Job();
 
-    interpreter.g0(command, job);
+    linearMove(command, job, interpreter);
 
     expect(job.paths.length).toEqual(0);
     expect(interpreter.others).toEqual(1);
@@ -222,7 +227,7 @@ describe('.g0', () => {
     const job = new Job();
     interpreter.execute([command1], job);
 
-    interpreter.g0(command2, job);
+    linearMove(command2, job, interpreter);
 
     expect(job.paths.length).toEqual(1);
     expect(job.inprogressPath?.travelType).toEqual(PathType.Extrusion);
@@ -235,40 +240,42 @@ describe('.g0', () => {
     const job = new Job();
     interpreter.execute([command1], job);
 
-    interpreter.g0(command2, job);
+    linearMove(command2, job, interpreter);
 
     expect(job.paths.length).toEqual(1);
     expect(job.inprogressPath?.travelType).toEqual(PathType.Travel);
   });
 
-  test('.G1 is an alias to .G0', () => {
-    const interpreter = new Interpreter();
+  test('G1 is handled by the same handler as G0', () => {
+    expect(handlers.get('g1')).toBe(handlers.get('g0'));
+  });
 
-    expect(interpreter.g1).toEqual(interpreter.g0);
+  test('G3 is handled by the same handler as G2', () => {
+    expect(handlers.get('g3')).toBe(handlers.get('g2'));
   });
 });
 
-test('.G20 sets the units to inches', () => {
+test('G20 sets the units to inches', () => {
   const command = new GCodeCommand('G20', 'g20', {});
   const interpreter = new Interpreter();
   const job = new Job();
 
-  interpreter.g20(command, job);
+  setInchUnits(command, job, interpreter);
 
   expect(job.state.units).toEqual('in');
 });
 
-test('.G21 sets the units to millimeters', () => {
+test('G21 sets the units to millimeters', () => {
   const command = new GCodeCommand('G21', 'g21', {});
   const interpreter = new Interpreter();
   const job = new Job();
 
-  interpreter.g21(command, job);
+  setMillimeterUnits(command, job, interpreter);
 
   expect(job.state.units).toEqual('mm');
 });
 
-test('.g28 moves the state to the origin and marks it homed', () => {
+test('G28 moves the state to the origin and marks it homed', () => {
   const command = new GCodeCommand('G28', 'g28', {});
   const interpreter = new Interpreter();
   const job = new Job();
@@ -276,7 +283,7 @@ test('.g28 moves the state to the origin and marks it homed', () => {
   job.state.y = 4;
   expect(job.state.isHomed).toBe(false);
 
-  interpreter.g28(command, job);
+  home(command, job, interpreter);
 
   expect(job.state.x).toEqual(0);
   expect(job.state.y).toEqual(0);
@@ -291,7 +298,7 @@ test('an un-homed state assumes the origin so a move can still render', () => {
   const interpreter = new Interpreter();
   const job = new Job();
 
-  interpreter.g1(command, job);
+  linearMove(command, job, interpreter);
 
   // X and Z were never given and never homed -> assumed origin in the geometry.
   expect(job.inprogressPath?.vertices.slice(0, 3)).toEqual([0, 0, 0]);
@@ -301,92 +308,15 @@ test('an un-homed state assumes the origin so a move can still render', () => {
   expect(job.state.isHomed).toBe(false);
 });
 
-test('.t0 sets the tool to 0', () => {
-  const command = new GCodeCommand('T0', 't0', {});
+test.each([0, 1, 2, 3, 4, 5, 6, 7])('T%i sets the tool to %i', (tool) => {
+  const command = new GCodeCommand(`T${tool}`, `t${tool}`, {});
   const interpreter = new Interpreter();
   const job = new Job();
   job.state.tool = 3;
 
-  interpreter.t0(command, job);
+  selectTool(command, job, interpreter);
 
-  expect(job.state.tool).toEqual(0);
-});
-
-test('.t1 sets the tool to 1', () => {
-  const command = new GCodeCommand('T1', 't1', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
-  job.state.tool = 3;
-
-  interpreter.t1(command, job);
-
-  expect(job.state.tool).toEqual(1);
-});
-
-test('.t2 sets the tool to 2', () => {
-  const command = new GCodeCommand('T2', 't2', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
-  job.state.tool = 3;
-
-  interpreter.t2(command, job);
-
-  expect(job.state.tool).toEqual(2);
-});
-
-test('.t3 sets the tool to 3', () => {
-  const command = new GCodeCommand('T3', 't3', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
-  job.state.tool = 3;
-
-  interpreter.t3(command, job);
-
-  expect(job.state.tool).toEqual(3);
-});
-
-test('.t4 sets the tool to 4', () => {
-  const command = new GCodeCommand('T4', 't4', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
-  job.state.tool = 3;
-
-  interpreter.t4(command, job);
-
-  expect(job.state.tool).toEqual(4);
-});
-
-test('.t5 sets the tool to 5', () => {
-  const command = new GCodeCommand('T5', 't5', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
-  job.state.tool = 3;
-
-  interpreter.t5(command, job);
-
-  expect(job.state.tool).toEqual(5);
-});
-
-test('.t6 sets the tool to 6', () => {
-  const command = new GCodeCommand('T6', 't6', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
-  job.state.tool = 3;
-
-  interpreter.t6(command, job);
-
-  expect(job.state.tool).toEqual(6);
-});
-
-test('.t7 sets the tool to 7', () => {
-  const command = new GCodeCommand('T7', 't7', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
-  job.state.tool = 3;
-
-  interpreter.t7(command, job);
-
-  expect(job.state.tool).toEqual(7);
+  expect(job.state.tool).toEqual(tool);
 });
 
 describe('malformed coordinates through the whole pipeline', () => {
@@ -525,7 +455,7 @@ describe('malformed coordinates through the whole pipeline', () => {
   });
 });
 
-describe('.g2 / .g3 arc moves', () => {
+describe('arcMove (G2/G3)', () => {
   const run = (gcode: string) => new Interpreter().execute(new Parser().parseGCode(gcode).commands);
 
   test('a retracting arc is a travel move, matching G0/G1 (negative E)', () => {
