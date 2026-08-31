@@ -10,7 +10,7 @@ import { selectTool } from './interpreter/commands/select-tool';
 
 /**
  * What the command handlers get from the interpreter while executing a job:
- * counters to report into and helpers for path bookkeeping
+ * helpers for path bookkeeping
  *
  * @remarks
  * Implemented by the `Interpreter`, which passes itself to every handler.
@@ -19,14 +19,6 @@ import { selectTool } from './interpreter/commands/select-tool';
  * circular runtime dependency.
  */
 export interface InterpreterContext {
-  retractions: number;
-  deretractions: number;
-  feedrateChanges: number;
-  others: number;
-  /** for reference, how many points were added to the job */
-  points: number;
-  extrusionDistance: number;
-
   /**
    * Resolves a state's position for rendering.
    * @param state - Current job state
@@ -96,14 +88,6 @@ export const handlers: ReadonlyMap<string, CommandHandler> = new Map<string, Com
  * handler are ignored.
  */
 export class Interpreter implements InterpreterContext {
-  // TODO: maybe these props should move to the Job class
-  public retractions = 0;
-  public deretractions = 0;
-  public feedrateChanges = 0;
-  public others = 0;
-  public points = 0; // for reference, how many points were added to the job
-  public extrusionDistance = 0;
-
   /**
    * Executes an array of G-code commands, updating the provided job
    * @param commands - Array of GCodeCommand objects to execute

@@ -269,6 +269,12 @@ describe('public API types', () => {
       expectTypeOf<Job['addPath']>().toEqualTypeOf<(path: Job['paths'][number]) => void>();
       expectTypeOf<Job['finishPath']>().toEqualTypeOf<() => void>();
       expectTypeOf<Job['resumeLastPath']>().toEqualTypeOf<() => void>();
+      expectTypeOf<Job['retractions']>().toEqualTypeOf<number>();
+      expectTypeOf<Job['deretractions']>().toEqualTypeOf<number>();
+      expectTypeOf<Job['feedrateChanges']>().toEqualTypeOf<number>();
+      expectTypeOf<Job['others']>().toEqualTypeOf<number>();
+      expectTypeOf<Job['points']>().toEqualTypeOf<number>();
+      expectTypeOf<Job['extrusionDistance']>().toEqualTypeOf<number>();
     });
   });
 });

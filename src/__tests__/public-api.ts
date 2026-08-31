@@ -225,6 +225,13 @@ describe('public API surface', () => {
       expect(job.boundingBox).toBeDefined();
       expect(job.inprogressPath).toBeUndefined();
     });
+
+    it.each(['retractions', 'deretractions', 'feedrateChanges', 'others', 'points', 'extrusionDistance'] as const)(
+      'starts counter %s at 0',
+      (name) => {
+        expect(new Job()[name]).toBe(0);
+      }
+    );
   });
 
   describe('no unexpected public surface shrinkage', () => {

@@ -38,13 +38,7 @@ describe('GCodePreview', () => {
     };
 
     mockInterpreter = {
-      execute: vi.fn(),
-      points: 100,
-      retractions: 5,
-      deretractions: 5,
-      feedrateChanges: 10,
-      others: 2,
-      extrusionDistance: 150.5
+      execute: vi.fn()
     };
 
     mockSceneManager = {

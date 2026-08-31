@@ -203,7 +203,7 @@ describe('linearMove (G0/G1)', () => {
     linearMove(command, job, interpreter);
 
     expect(job.paths.length).toEqual(0);
-    expect(interpreter.feedrateChanges).toEqual(1);
+    expect(job.feedrateChanges).toEqual(1);
     expect(job.inprogressPath).toBeUndefined();
   });
 
@@ -215,7 +215,7 @@ describe('linearMove (G0/G1)', () => {
     linearMove(command, job, interpreter);
 
     expect(job.paths.length).toEqual(0);
-    expect(interpreter.others).toEqual(1);
+    expect(job.others).toEqual(1);
     expect(job.inprogressPath).toBeUndefined();
   });
 
