@@ -24,6 +24,15 @@ describe('splitChunk', () => {
     expect(complete).toEqual('G1 X0\nG1 X1');
     expect(tail).toEqual('');
   });
+
+  test('a chunk with no newline is split before its last character', () => {
+    // Documented legacy quirk: without a newline, the split falls just
+    // before the last character of the chunk.
+    const { complete, tail } = splitChunk('G1 ', 'X42');
+
+    expect(complete).toEqual('G1 X4');
+    expect(tail).toEqual('2');
+  });
 });
 
 describe('streaming across a chunk boundary', () => {

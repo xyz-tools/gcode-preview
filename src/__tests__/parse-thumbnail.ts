@@ -41,6 +41,12 @@ test('not matching size should be invalid', () => {
   expect(thumb.isValid).toBeFalsy();
 });
 
+test('src should be a jpeg data URL of the base64 chars', () => {
+  const thumb = new Thumbnail('16x16', 16, 16, encodedImg.length);
+  thumb.chars = encodedImg;
+  expect(thumb.src).toEqual('data:image/jpeg;base64,' + encodedImg);
+});
+
 test('well-formatted thumbnail should be parsed', () => {
   const parser = new Parser(0);
   const parsed = parser.parseGCode(gcodeCommentsWithThumbnail);
