@@ -1,4 +1,4 @@
-import { CommandHandler } from '../shared';
+import type { CommandHandler } from '../../interpreter';
 
 /**
  * Executes a G20 command to set units to inches

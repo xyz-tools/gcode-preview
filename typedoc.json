@@ -1,7 +1,7 @@
 {
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": [
-    "src/*.ts", "src/helpers/*.ts", "src/interpreter/*.ts", "src/interpreter/commands/*.ts"
+    "src/*.ts", "src/helpers/*.ts", "src/interpreter/commands/*.ts"
   ],
   "out": "demo/docs",
   "includeVersion": true,

@@ -1,4 +1,4 @@
-import { CommandHandler } from '../shared';
+import type { CommandHandler } from '../../interpreter';
 
 /**
  * Executes a G28 homing command

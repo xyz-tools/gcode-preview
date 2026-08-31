@@ -1,5 +1,5 @@
 import { PathType } from '../../path';
-import { CommandHandler, breakPath, resolvePosition } from '../shared';
+import type { CommandHandler } from '../../interpreter';
 
 /**
  * Executes an arc move command (G2/G3)
@@ -19,7 +19,7 @@ export const arcMove: CommandHandler = (command, job, context) => {
   let arcIsDegenerate = false;
   const { state } = job;
   // Starting position for the arc, with any un-homed axis assumed at the origin.
-  const from = resolvePosition(state);
+  const from = context.resolvePosition(state);
 
   const cw = command.gcode === 'g2';
   let currentPath = job.inprogressPath;
@@ -29,7 +29,7 @@ export const arcMove: CommandHandler = (command, job, context) => {
   const pathType = e > 0 ? PathType.Extrusion : PathType.Travel;
 
   if (currentPath === undefined || currentPath.travelType !== pathType) {
-    currentPath = breakPath(job, pathType);
+    currentPath = context.breakPath(job, pathType);
   }
 
   if (e > 0) {
@@ -138,7 +138,7 @@ export const arcMove: CommandHandler = (command, job, context) => {
   state.y = y ?? state.y;
   state.z = z ?? state.z;
 
-  const pos = resolvePosition(state);
+  const pos = context.resolvePosition(state);
   currentPath.addPoint(pos.x, pos.y, pos.z);
   if (pathType === PathType.Extrusion) {
     job.boundingBox.update(pos.x, pos.y, pos.z);

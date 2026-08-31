@@ -1,5 +1,5 @@
 import { PathType } from '../../path';
-import { CommandHandler, breakPath, resolvePosition } from '../shared';
+import type { CommandHandler } from '../../interpreter';
 
 /**
  * Executes a linear move command (G0/G1)
@@ -36,7 +36,7 @@ export const linearMove: CommandHandler = (command, job, context) => {
   const pathType = e > 0 ? PathType.Extrusion : PathType.Travel;
 
   if (currentPath === undefined || currentPath.travelType !== pathType) {
-    currentPath = breakPath(job, pathType);
+    currentPath = context.breakPath(job, pathType);
   }
 
   if (e > 0) {
@@ -49,7 +49,7 @@ export const linearMove: CommandHandler = (command, job, context) => {
   state.y = y ?? state.y;
   state.z = z ?? state.z;
 
-  const pos = resolvePosition(state);
+  const pos = context.resolvePosition(state);
   currentPath.addPoint(pos.x, pos.y, pos.z);
   if (pathType === PathType.Extrusion) {
     job.boundingBox.update(pos.x, pos.y, pos.z);

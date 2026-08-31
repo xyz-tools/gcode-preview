@@ -1,7 +1,6 @@
 import { test, expect, describe } from 'vitest';
 import { GCodeCommand, Parser } from '../parser/gcode-parser';
-import { Interpreter } from '../interpreter';
-import { handlers } from '../interpreter/registry';
+import { Interpreter, handlers } from '../interpreter';
 import { linearMove } from '../interpreter/commands/linear-move';
 import { setInchUnits, setMillimeterUnits } from '../interpreter/commands/set-units';
 import { home } from '../interpreter/commands/home';
