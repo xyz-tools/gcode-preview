@@ -161,12 +161,4 @@ export class Path {
 
     return new LineSegmentsGeometry().setPositions(lineVertices);
   }
-
-  /**
-   * Checks if the path contains any vertical moves
-   * @returns True if any Z coordinates differ from the initial Z
-   */
-  hasVerticalMoves(): boolean {
-    return this.vertices.some((_, i, arr) => i % 3 === 2 && arr[i] !== arr[2]);
-  }
 }
