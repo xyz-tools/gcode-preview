@@ -268,7 +268,11 @@ describe('public API types', () => {
       expectTypeOf<Job['inprogressPath']>().toEqualTypeOf<Job['paths'][number] | undefined>();
       expectTypeOf<Job['addPath']>().toEqualTypeOf<(path: Job['paths'][number]) => void>();
       expectTypeOf<Job['finishPath']>().toEqualTypeOf<() => void>();
+      expectTypeOf<Job['breakPath']>().toEqualTypeOf<
+        (newType: Job['paths'][number]['travelType']) => Job['paths'][number]
+      >();
       expectTypeOf<Job['resumeLastPath']>().toEqualTypeOf<() => void>();
+      expectTypeOf<Job['resolvePosition']>().toEqualTypeOf<() => { x: number; y: number; z: number }>();
       expectTypeOf<Job['stats']>().toEqualTypeOf<{
         retractions: number;
         deretractions: number;

@@ -22,7 +22,7 @@ export class State {
    * Until an axis is homed its real position is unknown, which is why `x`/`y`/`z`
    * can be `undefined`. Consumers can read this flag to tell real coordinates
    * from ones a renderer may have assumed. How to render an un-homed position is
-   * the interpreter's decision, not the state's.
+   * the job's decision (see `Job.resolvePosition`), not the state's.
    */
   isHomed = false;
 

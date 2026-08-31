@@ -5,21 +5,20 @@ import type { CommandHandler } from '../../interpreter';
  * Executes an arc move command (G2/G3)
  * @param command - GCodeCommand containing arc parameters
  * @param job - Job instance to update
- * @param context - Interpreter context to report counters into
  * @remarks
  * Handles both clockwise (G2) and counter-clockwise (G3) arc moves. Supports
  * both I/J center offset and R radius modes. Calculates intermediate points
  * along the arc and updates the job state accordingly.
  * G2 is for clockwise arcs, G3 is for counter-clockwise arcs.
  */
-export const arcMove: CommandHandler = (command, job, context) => {
+export const arcMove: CommandHandler = (command, job) => {
   const { x, y, z, e } = command.params;
   let { i, j, r } = command.params;
   // Set when the arc cannot be described at all, so only the endpoint is emitted.
   let arcIsDegenerate = false;
   const { state } = job;
   // Starting position for the arc, with any un-homed axis assumed at the origin.
-  const from = context.resolvePosition(state);
+  const from = job.resolvePosition();
 
   const cw = command.gcode === 'g2';
   let currentPath = job.inprogressPath;
@@ -29,7 +28,7 @@ export const arcMove: CommandHandler = (command, job, context) => {
   const pathType = e > 0 ? PathType.Extrusion : PathType.Travel;
 
   if (currentPath === undefined || currentPath.travelType !== pathType) {
-    currentPath = context.breakPath(job, pathType);
+    currentPath = job.breakPath(pathType);
   }
 
   if (e > 0) {
@@ -138,7 +137,7 @@ export const arcMove: CommandHandler = (command, job, context) => {
   state.y = y ?? state.y;
   state.z = z ?? state.z;
 
-  const pos = context.resolvePosition(state);
+  const pos = job.resolvePosition();
   currentPath.addPoint(pos.x, pos.y, pos.z);
   if (pathType === PathType.Extrusion) {
     job.boundingBox.update(pos.x, pos.y, pos.z);

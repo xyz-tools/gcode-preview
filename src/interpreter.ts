@@ -1,7 +1,5 @@
-import { Path, PathType } from './path';
 import { GCodeCommand } from './parser/gcode-parser';
 import { Job } from './job';
-import { State } from './state';
 import { linearMove } from './interpreter/commands/linear-move';
 import { arcMove } from './interpreter/commands/arc-move';
 import { setInchUnits, setMillimeterUnits } from './interpreter/commands/set-units';
@@ -9,48 +7,16 @@ import { home } from './interpreter/commands/home';
 import { selectTool } from './interpreter/commands/select-tool';
 
 /**
- * What the command handlers get from the interpreter while executing a job:
- * helpers for path bookkeeping
- *
- * @remarks
- * Implemented by the `Interpreter`, which passes itself to every handler.
- * Handlers depend on this interface (a type-only import) rather than on the
- * interpreter module itself, so registering them here does not create a
- * circular runtime dependency.
- */
-export interface InterpreterContext {
-  /**
-   * Resolves a state's position for rendering.
-   * @param state - Current job state
-   * @returns The position as concrete `x`, `y`, `z` numbers
-   * @remarks
-   * An axis that has not been homed has an unknown (`undefined`) position. The
-   * interpreter chooses to assume the origin (`0`) for such axes so the viewer can
-   * still render best-effort (see #361); `state.isHomed` lets a consumer tell these
-   * assumed coordinates from real ones.
-   */
-  resolvePosition(state: State): { x: number; y: number; z: number };
-
-  /**
-   * Creates a new path and sets it as the current in-progress path
-   * @param job - Job instance to update
-   * @param newType - Type of the new path
-   * @returns The newly created path
-   * @remarks
-   * This method is called when a path type change is detected (e.g. switching
-   * between travel and extrusion moves). It finalizes the current path and
-   * starts a new one of the specified type.
-   */
-  breakPath(job: Job, newType: PathType): Path;
-}
-
-/**
  * Executes a single G-code command against a job
  * @param command - GCodeCommand to execute
  * @param job - Job instance to update
- * @param context - Interpreter context to report counters into
+ * @remarks
+ * Everything a handler needs — state, stats, and path bookkeeping like
+ * `breakPath`/`resolvePosition` — lives on the job. Handlers import this type
+ * with a type-only import, so registering them here does not create a circular
+ * runtime dependency.
  */
-export type CommandHandler = (command: GCodeCommand, job: Job, context: InterpreterContext) => void;
+export type CommandHandler = (command: GCodeCommand, job: Job) => void;
 
 /**
  * Maps a lowercase gcode (e.g. `g1`) to the handler that executes it
@@ -87,7 +53,7 @@ export const handlers: ReadonlyMap<string, CommandHandler> = new Map<string, Com
  * unit changes (G20/G21), and tool selection. Commands without a registered
  * handler are ignored.
  */
-export class Interpreter implements InterpreterContext {
+export class Interpreter {
   /**
    * Executes an array of G-code commands, updating the provided job
    * @param commands - Array of GCodeCommand objects to execute
@@ -98,25 +64,10 @@ export class Interpreter implements InterpreterContext {
     job.resumeLastPath();
     commands.forEach((command) => {
       const handler = handlers.get(command.gcode);
-      handler?.(command, job, this);
+      handler?.(command, job);
     });
     job.finishPath();
 
     return job;
-  }
-
-  /** {@inheritDoc InterpreterContext.resolvePosition} */
-  resolvePosition(state: State): { x: number; y: number; z: number } {
-    return { x: state.x ?? 0, y: state.y ?? 0, z: state.z ?? 0 };
-  }
-
-  /** {@inheritDoc InterpreterContext.breakPath} */
-  breakPath(job: Job, newType: PathType): Path {
-    job.finishPath();
-    const currentPath = new Path(newType, 0.6, 0.2, job.state.tool);
-    const pos = this.resolvePosition(job.state);
-    currentPath.addPoint(pos.x, pos.y, pos.z);
-    job.inprogressPath = currentPath;
-    return currentPath;
   }
 }

@@ -5,13 +5,12 @@ import type { CommandHandler } from '../../interpreter';
  * Executes a linear move command (G0/G1)
  * @param command - GCodeCommand containing move parameters
  * @param job - Job instance to update
- * @param context - Interpreter context to report counters into
  * @remarks
  * Handles both rapid moves (G0) and linear moves (G1). Updates the job state
  * and adds points to the current path based on the command parameters.
  * G0 is for rapid moves (non-extrusion), G1 is for linear moves (with optional extrusion).
  */
-export const linearMove: CommandHandler = (command, job, context) => {
+export const linearMove: CommandHandler = (command, job) => {
   const { x, y, z, e, f } = command.params;
 
   // discard zero length moves
@@ -36,7 +35,7 @@ export const linearMove: CommandHandler = (command, job, context) => {
   const pathType = e > 0 ? PathType.Extrusion : PathType.Travel;
 
   if (currentPath === undefined || currentPath.travelType !== pathType) {
-    currentPath = context.breakPath(job, pathType);
+    currentPath = job.breakPath(pathType);
   }
 
   if (e > 0) {
@@ -49,7 +48,7 @@ export const linearMove: CommandHandler = (command, job, context) => {
   state.y = y ?? state.y;
   state.z = z ?? state.z;
 
-  const pos = context.resolvePosition(state);
+  const pos = job.resolvePosition();
   currentPath.addPoint(pos.x, pos.y, pos.z);
   if (pathType === PathType.Extrusion) {
     job.boundingBox.update(pos.x, pos.y, pos.z);

@@ -205,7 +205,9 @@ describe('public API surface', () => {
     const methods: Record<string, number> = {
       addPath: 1,
       finishPath: 0,
-      resumeLastPath: 0
+      breakPath: 1,
+      resumeLastPath: 0,
+      resolvePosition: 0
     };
 
     it.each(Object.entries(methods))('has method %s with %d required parameter(s)', (name, arity) => {
