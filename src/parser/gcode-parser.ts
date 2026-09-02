@@ -168,7 +168,7 @@ export class Parser {
    * happens when streaming cuts the file mid-thumbnail -- keeps accumulating
    * instead of being silently dropped.
    */
-  private inProgressThumb?: Thumbnail;
+  private thumb?: Thumbnail;
 
   /**
    * How many lines have been parsed, counting every call.
@@ -391,15 +391,15 @@ export class Parser {
       const idxThumbEnd = comment.indexOf('thumbnail end');
 
       if (idxThumbBegin > -1) {
-        this.inProgressThumb = Thumbnail.parse(comment.slice(idxThumbBegin + 15).trim());
-      } else if (this.inProgressThumb) {
+        this.thumb = Thumbnail.parse(comment.slice(idxThumbBegin + 15).trim());
+      } else if (this.thumb) {
         if (idxThumbEnd == -1) {
-          this.inProgressThumb.chars += comment.trim();
+          this.thumb.chars += comment.trim();
         } else {
-          if (this.inProgressThumb.isValid) {
-            thumbnails[this.inProgressThumb.size] = this.inProgressThumb;
+          if (this.thumb.isValid) {
+            thumbnails[this.thumb.size] = this.thumb;
           }
-          this.inProgressThumb = undefined;
+          this.thumb = undefined;
         }
       }
     }
