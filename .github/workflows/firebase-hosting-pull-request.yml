@@ -24,7 +24,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - run: npm ci && npm run predeploy && npm run typedoc
+      - if: github.event.action != 'closed'
+        run: npm ci && npm run predeploy && npm run typedoc
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
