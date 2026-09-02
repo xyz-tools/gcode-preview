@@ -5,6 +5,7 @@ name: Deploy to Firebase Hosting on PR
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, closed]
     branches:
       - develop
       - v3.x
