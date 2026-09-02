@@ -675,6 +675,17 @@ export class SceneManager {
   }
 
   /**
+   * Schedules a coalesced on-demand frame, exactly like {@link requestRender}.
+   * @deprecated Use requestRender() instead.
+   * @remarks
+   * Kept for external callers of the old continuous loop's entry point. It no
+   * longer re-arms itself: one call draws (at most) one frame.
+   */
+  animate(): void {
+    this.requestRender();
+  }
+
+  /**
    * Requests a frame whenever the controls move the camera.
    * @remarks
    * Also called by the orthographic swap: listeners do not carry over to the

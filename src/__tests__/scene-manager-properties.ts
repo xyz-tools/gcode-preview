@@ -1348,6 +1348,19 @@ describe('SceneManager properties', () => {
       expect(renderCount()).toBe(drawn + 1);
     });
 
+    test('the deprecated animate() alias schedules a single on-demand frame', async () => {
+      await flushFrame();
+      const drawn = renderCount();
+
+      sceneManager.animate();
+      await flushFrame();
+
+      // one frame, and no self-rearming loop afterwards
+      expect(renderCount()).toBe(drawn + 1);
+      await flushFrame();
+      expect(renderCount()).toBe(drawn + 1);
+    });
+
     test('the orthographic swap replaces the controls in the disposables', () => {
       const oldControls = sceneManager.controls;
 
