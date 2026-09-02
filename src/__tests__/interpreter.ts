@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'vitest';
-import { GCodeCommand, Parser } from '../gcode-parser';
+import { GCodeCommand, Parser } from '../parser/gcode-parser';
 import { Interpreter } from '../interpreter';
 import { Job } from '../job';
 import { PathType } from '../path';

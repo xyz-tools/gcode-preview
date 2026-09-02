@@ -1,6 +1,6 @@
 import { test, expect, describe } from 'vitest';
 
-import { Parser } from '../gcode-parser';
+import { Parser } from '../../parser/gcode-parser';
 
 describe('with keepLines', () => {
   test('all input should be preserved', () => {

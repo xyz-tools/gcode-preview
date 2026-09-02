@@ -1,4 +1,4 @@
-import { Thumbnail } from './thumbnail';
+import { Thumbnail } from '../thumbnail';
 
 /**
  * Parameters for G-code commands used in 3D printing.
@@ -251,7 +251,9 @@ export class Parser {
       // only the span up to the next semicolon, matching the previous split(';')[1]
       const nextSemicolon = input.indexOf(';', firstSemicolon + 1);
       const text = nextSemicolon < 0 ? input.slice(firstSemicolon + 1) : input.slice(firstSemicolon + 1, nextSemicolon);
-      comment = text || undefined;
+      // Normalized once here so every consumer sees '; layer 1' and ';layer 1'
+      // identically -- the slicer metadata parsers anchor their patterns with ^.
+      comment = text.trim() || undefined;
     }
 
     let gcode = '';
