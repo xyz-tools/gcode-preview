@@ -126,17 +126,14 @@ export class Job {
   /**
    * Finalizes the current in-progress path
    * @remarks
-   * If the in-progress path has at least two points, it will be added to the
-   * job and the in-progress path reference will be cleared. A path holding
-   * only its seeded start point (e.g. left by a G92 reposition) has no
-   * geometry: it is kept in progress so a later command can extend or replace
-   * it, but is never committed to the job.
+   * If the in-progress path has vertices, it will be added to the job
+   * and the in-progress path reference will be cleared
    */
   finishPath(): void {
     if (this.inprogressPath === undefined) {
       return;
     }
-    if (this.inprogressPath.vertices.length > 3) {
+    if (this.inprogressPath.vertices.length > 0) {
       this.addPath(this.inprogressPath);
       this.inprogressPath = undefined;
     }
@@ -175,12 +172,10 @@ export class Job {
   /**
    * Resumes the last path from the job as the current in-progress path
    * @remarks
-   * Removes the path from all indexes and sets it as the current in-progress
-   * path. Does nothing when a path is already in progress (e.g. a repositioned
-   * start point carried over from the previous chunk).
+   * Removes the path from all indexes and sets it as the current in-progress path
    */
   resumeLastPath(): void {
-    if (this.inprogressPath !== undefined || this.paths.length === 0) {
+    if (this.paths.length === 0) {
       return;
     }
     this.inprogressPath = this.paths.pop();

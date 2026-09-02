@@ -3,48 +3,50 @@ import { Parser, GCodeCommand } from '../../../parser/gcode-parser';
 import { Interpreter } from '../../../interpreter';
 import { setPosition } from '../../../interpreter/commands';
 import { Job } from '../../../job';
-import { PathType } from '../../../path';
 
 describe('setPosition (G92)', () => {
   const run = (gcode: string) => new Interpreter().execute(new Parser().parseGCode(gcode).commands);
 
-  test('sets every given axis on the state', () => {
-    const command = new GCodeCommand('G92 X10 Y20 Z5 E1', 'g92', { x: 10, y: 20, z: 5, e: 1 });
+  test('gives the current position new coordinates without moving the printhead', () => {
+    const command = new GCodeCommand('G92 X0 Y5 Z1 E2', 'g92', { x: 0, y: 5, z: 1, e: 2 });
     const job = new Job();
+    job.state.x = 10;
+    job.state.y = 20;
+    job.state.z = 5;
 
     setPosition(command, job);
 
+    // physical position is untouched; the shift maps logical -> physical
     expect(job.state.x).toEqual(10);
     expect(job.state.y).toEqual(20);
     expect(job.state.z).toEqual(5);
-    expect(job.state.e).toEqual(1);
+    expect(job.state.positionShift).toEqual({ x: 10, y: 15, z: 4 });
+    expect(job.state.e).toEqual(2);
   });
 
-  test('keeps the axes a partial G92 omits', () => {
+  test('keeps the shift of the axes a partial G92 omits', () => {
     const command = new GCodeCommand('G92 Y5', 'g92', { y: 5 });
     const job = new Job();
-    job.state.x = 1;
-    job.state.z = 2;
+    job.state.y = 7;
     job.state.e = 3;
 
     setPosition(command, job);
 
-    expect(job.state.x).toEqual(1);
-    expect(job.state.y).toEqual(5);
-    expect(job.state.z).toEqual(2);
+    expect(job.state.positionShift).toEqual({ x: 0, y: 2, z: 0 });
     expect(job.state.e).toEqual(3);
   });
 
-  test('sets Z when it is the only axis given', () => {
+  test('shifts Z when it is the only axis given', () => {
     const command = new GCodeCommand('G92 Z3', 'g92', { z: 3 });
     const job = new Job();
+    job.state.z = 5;
 
     setPosition(command, job);
 
-    expect(job.state.z).toEqual(3);
+    expect(job.state.positionShift).toEqual({ x: 0, y: 0, z: 2 });
   });
 
-  test('resets every axis to zero when the G92 is bare', () => {
+  test('a bare G92 makes the current position the origin of every axis', () => {
     const command = new GCodeCommand('G92', 'g92', {});
     const job = new Job();
     job.state.x = 1;
@@ -54,9 +56,7 @@ describe('setPosition (G92)', () => {
 
     setPosition(command, job);
 
-    expect(job.state.x).toEqual(0);
-    expect(job.state.y).toEqual(0);
-    expect(job.state.z).toEqual(0);
+    expect(job.state.positionShift).toEqual({ x: 1, y: 2, z: 3 });
     expect(job.state.e).toEqual(0);
   });
 
@@ -64,25 +64,22 @@ describe('setPosition (G92)', () => {
     const command = new GCodeCommand('G92 F3000', 'g92', { f: 3000 });
     const job = new Job();
     job.state.x = 1;
-    job.state.y = 2;
-    job.state.z = 3;
     job.state.e = 4;
 
     setPosition(command, job);
 
-    expect(job.state.x).toEqual(1);
-    expect(job.state.y).toEqual(2);
-    expect(job.state.z).toEqual(3);
+    expect(job.state.positionShift).toEqual({ x: 0, y: 0, z: 0 });
     expect(job.state.e).toEqual(4);
   });
 
-  test('tracks the extrusion amount of an E-only G92', () => {
-    const command = new GCodeCommand('G92 E5', 'g92', { e: 5 });
+  test('an un-homed axis is assumed at the origin when computing the shift', () => {
+    const command = new GCodeCommand('G92 X5', 'g92', { x: 5 });
     const job = new Job();
 
     setPosition(command, job);
 
-    expect(job.state.e).toEqual(5);
+    expect(job.state.positionShift).toEqual({ x: -5, y: 0, z: 0 });
+    expect(job.state.x).toBeUndefined();
   });
 
   test('does not mark the axes as homed', () => {
@@ -95,63 +92,48 @@ describe('setPosition (G92)', () => {
     expect(job.state.isHomed).toBe(false);
   });
 
-  test('is a no-op on paths when the job has none in progress', () => {
-    const command = new GCodeCommand('G92 X1', 'g92', { x: 1 });
-    const job = new Job();
-
-    setPosition(command, job);
-
-    expect(job.paths.length).toEqual(0);
-    expect(job.inprogressPath).toBeUndefined();
-  });
-
-  test('the next move starts from the new position instead of drawing a teleport segment', () => {
+  test('the following moves continue in place instead of teleporting', () => {
     const job = run(['G28', 'G1 X10 Y10 E1', 'G92 X0 Y0', 'G1 X5 Y5 E1'].join('\n'));
 
-    expect(job.paths.length).toEqual(2);
-    expect(job.paths[1].travelType).toEqual(PathType.Extrusion);
-    expect(job.paths[1].vertices).toEqual([0, 0, 0, 5, 5, 0]);
+    // The printhead never moved on G92, so the path is continuous and the
+    // logical (5,5) target lands at the physical (15,15)
+    expect(job.paths.length).toEqual(1);
+    expect(job.paths[0].vertices).toEqual([0, 0, 0, 10, 10, 0, 15, 15, 0]);
   });
 
-  test('a bare G92 mid-print also reseeds the path at the origin', () => {
+  test('a bare G92 mid-print rebases every following move on the current position', () => {
     const job = run(['G1 X10 Y10 E1', 'G92', 'G1 X5 E1'].join('\n'));
 
-    expect(job.paths.length).toEqual(2);
-    expect(job.paths[1].vertices).toEqual([0, 0, 0, 5, 0, 0]);
+    expect(job.paths.length).toEqual(1);
+    expect(job.paths[0].vertices).toEqual([0, 0, 0, 10, 10, 0, 15, 10, 0]);
   });
 
-  test('an E-only G92 does not break the path', () => {
-    // Slicers emit G92 E0 on every layer; it must not fragment the geometry
+  test('an E-only G92 does not affect the geometry', () => {
+    // Slicers emit G92 E0 on every layer; it must not fragment or shift paths
     const job = run(['G1 X10 E1', 'G92 E0', 'G1 X20 E1'].join('\n'));
 
     expect(job.paths.length).toEqual(1);
-    expect(job.paths[0].vertices.length).toEqual(9);
+    expect(job.paths[0].vertices).toEqual([0, 0, 0, 10, 0, 0, 20, 0, 0]);
     expect(job.state.e).toEqual(0);
   });
 
-  test('a G92 that matches the current position does not break the path', () => {
-    const job = run(['G28', 'G1 X10 Y10 E1', 'G92 X10 Y10', 'G1 X20 Y10 E1'].join('\n'));
+  test('a Z re-zero translates the following Z moves', () => {
+    // The mach3 demo idiom: probe, re-zero Z, then lift by small logical amounts
+    const job = run(['G0 Z2', 'G92 Z0', 'G0 Z0.5'].join('\n'));
 
+    expect(job.state.z).toEqual(2.5);
     expect(job.paths.length).toEqual(1);
-    expect(job.paths[0].vertices.length).toEqual(9);
+    expect(job.paths[0].vertices).toEqual([0, 0, 0, 0, 0, 2, 0, 0, 2.5]);
   });
 
-  test('a travel move after G92 does not leave a degenerate one-point path behind', () => {
-    const job = run(['G28', 'G1 X10 E1', 'G92 X0', 'G0 X5'].join('\n'));
+  test('arc endpoints are translated by the shift', () => {
+    const job = run(['G28', 'G1 X10 Y10 E1', 'G92 X0 Y0', 'G2 X0 Y10 I-10 J0 E1'].join('\n'));
 
-    expect(job.paths.length).toEqual(2);
-    expect(job.paths[0].travelType).toEqual(PathType.Extrusion);
-    expect(job.paths[0].vertices).toEqual([0, 0, 0, 10, 0, 0]);
-    expect(job.paths[1].travelType).toEqual(PathType.Travel);
-    expect(job.paths[1].vertices).toEqual([0, 0, 0, 5, 0, 0]);
-    expect(job.extrusions.length).toEqual(1);
-  });
-
-  test('a trailing G92 does not commit a degenerate one-point path', () => {
-    const job = run(['G28', 'G1 X10 E1', 'G92 X0'].join('\n'));
-
-    expect(job.paths.length).toEqual(1);
-    expect(job.paths[0].vertices).toEqual([0, 0, 0, 10, 0, 0]);
+    // logical endpoint (0,10) + shift (10,10) = physical (10,20)
+    expect(job.state.x).toEqual(10);
+    expect(job.state.y).toEqual(20);
+    const { vertices } = job.paths[0];
+    expect(vertices.slice(-3)).toEqual([10, 20, 0]);
   });
 
   test('a chunk boundary right after G92 produces the same paths as a single run', () => {
@@ -162,7 +144,7 @@ describe('setPosition (G92)', () => {
     interpreter.execute(commands.slice(0, 3), job);
     interpreter.execute(commands.slice(3), job);
 
-    expect(job.paths.length).toEqual(2);
-    expect(job.paths[1].vertices).toEqual([0, 0, 0, 5, 0, 0]);
+    expect(job.paths.length).toEqual(1);
+    expect(job.paths[0].vertices).toEqual([0, 0, 0, 10, 0, 0, 15, 0, 0]);
   });
 });

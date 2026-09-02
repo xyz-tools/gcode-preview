@@ -5,35 +5,37 @@ import type { CommandHandler } from '../../interpreter';
  * @param command - GCodeCommand containing the axis parameters
  * @param job - Job instance to update
  * @remarks
- * Redefines the current logical position without moving: each given axis is
- * set to its value, and a bare `G92` without any words resets every axis
- * (including E) to zero, following RepRap semantics. When the resolved
- * position actually changes, the in-progress path is broken and reseeded at
- * the new position, so the next move does not draw a segment the printer
- * never traveled. `isHomed` is left untouched: as in Marlin, G92 trusts the
- * given coordinates but does not home the axes.
+ * G92 gives the current position new coordinates without moving the printhead,
+ * so it only adjusts `state.positionShift` so that each given axis value maps
+ * to the current physical position; the physical position and paths are
+ * untouched. A bare `G92` without any words resets every axis (including E) to
+ * zero, following RepRap semantics. E is set directly on the state: as in
+ * Marlin, the extruder position is not part of the workspace shift. `isHomed`
+ * is also left untouched: G92 trusts the given coordinates but does not home
+ * the axes.
  */
 export const setPosition: CommandHandler = (command, job) => {
   const { x, y, z, e } = command.params;
   const { state } = job;
-  const before = job.resolvePosition();
+  const { positionShift } = state;
+  const physical = job.resolvePosition();
 
   if (Object.keys(command.params).length === 0) {
-    state.x = 0;
-    state.y = 0;
-    state.z = 0;
+    positionShift.x = physical.x;
+    positionShift.y = physical.y;
+    positionShift.z = physical.z;
     state.e = 0;
-  } else {
-    state.x = x ?? state.x;
-    state.y = y ?? state.y;
-    state.z = z ?? state.z;
-    state.e = e ?? state.e;
+    return;
   }
 
-  const after = job.resolvePosition();
-  const moved = before.x !== after.x || before.y !== after.y || before.z !== after.z;
-
-  if (moved && job.inprogressPath !== undefined) {
-    job.breakPath(job.inprogressPath.travelType);
+  if (x !== undefined) {
+    positionShift.x = physical.x - x;
   }
+  if (y !== undefined) {
+    positionShift.y = physical.y - y;
+  }
+  if (z !== undefined) {
+    positionShift.z = physical.z - z;
+  }
+  state.e = e ?? state.e;
 };
