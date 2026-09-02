@@ -1,15 +1,20 @@
-# This workflow will run tests using node and then publish a package to GitHub Packages when a release is created
+# Publishes gcode-preview to npm whenever a GitHub Release is published.
+# One path for every release: the npm dist-tag is derived from the version in
+# package.json — a plain version (e.g. 3.1.0) publishes to `latest`, a
+# prerelease (e.g. 3.1.0-alpha.1) publishes to its prerelease id (`alpha`).
 # For more information see: https://docs.github.com/en/actions/publishing-packages/publishing-nodejs-packages
 
 name: Node.js Package
 
 on:
   release:
-    types: [released]
+    # `published` fires for both normal releases AND pre-releases.
+    # (`released` would skip pre-releases — that is the trap we are avoiding.)
+    types: [published]
 
 jobs:
   build:
-      
+
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,14 +28,27 @@ jobs:
   publish-npm:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           registry-url: https://registry.npmjs.org/
       - run: npm ci
       - run: npm run build
-      - run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+      - name: Derive npm dist-tag from the package version
+        id: tag
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [[ "$VERSION" == *-* ]]; then
+            # prerelease: use the identifier before the first dot (alpha, beta, rc, ...)
+            TAG=$(echo "${VERSION#*-}" | cut -d. -f1)
+          else
+            TAG=latest
+          fi
+          echo "Publishing $VERSION with npm dist-tag '$TAG'"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - run: npm publish --tag ${{ steps.tag.outputs.tag }}

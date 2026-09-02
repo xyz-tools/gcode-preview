@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GCodePreview } from '../gcode-preview';
 import { SceneManager } from '../scene-manager';
-import { Parser } from '../gcode-parser';
+import { Parser } from '../parser/gcode-parser';
 import { DevGUI } from '../dev-gui';
 import { Job } from '../job';
 import { Interpreter } from '../interpreter';
@@ -10,7 +10,7 @@ import { makeDroppable } from '../extra/dom-utils';
 
 // Mock the dependencies
 vi.mock('../scene-manager');
-vi.mock('../gcode-parser');
+vi.mock('../parser/gcode-parser');
 vi.mock('../dev-gui');
 vi.mock('../job');
 vi.mock('../interpreter');
@@ -24,6 +24,7 @@ describe('GCodePreview', () => {
   let mockDevGui: ReturnType<typeof vi.fn>;
   let mockJob: ReturnType<typeof vi.fn>;
   let mockInterpreter: ReturnType<typeof vi.fn>;
+  let mockStats: { update: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn>; dom: HTMLDivElement };
 
   beforeEach(() => {
     // Create mock canvas
@@ -37,13 +38,7 @@ describe('GCodePreview', () => {
     };
 
     mockInterpreter = {
-      execute: vi.fn(),
-      points: 100,
-      retractions: 5,
-      deretractions: 5,
-      feedrateChanges: 10,
-      others: 2,
-      extrusionDistance: 150.5
+      execute: vi.fn()
     };
 
     mockSceneManager = {
@@ -55,7 +50,8 @@ describe('GCodePreview', () => {
       resize: vi.fn(),
       processGCode: vi.fn().mockResolvedValue(undefined),
       render: vi.fn(),
-      renderAnimated: vi.fn(),
+      renderAnimated: vi.fn().mockResolvedValue(undefined),
+      renderProgressive: vi.fn(),
       dispose: vi.fn()
     };
 
@@ -87,16 +83,20 @@ describe('GCodePreview', () => {
     vi.mocked(DevGUI).mockImplementation(function () {
       return mockDevGui;
     } as never);
+    mockStats = {
+      update: vi.fn(),
+      end: vi.fn(),
+      dom: document.createElement('div')
+    };
     vi.mocked(Stats).mockImplementation(function () {
-      return {
-        update: vi.fn(),
-        dom: document.createElement('div')
-      };
+      return mockStats;
     } as never);
   });
 
   afterEach(() => {
     vi.clearAllMocks();
+    // initStats appends the stats dom to document.body by default
+    mockStats.dom.remove();
   });
 
   describe('constructor', () => {
@@ -106,9 +106,15 @@ describe('GCodePreview', () => {
 
       expect(Job).toHaveBeenCalledWith({ minLayerThreshold: undefined });
       expect(Interpreter).toHaveBeenCalled();
-      expect(SceneManager).toHaveBeenCalledWith(options, mockJob, expect.any(Function));
+      expect(SceneManager).toHaveBeenCalledWith(options, mockJob);
       expect(Parser).toHaveBeenCalled();
       expect(preview).toBeInstanceOf(GCodePreview);
+    });
+
+    it('passes arcChordTolerance to the interpreter', () => {
+      preview = new GCodePreview({ canvas: mockCanvas, arcChordTolerance: 0.01 });
+
+      expect(Interpreter).toHaveBeenCalledWith({ arcChordTolerance: 0.01 });
     });
 
     it('should expose renderer, parser, and job as public properties', () => {
@@ -126,6 +132,8 @@ describe('GCodePreview', () => {
       preview = new GCodePreview(options);
 
       expect(DevGUI).toHaveBeenCalledWith(preview);
+      // the devMode setter is the only construction site, so exactly one GUI
+      expect(DevGUI).toHaveBeenCalledTimes(1);
     });
 
     it('should initialize dev GUI with options when devMode is an object', () => {
@@ -134,6 +142,7 @@ describe('GCodePreview', () => {
       preview = new GCodePreview(options);
 
       expect(DevGUI).toHaveBeenCalledWith(preview, devModeOptions);
+      expect(DevGUI).toHaveBeenCalledTimes(1);
     });
 
     it('should not initialize dev GUI when devMode is false', () => {
@@ -214,6 +223,19 @@ describe('GCodePreview', () => {
         expect(mockInterpreter.execute).toHaveBeenCalled();
         expect(mockSceneManager.renderAnimated).toHaveBeenCalled();
       });
+
+      it('should resolve only after the animated render has completed', async () => {
+        let renderDone = false;
+        mockSceneManager.renderAnimated.mockImplementation(() =>
+          Promise.resolve().then(() => {
+            renderDone = true;
+          })
+        );
+
+        await preview.processGCode('G0 X0 Y0');
+
+        expect(renderDone).toBe(true);
+      });
     });
 
     describe('processGCodeStream', () => {
@@ -235,6 +257,19 @@ describe('GCodePreview', () => {
         expect(mockSceneManager.renderAnimated).not.toHaveBeenCalled();
       });
 
+      it('should resolve only after the animated render has completed', async () => {
+        let renderDone = false;
+        mockSceneManager.renderAnimated.mockImplementation(() =>
+          Promise.resolve().then(() => {
+            renderDone = true;
+          })
+        );
+
+        await preview.processGCodeStream('G0 X0 Y0');
+
+        expect(renderDone).toBe(true);
+      });
+
       it('should handle ReadableStream', async () => {
         const stream = new ReadableStream({
           start(controller) {
@@ -249,14 +284,54 @@ describe('GCodePreview', () => {
 
         await preview.processGCodeStream(stream);
 
-        expect(readStreamSpy).toHaveBeenCalledWith(stream);
+        expect(readStreamSpy).toHaveBeenCalledWith(stream, { render: true });
       });
-    });
 
-    describe('render', () => {
-      it('should call render on renderer', () => {
-        preview.render();
-        expect(mockSceneManager.render).toHaveBeenCalled();
+      const makeStream = (chunks: string[]) =>
+        new ReadableStream({
+          start(controller) {
+            chunks.forEach((chunk) => controller.enqueue(chunk));
+            controller.close();
+          }
+        });
+
+      it('should draw progressively while reading a stream', async () => {
+        // advance the clock past the throttle interval on every call
+        let now = 0;
+        const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => (now += 1000));
+
+        await preview.processGCodeStream(makeStream(['G0 X0 Y0\n', 'G1 X10 Y10\n', 'G1 X20 Y20\n']));
+
+        expect(mockSceneManager.renderProgressive).toHaveBeenCalledTimes(3);
+        expect(mockSceneManager.renderAnimated).toHaveBeenCalled();
+        nowSpy.mockRestore();
+      });
+
+      it('should throttle progressive draws to the render interval', async () => {
+        // the clock never advances, so only the first chunk triggers a draw
+        const nowSpy = vi.spyOn(performance, 'now').mockReturnValue(0);
+
+        await preview.processGCodeStream(makeStream(['G0 X0 Y0\n', 'G1 X10 Y10\n', 'G1 X20 Y20\n']));
+
+        expect(mockSceneManager.renderProgressive).toHaveBeenCalledTimes(1);
+        nowSpy.mockRestore();
+      });
+
+      it('should draw on every chunk when liveRenderInterval is 0', async () => {
+        // the clock never advances, so only the interval of 0 lets every chunk draw
+        const nowSpy = vi.spyOn(performance, 'now').mockReturnValue(0);
+        preview = new GCodePreview({ canvas: mockCanvas, liveRenderInterval: 0 });
+
+        await preview.processGCodeStream(makeStream(['G0 X0 Y0\n', 'G1 X10 Y10\n', 'G1 X20 Y20\n']));
+
+        expect(mockSceneManager.renderProgressive).toHaveBeenCalledTimes(3);
+        nowSpy.mockRestore();
+      });
+
+      it('should not draw progressively when render is false', async () => {
+        await preview.processGCodeStream(makeStream(['G0 X0 Y0\n']), { render: false });
+
+        expect(mockSceneManager.renderProgressive).not.toHaveBeenCalled();
       });
     });
 
@@ -333,7 +408,7 @@ describe('GCodePreview', () => {
       // Access renderer getter
       const renderer = lazyPreview.sceneManager;
 
-      expect(SceneManager).toHaveBeenCalledWith(options, mockJob, expect.any(Function));
+      expect(SceneManager).toHaveBeenCalledWith(options, mockJob);
       expect(renderer).toBe(mockSceneManager);
     });
 
@@ -411,6 +486,8 @@ describe('GCodePreview', () => {
 
     it('should handle empty stream chunks', async () => {
       preview = new GCodePreview({ canvas: mockCanvas });
+      const onStreamEnd = vi.fn();
+      preview.onStreamEnd = onStreamEnd;
 
       const stream = new ReadableStream({
         start(controller) {
@@ -421,8 +498,35 @@ describe('GCodePreview', () => {
 
       await preview.readStream(stream);
 
-      // Should handle empty chunk gracefully
+      // An empty chunk is skipped, not treated as end-of-stream: there is
+      // nothing to parse, but the stream still finishes normally
       expect(preview.parser.parseGCode).not.toHaveBeenCalled();
+      expect(onStreamEnd).toHaveBeenCalledTimes(1);
+    });
+
+    it('should process every chunk after an empty mid-stream chunk', async () => {
+      preview = new GCodePreview({ canvas: mockCanvas });
+      const onStreamEnd = vi.fn();
+      preview.onStreamEnd = onStreamEnd;
+
+      const stream = new ReadableStream({
+        start(controller) {
+          // TextDecoderStream can emit '' for a chunk holding only a partial
+          // multi-byte sequence; it must not truncate the rest of the stream
+          controller.enqueue('G1 X0 Y0\n');
+          controller.enqueue('');
+          controller.enqueue('G1 X10 Y10\n');
+          controller.close();
+        }
+      });
+
+      await preview.readStream(stream);
+
+      expect(preview.parser.parseGCode).toHaveBeenCalledTimes(2);
+      expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(1, 'G1 X0 Y0');
+      expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(2, 'G1 X10 Y10');
+      expect(mockInterpreter.execute).toHaveBeenCalledTimes(2);
+      expect(onStreamEnd).toHaveBeenCalledTimes(1);
     });
 
     it('should handle stream with tail data', async () => {
@@ -443,18 +547,81 @@ describe('GCodePreview', () => {
       expect(preview.parser.parseGCode).toHaveBeenCalledTimes(2);
       expect(mockInterpreter.execute).toHaveBeenCalledTimes(2);
     });
+
+    it('should flush and parse the tail when the last chunk has no trailing newline', async () => {
+      preview = new GCodePreview({ canvas: mockCanvas });
+
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue('G0 X0 Y0\n');
+          controller.enqueue('G1 X10 Y10');
+          controller.close();
+        }
+      });
+
+      await preview.readStream(stream);
+
+      // chunk 1 completes 'G0 X0 Y0', chunk 2 has no newline so it completes
+      // nothing (''), and the leftover tail is flushed after the stream ends
+      expect(preview.parser.parseGCode).toHaveBeenCalledTimes(3);
+      expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(1, 'G0 X0 Y0');
+      expect(preview.parser.parseGCode).toHaveBeenLastCalledWith('G1 X10 Y10');
+      expect(mockInterpreter.execute).toHaveBeenCalledTimes(3);
+    });
   });
 
   describe('initStats method', () => {
     it('should not create stats when devMode is false', () => {
       preview = new GCodePreview({ canvas: mockCanvas, devMode: false });
+      expect(Stats).not.toHaveBeenCalled();
       expect(preview.stats).toBeUndefined();
     });
 
-    it('should not create stats initially when devMode is not set', () => {
+    it('should not create stats when devMode is not set', () => {
       preview = new GCodePreview({ canvas: mockCanvas });
-      // Stats should not be created initially because devMode is undefined at line 92
+      expect(Stats).not.toHaveBeenCalled();
       expect(preview.stats).toBeUndefined();
+    });
+
+    // regression: the constructor used to read this.devMode before assigning
+    // it from opts, so stats were never created even with devMode enabled
+    it('should create stats and append them to document.body when devMode is true', () => {
+      preview = new GCodePreview({ canvas: mockCanvas, devMode: true });
+
+      expect(Stats).toHaveBeenCalledTimes(1);
+      expect(mockStats.dom.parentElement).toBe(document.body);
+      expect(mockStats.dom.classList.contains('stats')).toBe(true);
+    });
+
+    it('should append stats to the statsContainer from devMode options', () => {
+      const statsContainer = document.createElement('div');
+      preview = new GCodePreview({ canvas: mockCanvas, devMode: { statsContainer } });
+
+      expect(mockStats.dom.parentElement).toBe(statsContainer);
+      expect(mockStats.dom.classList.contains('stats')).toBe(true);
+    });
+
+    it('should fall back to document.body when devMode options have no statsContainer', () => {
+      preview = new GCodePreview({ canvas: mockCanvas, devMode: {} });
+
+      expect(mockStats.dom.parentElement).toBe(document.body);
+    });
+  });
+
+  describe('stats updates on rendered frames', () => {
+    it('should update stats when the sceneManager reports a rendered frame', () => {
+      preview = new GCodePreview({ canvas: mockCanvas, devMode: true });
+
+      mockSceneManager.onFrameRendered();
+
+      expect(mockStats.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('should tolerate rendered frames when stats are disabled', () => {
+      preview = new GCodePreview({ canvas: mockCanvas });
+
+      expect(() => mockSceneManager.onFrameRendered()).not.toThrow();
+      expect(mockStats.update).not.toHaveBeenCalled();
     });
   });
 
@@ -468,6 +635,35 @@ describe('GCodePreview', () => {
       // Should not throw when disposing without stats
       expect(() => preview.dispose()).not.toThrow();
       expect(mockSceneManager.dispose).toHaveBeenCalled();
+    });
+
+    it('should stop stats and remove their dom element when stats exist', () => {
+      preview = new GCodePreview({ canvas: mockCanvas, devMode: true });
+      expect(mockStats.dom.parentElement).toBe(document.body);
+
+      preview.dispose();
+
+      expect(mockStats.end).toHaveBeenCalled();
+      expect(mockStats.dom.parentElement).toBeNull();
+    });
+  });
+
+  describe('initGui edge cases', () => {
+    it('should not create a dev GUI once the sceneManager is disposed', () => {
+      preview = new GCodePreview({ canvas: mockCanvas });
+      preview.dispose();
+
+      preview.devMode = true;
+
+      expect(DevGUI).not.toHaveBeenCalled();
+    });
+
+    it('should not create a dev GUI for a truthy devMode that is neither boolean nor object', () => {
+      preview = new GCodePreview({ canvas: mockCanvas });
+
+      preview.devMode = 'invalid' as never;
+
+      expect(DevGUI).not.toHaveBeenCalled();
     });
   });
 

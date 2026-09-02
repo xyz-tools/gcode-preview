@@ -1,10 +1,14 @@
 import { SceneManager, SceneManagerOptions } from './scene-manager';
-import { GCodeCommand, Parser } from './gcode-parser';
+import { GCodeCommand, Parser } from './parser/gcode-parser';
 import { Interpreter } from './interpreter';
 import { Job } from './job';
 import { DevGUI, type DevModeOptions } from './dev-gui';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { makeDroppable } from './extra/dom-utils';
+import { splitChunk } from './helpers/split-chunk';
+
+/** While streaming, how often (at most) the paths parsed so far are drawn. */
+const LIVE_RENDER_INTERVAL_MS = 250;
 
 /**
  * Options for configuring the G-code preview
@@ -15,6 +19,28 @@ type LibOptions = {
   minLayerThreshold?: number;
   /** Enable drag and drop file handling */
   droppable?: boolean;
+  /**
+   * Keep the parsed G-code source on `preview.parser.lines`.
+   * @remarks
+   * Off by default. Nothing in the library reads the source back, and holding
+   * it costs several megabytes on a large file.
+   */
+  keepLines?: boolean;
+  /**
+   * How often, in milliseconds, the paths parsed so far are drawn while a
+   * G-code stream is being read.
+   * @remarks
+   * Defaults to 250. Lower values grow the model more smoothly — 0 draws on
+   * every chunk, effectively once per frame — but every draw adds a geometry
+   * batch, so very low values cost draw calls on large files.
+   */
+  liveRenderInterval?: number;
+  /**
+   * Maximum deviation, in millimeters, between rendered G2/G3 arcs and the
+   * true arc (default 0.05). Lower values produce smoother arcs at the cost
+   * of more geometry; higher values trade smoothness for performance.
+   */
+  arcChordTolerance?: number;
 };
 
 export type GCodePreviewOptions = LibOptions & SceneManagerOptions;
@@ -40,6 +66,19 @@ export type GCodePreviewOptions = LibOptions & SceneManagerOptions;
  * ```
  */
 export class GCodePreview {
+  /**
+   * Called whenever parsed commands have been folded into the job.
+   * @remarks
+   * Holds a single callback: assigning it replaces any previous one. Wrap
+   * multiple listeners in one function if several consumers need the signal.
+   */
+  onJobUpdated?: (job: Job) => void;
+  /**
+   * Called once a streamed G-code file has been read to the end.
+   * @remarks
+   * Holds a single callback: assigning it replaces any previous one.
+   */
+  onStreamEnd?: () => void;
   /** Job containing parsed G-code data */
   job: Job;
   /** The WebGL sceneManager instance for direct access to rendering properties */
@@ -48,7 +87,7 @@ export class GCodePreview {
   private _parser: Parser | null;
   private opts: GCodePreviewOptions | null;
 
-  private interpreter = new Interpreter();
+  private interpreter: Interpreter;
 
   // dev mode
   /** Developer mode configuration */
@@ -62,17 +101,30 @@ export class GCodePreview {
   /** The WebGL sceneManager instance for direct access to rendering properties */
   get sceneManager(): SceneManager {
     if (!this._sceneManager) {
-      this._sceneManager = new SceneManager(this.opts, this.job, () => this.stats?.update());
+      this._sceneManager = this.createSceneManager();
     }
     return this._sceneManager;
+  }
+
+  /** Builds a SceneManager wired to feed the stats display. */
+  private createSceneManager(): SceneManager {
+    const sceneManager = new SceneManager(this.opts, this.job);
+    sceneManager.onFrameRendered = () => this.stats?.update();
+
+    return sceneManager;
   }
 
   /** The G-code parser instance */
   get parser(): Parser {
     if (!this._parser) {
-      this._parser = new Parser();
+      this._parser = this.createParser();
     }
     return this._parser;
+  }
+
+  /** Builds a parser carrying the preview's parsing options. */
+  private createParser(): Parser {
+    return new Parser({ keepLines: this.opts?.keepLines });
   }
 
   /**
@@ -99,10 +151,14 @@ export class GCodePreview {
    */
   constructor(opts: GCodePreviewOptions) {
     this.opts = opts;
-    this._parser = new Parser();
+    this.interpreter = new Interpreter({ arcChordTolerance: opts.arcChordTolerance });
+    this._parser = this.createParser();
     this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
-    this.stats = this.devMode ? new Stats() : undefined;
-    this._sceneManager = new SceneManager(this.opts, this.job, () => this.stats?.update());
+    // note: reads opts.devMode because this.devMode is only assigned below,
+    // once the scene manager needed by its setter exists
+    this.stats = opts.devMode ? new Stats() : undefined;
+    this._sceneManager = this.createSceneManager();
+    // the devMode setter also creates the dev GUI, so no separate initGui() call
     this.devMode = opts?.devMode;
 
     this.initStats();
@@ -113,7 +169,7 @@ export class GCodePreview {
    * Clears the preview and resets the parser, sceneManager, gui and job
    */
   clear(): void {
-    this._parser = new Parser();
+    this._parser = this.createParser();
     this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
     this.sceneManager.clear();
     this.sceneManager.job = this.job;
@@ -124,16 +180,18 @@ export class GCodePreview {
   /**
    * Processes G-code and renders the preview
    * @param gcode - G-code string or array of lines
+   * @returns Promise that resolves when the animated render has completed
    */
-  processGCode(gcode: string | string[]): void {
+  processGCode(gcode: string | string[]): Promise<void> {
     // Parse the gcode using our managed parser
-    const { commands } = this.parser.parseGCode(gcode);
+    const { commands, metadata } = this.parser.parseGCode(gcode);
+    this.job.metadata = metadata;
 
     // Pass the parsed commands to the sceneManager
-    this.interpreter.execute(commands, this.job);
+    this.executeCommands(commands);
 
     // Render the result
-    this.sceneManager.renderAnimated();
+    return this.sceneManager.renderAnimated();
   }
 
   /**
@@ -148,66 +206,85 @@ export class GCodePreview {
     options: { render?: boolean } = { render: true }
   ): Promise<void> {
     if (gcode instanceof ReadableStream) {
-      await this.readStream(gcode);
+      await this.readStream(gcode, { render: options.render });
     } else {
-      const { commands } = this.parser.parseGCode(gcode);
-      this.interpreter.execute(commands, this.job);
+      const { commands, metadata } = this.parser.parseGCode(gcode);
+      this.job.metadata = metadata;
+      this.executeCommands(commands);
     }
-
-    console.debug(
-      `out of ${this.interpreter.points} move commands, the following were pruned due to no actual movement:`
-    );
-    console.debug(this.interpreter.retractions, 'retractions');
-    console.debug(this.interpreter.deretractions, 'deretractions');
-    console.debug(this.interpreter.feedrateChanges, 'feedrateChanges');
-    console.debug(this.interpreter.others, 'other');
-
-    console.debug(Math.round(this.interpreter.extrusionDistance), 'total extrusion distance (mm)');
 
     if (!this.job.isPlanar) {
       console.warn('Job is non-planar');
     }
 
     if (options.render) {
-      this.sceneManager.renderAnimated();
+      // resolve only once the animated render has completed, so callers can
+      // observe the moment the model is fully drawn
+      await this.sceneManager.renderAnimated();
     }
   }
 
-  async readStream(stream: ReadableStream): Promise<void> {
+  async readStream(stream: ReadableStream, options: { render?: boolean } = {}): Promise<void> {
     const reader = stream.getReader();
     let result;
     let tail = '';
     let size = 0;
+    let lastDrawnAt = -Infinity;
 
     do {
       result = await reader.read();
       const length = result.value?.length ?? 0;
       if (length === 0) {
-        break;
+        // TextDecoderStream can legitimately emit an empty chunk (e.g. one
+        // holding only a partial multi-byte sequence). Skip it and keep
+        // reading; the loop only ends when the stream reports done.
+        continue;
       }
       console.debug('reading from stream', Math.floor(length / 1024), 'kB');
       size += length;
-      const str = result.value;
-      const idxNewLine = str.lastIndexOf('\n');
-      const maxFullLine = str.slice(0, idxNewLine);
+      const split = splitChunk(tail, result.value);
+      tail = split.tail;
 
-      // parse increments but don't render yet
-      const { commands } = this.parser.parseGCode(tail + maxFullLine);
+      const { commands, metadata } = this.parser.parseGCode(split.complete);
+
+      // forward metadata before executing: the layer indexer locks its
+      // strategy on the first path it sees
+      this.job.metadata = metadata;
 
       // we'll execute the commands immediately, for now
-      this.interpreter.execute(commands, this.job);
+      this.executeCommands(commands);
 
-      tail = str.slice(idxNewLine);
+      // draw what has arrived so far, so the model grows on screen while the
+      // stream is still coming in. Throttled: each call only builds the paths
+      // that are not drawn yet, but a geometry batch per chunk would still
+      // pile up draw calls
+      if (
+        options.render &&
+        performance.now() - lastDrawnAt >= (this.opts?.liveRenderInterval ?? LIVE_RENDER_INTERVAL_MS)
+      ) {
+        this.sceneManager.renderProgressive();
+        lastDrawnAt = performance.now();
+      }
     } while (!result.done);
 
+    // flush the leftover tail: a file whose last line has no trailing newline
+    // still needs that final command parsed and executed
+    if (tail !== '') {
+      const { commands } = this.parser.parseGCode(tail);
+      this.executeCommands(commands);
+    }
+
     console.debug('total read from stream', Math.floor(size / 1024), 'kB');
+    this.onStreamEnd?.();
   }
 
   /**
-   * Renders the current scene
+   * Folds parsed commands into the job and announces the result.
+   * @param commands - Parsed G-code commands
    */
-  render(): void {
-    this.sceneManager.render();
+  private executeCommands(commands: GCodeCommand[]): void {
+    this.interpreter.execute(commands, this.job);
+    this.onJobUpdated?.(this.job);
   }
 
   /**
@@ -261,4 +338,5 @@ export class GCodePreview {
  * This class provides a simple interface for rendering G-code previews.
  * Most properties and methods are available through the `sceneManager` property.
  */
-export { SceneManager, DevModeOptions, GCodeCommand, Parser };
+export { SceneManager, DevModeOptions, GCodeCommand, Parser, Job };
+export type { SceneManagerOptions };

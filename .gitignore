@@ -1,17 +1,18 @@
-demo/js/gcode-preview.js
-demo/js/three.min.js
-src/.rpt2_cache
 node_modules
-dist/__tests__
-.rpt2_cache
+.DS_Store
+TODO.md
 yarn-error.log
 .firebase/hosting.*
-TODO.md
-.DS_Store
-examples/files
-react-typescript-demo/.env
+
+# Build output
 dist/*
 demo/build/*
-docs
 demo/dist
 demo/lib
+docs
+
+# Test coverage
+coverage
+.context
+
+*.bench.ts

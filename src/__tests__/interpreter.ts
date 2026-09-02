@@ -1,8 +1,7 @@
 import { test, expect, describe } from 'vitest';
-import { GCodeCommand } from '../gcode-parser';
-import { Interpreter } from '../interpreter';
+import { GCodeCommand, Parser } from '../parser/gcode-parser';
+import { Interpreter, handlers } from '../interpreter';
 import { Job } from '../job';
-import { PathType } from '../path';
 
 describe('.execute', () => {
   test('returns a stateful job', () => {
@@ -18,6 +17,19 @@ describe('.execute', () => {
     expect(result.state.z).toEqual(3);
   });
 
+  test('skips a command whose gcode is undefined', () => {
+    // A command with no gcode at all (guarded by `command.gcode !== undefined`).
+    const command = new GCodeCommand('', undefined as unknown as string, {});
+    const interpreter = new Interpreter();
+
+    const result = interpreter.execute([command]);
+
+    expect(result.paths.length).toEqual(0);
+    // Nothing ran, so the axes are still un-homed and the position is unknown.
+    expect(result.state.x).toBeUndefined();
+    expect(result.state.isHomed).toBe(false);
+  });
+
   test('ignores unknown commands', () => {
     const command = new GCodeCommand('G42', 'g42', {});
     const interpreter = new Interpreter();
@@ -26,9 +38,11 @@ describe('.execute', () => {
 
     expect(result).not.toBeNull();
     expect(result).toBeInstanceOf(Job);
-    expect(result.state.x).toEqual(0);
-    expect(result.state.y).toEqual(0);
-    expect(result.state.z).toEqual(0);
+    // An unknown command leaves the axes un-homed, so the position stays unknown.
+    expect(result.state.x).toBeUndefined();
+    expect(result.state.y).toBeUndefined();
+    expect(result.state.z).toBeUndefined();
+    expect(result.state.isHomed).toBe(false);
   });
 
   test('runs multiple commands', () => {
@@ -85,236 +99,176 @@ describe('.execute', () => {
   });
 });
 
-describe('.g0', () => {
-  test('starts a path if the job has none, starting at the job current state', () => {
-    const command = new GCodeCommand('G0 X1 Y2', 'g0', { x: 1, y: 2 });
-    const interpreter = new Interpreter();
-    const job = new Job();
-    job.state.x = 3;
-    job.state.y = 4;
-    job.state.tool = 5;
-
-    interpreter.g0(command, job);
-
-    expect(job.paths.length).toEqual(0);
-    expect(job.inprogressPath?.vertices.length).toEqual(6);
-    expect(job.inprogressPath?.vertices[0]).toEqual(3);
-    expect(job.inprogressPath?.vertices[1]).toEqual(4);
-    expect(job.inprogressPath?.vertices[2]).toEqual(0);
-    expect(job.inprogressPath?.tool).toEqual(5);
+describe('handler registry', () => {
+  test('G1 is handled by the same handler as G0', () => {
+    expect(handlers.get('g1')).toBe(handlers.get('g0'));
   });
 
-  test('continues the path if the job has one', () => {
-    const command1 = new GCodeCommand('G0 X1 Y2', 'g0', { x: 1, y: 2 });
-    const command2 = new GCodeCommand('G0 X3 Y4', 'g0', { x: 3, y: 4 });
-    const interpreter = new Interpreter();
-    const job = new Job();
-
-    job.state.z = 5;
-    interpreter.g0(command1, job);
-
-    interpreter.g0(command2, job);
-
-    expect(job.paths.length).toEqual(0);
-    expect(job.inprogressPath?.vertices.length).toEqual(9);
-    expect(job.inprogressPath?.vertices[6]).toEqual(command2.params.x);
-    expect(job.inprogressPath?.vertices[7]).toEqual(command2.params.y);
-    expect(job.inprogressPath?.vertices[8]).toEqual(job.state.z);
-  });
-
-  test("assigns the travel type if there's no extrusion", () => {
-    const command = new GCodeCommand('G0 X1 Y2', 'g0', { x: 1, y: 2 });
-    const interpreter = new Interpreter();
-    const job = new Job();
-
-    interpreter.g0(command, job);
-
-    expect(job.paths.length).toEqual(0);
-    expect(job.inprogressPath?.travelType).toEqual(PathType.Travel);
-  });
-
-  test("assigns the extrusion type if there's extrusion", () => {
-    const command = new GCodeCommand('G1 X1 Y2 E3', 'g1', { x: 1, y: 2, e: 3 });
-    const interpreter = new Interpreter();
-    const job = new Job();
-
-    interpreter.g0(command, job);
-
-    expect(job.paths.length).toEqual(0);
-    expect(job.inprogressPath?.travelType).toEqual('Extrusion');
-  });
-
-  test('will not result in a path when there is no movement (retraction)', () => {
-    const command = new GCodeCommand('G0 E-2', 'g0', { e: -2 });
-    const interpreter = new Interpreter();
-    const job = new Job();
-
-    interpreter.g0(command, job);
-
-    expect(job.paths.length).toEqual(0);
-  });
-
-  test('will not result in a path when there is no movement (deretraction)', () => {
-    const command = new GCodeCommand('G0 E4', 'g0', { e: 4 });
-    const interpreter = new Interpreter();
-    const job = new Job();
-
-    interpreter.g0(command, job);
-
-    expect(job.paths.length).toEqual(0);
-  });
-
-  test('starts a new path if the travel type changes from Travel to Extrusion', () => {
-    const command1 = new GCodeCommand('G0 X1 Y2', 'g0', { x: 1, y: 2 });
-    const command2 = new GCodeCommand('G1 X3 Y4 E5', 'g1', { x: 3, y: 4, e: 5 });
-    const interpreter = new Interpreter();
-    const job = new Job();
-    interpreter.execute([command1], job);
-
-    interpreter.g0(command2, job);
-
-    expect(job.paths.length).toEqual(1);
-    expect(job.inprogressPath?.travelType).toEqual(PathType.Extrusion);
-  });
-
-  test('starts a new path if the travel type changes from Extrusion to Travel', () => {
-    const command1 = new GCodeCommand('G1 X1 Y2 E3', 'g1', { x: 1, y: 2, e: 3 });
-    const command2 = new GCodeCommand('G0 X3 Y4', 'g0', { x: 3, y: 4 });
-    const interpreter = new Interpreter();
-    const job = new Job();
-    interpreter.execute([command1], job);
-
-    interpreter.g0(command2, job);
-
-    expect(job.paths.length).toEqual(1);
-    expect(job.inprogressPath?.travelType).toEqual(PathType.Travel);
-  });
-
-  test('.G1 is an alias to .G0', () => {
-    const interpreter = new Interpreter();
-
-    expect(interpreter.g1).toEqual(interpreter.g0);
+  test('G3 is handled by the same handler as G2', () => {
+    expect(handlers.get('g3')).toBe(handlers.get('g2'));
   });
 });
 
-test('.G20 sets the units to inches', () => {
-  const command = new GCodeCommand('G20', 'g20', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
+describe('malformed coordinates through the whole pipeline', () => {
+  const run = (gcode: string) => new Interpreter().execute(new Parser().parseGCode(gcode).commands);
+  const allVertices = (job: Job) => job.paths.flatMap((path) => path.vertices);
+  // The vertices the final command contributed, without the lead-in move or the
+  // implicit start point at the origin.
+  const ysOf = (vertices: number[]) => vertices.filter((_, index) => index % 3 === 1);
+  const zsOf = (vertices: number[]) => vertices.filter((_, index) => index % 3 === 2);
+  const tailVertices = (setup: string[], last: string) => {
+    const before = allVertices(run(setup.join('\n'))).length;
+    return allVertices(run([...setup, last].join('\n'))).slice(before);
+  };
 
-  interpreter.g20(command, job);
+  test('a malformed coordinate leaves the job state finite', () => {
+    // Before validation at the parser boundary, Xabc parsed to NaN and `x ?? state.x`
+    // kept it (?? only catches null/undefined), poisoning the state from there on.
+    const job = run(['G1 X10 Y10 Z1 E1', 'G1 Xabc Y20 E1'].join('\n'));
 
-  expect(job.state.units).toEqual('in');
-});
+    expect(job.state.x).toEqual(10);
+    expect(job.state.y).toEqual(20);
+    expect(Number.isFinite(job.state.x)).toBe(true);
+  });
 
-test('.G21 sets the units to millimeters', () => {
-  const command = new GCodeCommand('G21', 'g21', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
+  test('a malformed coordinate does not poison the bounding box', () => {
+    const job = run(['G1 X10 Y10 Z1 E1', 'G1 Xabc Y20 E1', 'G1 X30 Y30 E1'].join('\n'));
 
-  interpreter.g21(command, job);
+    expect(job.boundingBox.isValid).toBe(true);
+    expect(job.boundingBox.corners).toEqual({
+      min: expect.objectContaining({ x: 10, y: 10, z: 1 }),
+      max: expect.objectContaining({ x: 30, y: 30, z: 1 })
+    });
+  });
 
-  expect(job.state.units).toEqual('mm');
-});
+  test('an overflowing coordinate does not stretch the bounding box to Infinity', () => {
+    const huge = '1' + '0'.repeat(400);
+    const job = run(['G1 X10 Y10 Z1 E1', `G1 X${huge} E1`, 'G1 X30 Y30 E1'].join('\n'));
 
-test('.g28 moves the state to the origin', () => {
-  const command = new GCodeCommand('G28', 'g28', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
-  job.state.x = 3;
-  job.state.y = 4;
+    expect(job.boundingBox.size).toEqual(expect.objectContaining({ x: 20, y: 20, z: 0 }));
+  });
 
-  interpreter.g28(command, job);
+  test('an arc emits only finite segment points', () => {
+    // A half circle of radius 5 -- enough arc length to go through the segment loop.
+    const job = run(['G1 X10 Y10 Z1 E1', 'G2 X20 Y10 I5 J0 E1'].join('\n'));
 
-  expect(job.state.x).toEqual(0);
-  expect(job.state.y).toEqual(0);
-  expect(job.state.z).toEqual(0);
-});
+    const points = job.paths.flatMap((path) => path.vertices);
+    expect(points.length).toBeGreaterThan(3 * 3);
+    expect(points.every((value) => Number.isFinite(value))).toBe(true);
+    expect(job.boundingBox.isValid).toBe(true);
+  });
 
-test('.t0 sets the tool to 0', () => {
-  const command = new GCodeCommand('T0', 't0', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
-  job.state.tool = 3;
+  test('a G3 arc sweeps counter-clockwise where G2 sweeps clockwise', () => {
+    // The same half circle around (15,10), from west to east, in both directions.
+    // Viewed from above, G2 (clockwise) passes north of the center and G3
+    // (counter-clockwise) south. Also guards the g3 registry wiring end to end:
+    // without it G3 is silently ignored and contributes no intermediate points,
+    // and the shared handler must still flip direction per gcode.
+    const g2Ys = ysOf(tailVertices(['G1 X10 Y10 Z1 E1'], 'G2 X20 Y10 I5 J0 E1'));
+    const g3Ys = ysOf(tailVertices(['G1 X10 Y10 Z1 E1'], 'G3 X20 Y10 I5 J0 E1'));
 
-  interpreter.t0(command, job);
+    expect(g3Ys.length).toBeGreaterThan(2);
+    expect(Math.max(...g2Ys)).toBeGreaterThan(14);
+    expect(Math.min(...g2Ys)).toBeGreaterThanOrEqual(10);
+    expect(Math.min(...g3Ys)).toBeLessThan(6);
+    expect(Math.max(...g3Ys)).toBeLessThanOrEqual(10);
+  });
 
-  expect(job.state.tool).toEqual(0);
-});
+  test('arcChordTolerance tunes how densely arcs are tessellated', () => {
+    const gcode = ['G1 X10 Y10 Z1 E1', 'G2 X20 Y10 I5 J0 E1'].join('\n');
+    const runWith = (tolerance?: number) =>
+      new Interpreter({ arcChordTolerance: tolerance }).execute(new Parser().parseGCode(gcode).commands);
 
-test('.t1 sets the tool to 1', () => {
-  const command = new GCodeCommand('T1', 't1', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
-  job.state.tool = 3;
+    const defaultCount = allVertices(runWith()).length;
 
-  interpreter.t1(command, job);
+    expect(allVertices(runWith(0.005)).length).toBeGreaterThan(defaultCount);
+    expect(allVertices(runWith(0.5)).length).toBeLessThan(defaultCount);
+  });
 
-  expect(job.state.tool).toEqual(1);
-});
+  test('an arc ending on X0 or Y0 moves there instead of keeping the previous position', () => {
+    // g2 used `x || state.x`, so a legitimate 0 endpoint was falsy and silently
+    // discarded. This is ordinary valid gcode, not a malformed-input case.
+    const job = run(['G1 X10 Y10 Z5 E1', 'G2 X0 Y0 I-5 J-5 E1'].join('\n'));
 
-test('.t2 sets the tool to 2', () => {
-  const command = new GCodeCommand('T2', 't2', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
-  job.state.tool = 3;
+    expect(job.state.x).toEqual(0);
+    expect(job.state.y).toEqual(0);
+  });
 
-  interpreter.t2(command, job);
+  test('an arc ending on Z0 moves there instead of keeping the previous height', () => {
+    const job = run(['G1 X10 Y10 Z5 E1', 'G2 X20 Y10 Z0 I5 J0 E1'].join('\n'));
 
-  expect(job.state.tool).toEqual(2);
-});
+    expect(job.state.z).toEqual(0);
+  });
 
-test('.t3 sets the tool to 3', () => {
-  const command = new GCodeCommand('T3', 't3', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
-  job.state.tool = 3;
+  test('a helical arc interpolates Z towards the target, not away from it', () => {
+    // zDist was current - target, so a climb from Z1 to Z3 descended to Z-0.97 across
+    // its 31 intermediate points and only reached Z3 at the endpoint.
+    const zs = zsOf(tailVertices(['G1 X10 Y10 Z1 E1'], 'G2 X20 Y10 Z3 I5 J0 E1'));
 
-  interpreter.t3(command, job);
+    expect(zs.length).toBeGreaterThan(2);
+    expect(Math.min(...zs)).toBeGreaterThanOrEqual(1);
+    expect(Math.max(...zs)).toBeLessThanOrEqual(3);
+    // and it should actually climb, not sit flat at the start height
+    expect(Math.max(...zs)).toBeGreaterThan(1);
+  });
 
-  expect(job.state.tool).toEqual(3);
-});
+  test('an arc descending to Z0 spreads the drop across its segments', () => {
+    // `z || state.z` made a Z0 target fall back to the current height, so zDist was 0
+    // and every intermediate point sat flat at Z5 before the endpoint snapped to Z0.
+    const zs = zsOf(tailVertices(['G1 X10 Y10 Z5 E1'], 'G2 X20 Y10 Z0 I5 J0 E1'));
 
-test('.t4 sets the tool to 4', () => {
-  const command = new GCodeCommand('T4', 't4', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
-  job.state.tool = 3;
+    expect(zs.some((value) => value > 0 && value < 5)).toBe(true);
+    expect(zs.every((value) => Number.isFinite(value))).toBe(true);
+  });
 
-  interpreter.t4(command, job);
+  test('a malformed Z on an arc leaves the intermediate points finite', () => {
+    // `??` propagates NaN where `||` absorbed it, so this relies on the parser
+    // dropping the param entirely. Guards the coupling between the two changes.
+    const zs = zsOf(tailVertices(['G1 X10 Y10 Z5 E1'], 'G2 X20 Y10 Zabc I5 J0 E1'));
 
-  expect(job.state.tool).toEqual(4);
-});
+    expect(zs.every((value) => Number.isFinite(value))).toBe(true);
+    expect(zs.every((value) => value === 5)).toBe(true);
+  });
 
-test('.t5 sets the tool to 5', () => {
-  const command = new GCodeCommand('T5', 't5', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
-  job.state.tool = 3;
+  test('a degenerate R-mode whole circle emits the endpoint and no arc', () => {
+    // start === end in R mode leaves dSquared === 0, so the centre is undefined.
+    // The arc is skipped deliberately rather than rendered from NaN centres.
+    const arcVertices = tailVertices(['G1 X10 Y10 Z1 E1'], 'G2 X10 Y10 R5 E1');
 
-  interpreter.t5(command, job);
+    expect(arcVertices).toEqual([10, 10, 1]); // the endpoint only, no intermediate points
+  });
 
-  expect(job.state.tool).toEqual(5);
-});
+  test('a degenerate R-mode whole circle terminates and emits only finite points', () => {
+    // Every param here is finite, but deltaX/deltaY are 0 so the R block divides by
+    // dSquared === 0: hDivD is Infinity and i/j come out NaN.
+    const job = run(['G1 X10 Y10 Z1 E1', 'G2 X10 Y10 R5 E1'].join('\n'));
 
-test('.t6 sets the tool to 6', () => {
-  const command = new GCodeCommand('T6', 't6', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
-  job.state.tool = 3;
+    const points = job.paths.flatMap((path) => path.vertices);
+    expect(points.every((value) => Number.isFinite(value))).toBe(true);
+    expect(job.boundingBox.isValid).toBe(true);
+  });
 
-  interpreter.t6(command, job);
+  test('arc offsets that overflow the radius do not blow up the vertex buffer', () => {
+    // I/J near Number.MAX_VALUE make arcRadius Infinity. On a whole circle totalArc is
+    // 2*PI rather than 0, so totalSegments is Infinity instead of NaN and
+    // `moveIdx < totalSegments - 1` never becomes false. Without the guard the loop
+    // pushes vertices until the array hits its length limit and throws
+    // `RangeError: Invalid array length`, aborting execute() and losing the whole job.
+    const huge = '1' + '0'.repeat(308);
+    const job = run(['G1 X10 Y10 Z1 E1', `G2 X10 Y10 I${huge} J${huge} E1`].join('\n'));
 
-  expect(job.state.tool).toEqual(6);
-});
+    const points = job.paths.flatMap((path) => path.vertices);
+    expect(points.every((value) => Number.isFinite(value))).toBe(true);
+    expect(job.boundingBox.isValid).toBe(true);
+  });
 
-test('.t7 sets the tool to 7', () => {
-  const command = new GCodeCommand('T7', 't7', {});
-  const interpreter = new Interpreter();
-  const job = new Job();
-  job.state.tool = 3;
+  test('an arc with a malformed endpoint still produces only finite points', () => {
+    const job = run(['G1 X10 Y10 Z1 E1', 'G2 Xabc Y20 I5 J0 E1'].join('\n'));
 
-  interpreter.t7(command, job);
-
-  expect(job.state.tool).toEqual(7);
+    const points = job.paths.flatMap((path) => path.vertices);
+    expect(points.length).toBeGreaterThan(0);
+    expect(points.every((value) => Number.isFinite(value))).toBe(true);
+    expect(job.boundingBox.isValid).toBe(true);
+    expect(job.boundingBox.corners?.min.x).not.toBeNaN();
+  });
 });

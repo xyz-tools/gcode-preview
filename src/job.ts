@@ -1,15 +1,17 @@
-import { Path } from './path';
+import { Path, PathType } from './path';
 import { State } from './state';
 import { Layer } from './layer';
 import {
   TravelTypeIndexer,
-  LayersIndexer,
+  LayersMetadataIndexer,
   ToolIndexer,
   Indexer,
   NonApplicableIndexer,
   NonPlanarExtrusionError
 } from './indexers';
 import { BoundingBox } from './bounding-box';
+import { Metadata } from './parser/gcode-parser';
+import { JobStats } from './job-stats';
 
 /**
  * Represents a complete print job containing paths, layers, and state
@@ -32,9 +34,15 @@ export class Job {
   private _toolPaths: Path[][] = [];
   /** Indexers for organizing paths */
   private indexers: Indexer[];
+  /** Layer indexer, retained so metadata can be applied after construction */
+  private layersIndexer: LayersMetadataIndexer;
   /** Current in-progress path */
   inprogressPath: Path | undefined;
   public boundingBox: BoundingBox = new BoundingBox();
+  private _metadata: Metadata | undefined;
+
+  /** Statistics accumulated while interpreting the job's G-code */
+  public stats: JobStats = new JobStats();
 
   /**
    * Creates a new Job instance
@@ -44,14 +52,37 @@ export class Job {
    */
   constructor(opts: { state?: State; minLayerThreshold?: number } = {}) {
     this.state = opts.state || State.initial;
+    this.layersIndexer = new LayersMetadataIndexer(this._layers, [], opts.minLayerThreshold);
     this.indexers = [
       new TravelTypeIndexer({ travel: this.travelPaths, extrusion: this.extrusionPaths }),
-      new LayersIndexer(this._layers, opts.minLayerThreshold),
+      this.layersIndexer,
       new ToolIndexer(this._toolPaths)
     ];
   }
 
   /**
+   * Gets the slicer metadata (thumbnails, layer metadata, slicer name) for this job
+   * @returns The metadata, or undefined if none has been set
+   */
+  get metadata(): Metadata | undefined {
+    return this._metadata;
+  }
+
+  /**
+   * Sets the slicer metadata and forwards layer metadata to the layer indexer
+   * @param metadata - Parsed slicer metadata
+   * @remarks
+   * Must be set before paths are indexed (i.e. before executing commands) so the
+   * layer indexer can use slicer-provided layer boundaries instead of the
+   * tolerance-based fallback.
+   */
+  set metadata(metadata: Metadata | undefined) {
+    this._metadata = metadata;
+    this.layersIndexer.setLayerMetadata(metadata?.layerMetadata ?? []);
+  }
+
+  /**
+   *
    * Gets all extrusion paths in the job
    * @returns Array of extrusion paths
    */
@@ -109,6 +140,36 @@ export class Job {
   }
 
   /**
+   * Resolves the current state's position for rendering.
+   * @returns The position as concrete `x`, `y`, `z` numbers
+   * @remarks
+   * An axis that has not been homed has an unknown (`undefined`) position. The
+   * job chooses to assume the origin (`0`) for such axes so the viewer can
+   * still render best-effort (see #361); `state.isHomed` lets a consumer tell
+   * these assumed coordinates from real ones.
+   */
+  resolvePosition(): { x: number; y: number; z: number } {
+    return { x: this.state.x ?? 0, y: this.state.y ?? 0, z: this.state.z ?? 0 };
+  }
+
+  /**
+   * Finalizes the current in-progress path and starts a new one of the given type
+   * @param newType - Type of the new path
+   * @returns The newly created path, seeded with the current position
+   * @remarks
+   * Called when a path type change is detected (e.g. switching between travel
+   * and extrusion moves).
+   */
+  breakPath(newType: PathType): Path {
+    this.finishPath();
+    const currentPath = new Path(newType, 0.6, 0.2, this.state.tool);
+    const pos = this.resolvePosition();
+    currentPath.addPoint(pos.x, pos.y, pos.z);
+    this.inprogressPath = currentPath;
+    return currentPath;
+  }
+
+  /**
    * Resumes the last path from the job as the current in-progress path
    * @remarks
    * Removes the path from all indexes and sets it as the current in-progress path
@@ -118,7 +179,12 @@ export class Job {
       return;
     }
     this.inprogressPath = this.paths.pop();
-    [this.extrusionPaths, this.travelPaths, this.layers[this.layers.length - 1]?.paths].forEach((indexer) => {
+    [
+      this.extrusionPaths,
+      this.travelPaths,
+      this.layers[this.layers.length - 1]?.paths,
+      this._toolPaths[this.inprogressPath.tool]
+    ].forEach((indexer) => {
       if (indexer === undefined || indexer.length === 0) {
         return;
       }
@@ -154,7 +220,9 @@ export class Job {
    * the layers will be cleared.
    */
   private indexPath(path: Path): void {
-    this.indexers.forEach((indexer) => {
+    // Iterate over a snapshot so removing a failed indexer
+    // does not skip the indexers that follow it
+    [...this.indexers].forEach((indexer) => {
       try {
         indexer.sortIn(path);
       } catch (e) {
@@ -164,7 +232,8 @@ export class Job {
 
         if (e instanceof NonPlanarExtrusionError) {
           console.warn('Non-planar path detected; clearing layer index');
-          this._layers = [];
+          // Truncate in place so consumers holding the array see it emptied
+          this._layers.length = 0;
         }
 
         // Remove the indexer that cannot handle this path

@@ -1,5 +1,6 @@
 import { Path, PathType } from './path';
-import { Layer } from './layer'; // Assuming Layer is now in its own file
+import { Layer } from './layer';
+import { LayerMetadata } from './parser/metadata-parser-base';
 
 /**
  * Base error class for indexer-related errors
@@ -91,16 +92,20 @@ export class LayersIndexer extends Indexer {
     this.tolerance = tolerance;
   }
 
+  private static hasNonPlanarVertex(vertices: number[], tolerance: number): boolean {
+    for (let i = 5; i < vertices.length; i += 3) {
+      if (Math.abs(vertices[i] - vertices[i - 3]) > tolerance) return true;
+    }
+    return false;
+  }
+
   /**
    * Sorts a path into the appropriate layer
    * @param path - Path to sort
    * @throws NonPlanarPathError if path is non-planar
    */
   sortIn(path: Path): void {
-    if (
-      path.travelType === PathType.Extrusion &&
-      path.vertices.some((_, i, arr) => i > 3 && i % 3 === 2 && Math.abs(arr[i] - arr[i - 3]) > this.tolerance)
-    ) {
+    if (path.travelType === PathType.Extrusion && LayersIndexer.hasNonPlanarVertex(path.vertices, this.tolerance)) {
       throw new NonPlanarExtrusionError();
     }
 
@@ -116,7 +121,11 @@ export class LayersIndexer extends Indexer {
       }
     }
 
-    this.lastLayer?.paths.push(path);
+    if (this.lastLayer) {
+      // record which layer the path landed in so the renderer can shade it by depth
+      path.layerIndex = this.indexes.length - 1;
+      this.lastLayer.paths.push(path);
+    }
   }
 
   /**
@@ -160,10 +169,163 @@ export class ToolIndexer extends Indexer {
   sortIn(path: Path): void {
     if (path.travelType === PathType.Extrusion) {
       this.indexes[path.tool] = this.indexes[path.tool] || [];
-      if (this.indexes[path.tool] === undefined) {
-        this.indexes[path.tool] = [];
-      }
       this.indexes[path.tool].push(path);
+    }
+  }
+}
+
+/**
+ * Indexer that organizes paths into layers using slicer metadata when available,
+ * falling back to tolerance-based detection
+ */
+export class LayersMetadataIndexer extends Indexer {
+  /** Default layer height used when metadata does not specify one */
+  private static readonly DEFAULT_LAYER_HEIGHT = 0.2;
+
+  /** Z tolerance (mm) used when matching a path to a metadata layer */
+  private static readonly Z_MATCH_TOLERANCE = 0.01;
+
+  /** Array of layers being managed */
+  declare protected indexes: Layer[];
+
+  /** Layer metadata from slicer comments */
+  private layerMetadata: LayerMetadata[];
+
+  /** Fallback tolerance indexer, writing into the same layer array */
+  private fallbackIndexer: LayersIndexer;
+
+  /** Current layer pointer for metadata-based indexing (paths arrive in Z order) */
+  private currentMetadataLayerIndex = 0;
+
+  /**
+   * Which strategy owns the shared layer array, decided on the first path.
+   * @remarks
+   * Locked once because the two strategies disagree about what an array
+   * position means: metadata mode requires position N to be metadata layer N,
+   * while the fallback creates layers purely from observed Z jumps. Switching
+   * midway would file paths into unrelated layers.
+   */
+  private useMetadata: boolean | null = null;
+
+  /**
+   * Creates a new LayersMetadataIndexer
+   * @param indexes - Array to store layers
+   * @param layerMetadata - Layer metadata from slicer comments
+   * @param tolerance - Height tolerance for fallback detection
+   */
+  constructor(
+    indexes: Layer[],
+    layerMetadata: LayerMetadata[] = [],
+    tolerance: number = LayersIndexer.DEFAULT_TOLERANCE
+  ) {
+    super(indexes);
+    // undefined is handled by the parameter default; null is not typeable here.
+    this.layerMetadata = layerMetadata;
+    // The fallback shares the same layer array, so no copying/syncing is needed.
+    this.fallbackIndexer = new LayersIndexer(indexes, tolerance);
+  }
+
+  /** Whether slicer-provided layer metadata is available */
+  get hasMetadata(): boolean {
+    return this.layerMetadata.length > 0;
+  }
+
+  /**
+   * Replaces the layer metadata used for indexing.
+   * @param layerMetadata - Layer metadata from slicer comments
+   * @remarks
+   * Must be set before paths are indexed to take effect: the strategy locks
+   * on the first path (see `useMetadata`). A streaming parse re-sets the same
+   * (growing) array each chunk, which keeps the layer pointer; swapping in a
+   * different array rewinds the pointer so stale positions cannot leak.
+   */
+  setLayerMetadata(layerMetadata: LayerMetadata[]): void {
+    const next = layerMetadata ?? [];
+    if (next === this.layerMetadata) return;
+    this.layerMetadata = next;
+    this.currentMetadataLayerIndex = 0;
+  }
+
+  /**
+   * Sorts a path into the appropriate layer using metadata or tolerance fallback
+   * @param path - Path to sort
+   * @throws NonPlanarPathError if path is non-planar (fallback mode only)
+   */
+  sortIn(path: Path): void {
+    this.useMetadata ??= this.hasMetadata;
+    if (this.useMetadata) {
+      this.sortWithMetadata(path);
+    } else {
+      this.fallbackIndexer.sortIn(path);
+    }
+  }
+
+  /** The most recent layer, or undefined when no layers exist yet */
+  private get lastLayer(): Layer | undefined {
+    return this.indexes[this.indexes.length - 1];
+  }
+
+  /**
+   * Sorts a path into a layer using slicer metadata
+   * @param path - Path to sort
+   */
+  private sortWithMetadata(path: Path): void {
+    // Travel moves never open a new layer; attach them to the current one.
+    if (path.travelType !== PathType.Extrusion) {
+      if (this.lastLayer) {
+        // record which layer the path landed in so the renderer can shade it by depth
+        path.layerIndex = this.indexes.length - 1;
+        this.lastLayer.paths.push(path);
+      }
+      return;
+    }
+
+    const pathZ = path.vertices[2];
+    const targetLayerIndex = this.findLayerIndexForZ(pathZ);
+
+    if (targetLayerIndex < 0) {
+      // Z sits above everything the metadata describes: keep it in the last
+      // known layer, creating a bootstrap layer if none exist yet.
+      if (this.indexes.length === 0) {
+        this.indexes.push(new Layer(pathZ, LayersMetadataIndexer.DEFAULT_LAYER_HEIGHT));
+      }
+      path.layerIndex = this.indexes.length - 1;
+      this.lastLayer!.paths.push(path);
+      return;
+    }
+
+    this.ensureLayersUpTo(targetLayerIndex, pathZ);
+    this.currentMetadataLayerIndex = targetLayerIndex;
+    path.layerIndex = targetLayerIndex;
+    this.indexes[targetLayerIndex].paths.push(path);
+  }
+
+  /**
+   * Finds the metadata layer a path at the given Z belongs to.
+   * @param pathZ - Z position of the path
+   * @returns Layer index, or -1 when the Z is above all known layers
+   */
+  private findLayerIndexForZ(pathZ: number): number {
+    for (let i = this.currentMetadataLayerIndex; i < this.layerMetadata.length; i++) {
+      const z = this.layerMetadata[i].z;
+      // Metadata without a Z falls back to plain layer order.
+      if (z === undefined) return i;
+      if (pathZ <= z + LayersMetadataIndexer.Z_MATCH_TOLERANCE) return i;
+    }
+    return -1;
+  }
+
+  /**
+   * Creates layers from metadata up to and including the target index.
+   * @param targetIndex - Highest layer index that must exist
+   * @param fallbackZ - Z to use when a layer's metadata omits it
+   */
+  private ensureLayersUpTo(targetIndex: number, fallbackZ: number): void {
+    while (this.indexes.length <= targetIndex) {
+      const metadata = this.layerMetadata[this.indexes.length];
+      const z = metadata.z ?? fallbackZ;
+      const height = metadata.height ?? LayersMetadataIndexer.DEFAULT_LAYER_HEIGHT;
+      this.indexes.push(new Layer(z, height));
     }
   }
 }

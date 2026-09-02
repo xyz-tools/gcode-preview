@@ -1,37 +1,25 @@
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
-import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
-import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 
-import { BuildVolume } from './build-volume';
+import { BuildVolume, type BuildVolumeDef } from './build-volume';
 import { type Disposable } from './helpers/three-utils';
 import { LineBox } from './helpers/line-box';
 
-import { Path } from './path';
 import { Job } from './job';
-import { createColorMaterial } from './helpers/colorMaterial';
+import { ObjectsManager } from './objects-manager';
+import { Path, PathType } from './path';
 
 import {
-  BatchedMesh,
-  BufferGeometry,
   Color,
   ColorRepresentation,
-  Euler,
-  Group,
-  Material,
   OrthographicCamera,
   PerspectiveCamera,
-  Plane,
   REVISION,
   Scene,
-  ShaderMaterial,
-  Vector3,
   WebGLRenderer,
-  MathUtils,
-  LineBasicMaterial
+  MathUtils
 } from 'three';
 
-export type BuildVolumeDef = Pick<BuildVolume, 'x' | 'y' | 'z' | 'smallGrid'>;
+export type { BuildVolumeDef };
 
 // Orthographic camera constants
 const PERSPECTIVE_FOV = 25;
@@ -61,8 +49,6 @@ export type SceneManagerOptions = {
   lineWidth?: number;
   /** Height of extruded lines */
   lineHeight?: number;
-  /** List of G-code commands considered non-travel moves */
-  nonTravelMoves?: string[];
   /** Minimum layer height threshold */
   minLayerThreshold?: number;
   /** Whether to render extrusion paths */
@@ -75,8 +61,6 @@ export type SceneManagerOptions = {
   topLayerColor?: ColorRepresentation;
   /** Color for travel moves */
   travelColor?: ColorRepresentation;
-  /** Colors for different tools */
-  toolColors?: Record<number, ColorRepresentation>;
   /** Disable color gradient between layers */
   disableGradient?: boolean;
   /** Width of extruded material */
@@ -109,117 +93,85 @@ export class SceneManager {
   /** Canvas element being rendered to */
   canvas: HTMLCanvasElement;
   /** Whether to render extrusion paths */
-  renderExtrusion = true;
+  private _renderExtrusion = true;
   /** Whether to render travel moves */
-  renderTravel = false;
-  /** Whether to render paths as 3D tubes */
-  renderTubes = false;
-  /** Width of extruded material */
-  extrusionWidth?: number;
-  /** Width of rendered lines */
-  lineWidth?: number;
-  /** Height of extruded lines */
-  lineHeight = 0.2;
+  private _renderTravel = false;
   /** First layer to render (1-based index) */
-  _startLayer?: number;
+  private _startLayer?: number;
   /** Last layer to render (1-based index) */
-  _endLayer?: number;
+  private _endLayer?: number;
   /** Whether single layer mode is enabled */
-  _singleLayerMode = false;
-  /** Build volume dimensions */
-  private _buildVolume?: BuildVolume;
+  private _singleLayerMode = false;
   /** Initial camera position [x, y, z] */
-  initialCameraPosition = [-100, 400, 450];
+  private initialCameraPosition = [-100, 400, 450];
   /** Whether to use inches instead of millimeters */
-  inches = false;
-  /** List of G-code commands considered non-travel moves */
-  nonTravelmoves: string[] = [];
+  private _inches = false;
   /** Disable color gradient between layers */
-  disableGradient = false;
+  private _disableGradient = false;
   job: Job;
-  /** Bounding box mesh */
-  private boundingBoxMesh?: LineBox;
-  /** Color for the bounding box */
-  private _boundingBoxColor?: Color;
 
   // rendering
-  /** Group containing all rendered paths */
-  private group?: Group;
   /** Disposable resources */
   private disposables: Disposable[] = [];
   /** Default extrusion color */
-  static readonly defaultExtrusionColor = new Color('hotpink');
-  /** Current extrusion color(s) */
-  private _extrusionColor: Color | Color[] = SceneManager.defaultExtrusionColor;
+  static readonly defaultExtrusionColor = ObjectsManager.defaultExtrusionColor;
   /** Animation frame ID */
   private animationFrameId?: number;
-  /** Current path index for animated rendering */
-  private renderPathIndex?: number;
   /** Previous start layer before single layer mode */
   private prevStartLayer = 0;
-
-  // shader material
-  private materials: ShaderMaterial[] = [];
-  private _ambientLight = 0.4;
-  private _directionalLight = 1.3;
-  private _brightness = 1.3;
-
   // colors
   /** Background color */
   private _backgroundColor = new Color(0xe0e0e0);
-  /** Travel move color */
-  private _travelColor = new Color(0x990000);
   /** Top layer color */
   private _topLayerColor?: Color;
   /** Last segment color */
   private _lastSegmentColor?: Color;
-  /** Tool-specific colors */
-  private _toolColors: Record<number, Color> = {};
+  /** Layer index the top-layer/last-segment highlight is currently drawn on */
+  private _highlightedLayerIndex?: number;
+  /** The path the highlight last treated as the layer's last-received path */
+  private _highlightedLastPath?: Path;
   /** Last render time in milliseconds */
   lastRenderTime = 0;
   /** Whether to render in wireframe mode */
-  _wireframe = false;
+  private _wireframe = false;
   /** Whether to preserve drawing buffer */
   private preserveDrawingBuffer = false;
-  private currentChunk: Group;
-  private onFrame: () => void;
+  /**
+   * Called after every rendered frame, for consumers that track render stats.
+   * @remarks
+   * Holds a single callback: assigning it replaces any previous one.
+   */
+  onFrameRendered?: () => void;
+  private objectsManager: ObjectsManager;
 
   /**
    * Creates a new SceneManager instance
    * @param opts - Configuration options
    * @throws Error if no canvas element is provided
    */
-  constructor(opts: SceneManagerOptions, job: Job, onFrame?: () => void) {
+  constructor(opts: SceneManagerOptions, job: Job) {
     this.job = job;
     this.scene = new Scene();
+    this.objectsManager = this.createObjectsManager(opts.lineWidth ?? 1, opts.lineHeight, opts.extrusionWidth);
     this.scene.background = this._backgroundColor;
     if (opts.backgroundColor !== undefined) {
       this.backgroundColor = new Color(opts.backgroundColor);
     }
     this.endLayer = opts.endLayer;
     this.startLayer = opts.startLayer;
-    this.lineWidth = opts.lineWidth ?? 1;
-    this.lineHeight = opts.lineHeight ?? this.lineHeight;
+
     if (opts.buildVolume) {
-      this._buildVolume = new BuildVolume(
-        opts.buildVolume.x,
-        opts.buildVolume.y,
-        opts.buildVolume.z,
-        opts.buildVolume.smallGrid,
-        this.scene
-      );
-      this.disposables.push(this._buildVolume);
+      this.objectsManager.setBuildVolume(opts.buildVolume);
     }
     this.initialCameraPosition = opts.initialCameraPosition ?? this.initialCameraPosition;
-    this.renderExtrusion = opts.renderExtrusion ?? this.renderExtrusion;
-    this.renderTravel = opts.renderTravel ?? this.renderTravel;
-    this.nonTravelmoves = opts.nonTravelMoves ?? this.nonTravelmoves;
-    this.renderTubes = opts.renderTubes ?? this.renderTubes;
-    this.extrusionWidth = opts.extrusionWidth;
-    this.onFrame = onFrame;
+    // assign the backing fields directly: the setters would draw the scene before
+    // the colors below have been applied, and initScene() draws it once anyway
+    this._renderExtrusion = opts.renderExtrusion ?? this._renderExtrusion;
+    this._renderTravel = opts.renderTravel ?? this._renderTravel;
+    this.objectsManager.renderTubes = opts.renderTubes ?? this.objectsManager.renderTubes;
 
     if (opts.boundingBoxColor !== undefined) {
-      this._boundingBoxColor = new Color(opts.boundingBoxColor);
+      this.objectsManager.setBoundingBoxColor(new Color(opts.boundingBoxColor));
     }
 
     if (!opts.canvas) {
@@ -232,22 +184,17 @@ export class SceneManager {
     if (opts.travelColor !== undefined) {
       this.travelColor = new Color(opts.travelColor);
     }
+    // assign the backing fields directly: the setters would draw the scene before
+    // initScene() does, and it walks the paths once anyway
     if (opts.topLayerColor !== undefined) {
-      this.topLayerColor = new Color(opts.topLayerColor);
+      this._topLayerColor = new Color(opts.topLayerColor);
     }
     if (opts.lastSegmentColor !== undefined) {
-      this.lastSegmentColor = new Color(opts.lastSegmentColor);
+      this._lastSegmentColor = new Color(opts.lastSegmentColor);
     }
-    if (opts.toolColors) {
-      this._toolColors = {};
-      for (const [key, value] of Object.entries(opts.toolColors)) {
-        this._toolColors[parseInt(key)] = new Color(value);
-      }
-    }
-
-    if (opts.disableGradient !== undefined) {
-      this.disableGradient = opts.disableGradient;
-    }
+    // set the backing field directly: the setter re-renders, but initScene() below
+    // draws the scene once with this value already applied
+    this._disableGradient = opts.disableGradient ?? this._disableGradient;
 
     console.info('Using THREE r' + REVISION);
     console.debug('preview options', opts);
@@ -257,6 +204,7 @@ export class SceneManager {
       canvas: this.canvas,
       preserveDrawingBuffer: this.preserveDrawingBuffer
     });
+    this.disposables.push(this.renderer);
 
     this.renderer.localClippingEnabled = true;
     this.camera = this.createCamera(opts.orthographic ?? false);
@@ -264,7 +212,8 @@ export class SceneManager {
     this.resize();
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.target.set(this._buildVolume.x / 2, 0, -this._buildVolume.y / 2);
+    this.controls.target.set(this.buildVolume.x / 2, 0, -this.buildVolume.y / 2);
+    this.disposables.push(this.controls);
     this.loadCamera();
 
     this.initScene();
@@ -272,11 +221,26 @@ export class SceneManager {
   }
 
   /**
+   * Builds an ObjectsManager wired to rebuild the scene when geometry is invalidated.
+   * @remarks
+   * The manager decides *whether* a change needs new geometry; this callback is
+   * how it asks for the paths to be walked again.
+   */
+  private createObjectsManager(lineWidth: number, lineHeight?: number, extrusionWidth?: number): ObjectsManager {
+    const manager = new ObjectsManager(this.scene, lineWidth, lineHeight, extrusionWidth, () => {
+      if (this.job) this.render();
+    });
+    this.disposables.push(manager);
+
+    return manager;
+  }
+
+  /**
    * Gets the current build volume
    * @returns Current build volume or undefined if not set
    */
   get buildVolume(): BuildVolume | undefined {
-    return this._buildVolume;
+    return this.objectsManager.buildVolume;
   }
 
   /**
@@ -284,18 +248,7 @@ export class SceneManager {
    * @param value - Partial build volume properties (x, y, z, smallGrid)
    */
   set buildVolume(value: BuildVolumeDef | undefined) {
-    if (!value) {
-      this._buildVolume?.dispose();
-      this._buildVolume = undefined;
-      return;
-    }
-
-    this._buildVolume = new BuildVolume(value.x, value.y, value.z, value.smallGrid, this.scene);
-
-    if (this._buildVolume) {
-      this.disposables.push(this._buildVolume);
-      this._buildVolume.update();
-    }
+    this.objectsManager.setBuildVolume(value);
   }
 
   /**
@@ -303,7 +256,7 @@ export class SceneManager {
    * @returns Color or array of colors for extruded paths
    */
   get extrusionColor(): Color | Color[] {
-    return this._extrusionColor;
+    return this.objectsManager.extrusionColor;
   }
 
   /**
@@ -311,38 +264,9 @@ export class SceneManager {
    * @param value - Color value(s) as number, string, Color instance, or array of ColorRepresentation
    */
   set extrusionColor(value: number | string | Color | ColorRepresentation[]) {
-    if (Array.isArray(value)) {
-      this._extrusionColor = [];
-      // loop over the object and convert all colors to Color
-      for (const [index, color] of value.entries()) {
-        this._extrusionColor[index] = new Color(color);
-        if (!this.materials[index]) {
-          this.materials[index] = createColorMaterial(
-            this._extrusionColor[index].getHex(),
-            this.ambientLight,
-            this.directionalLight,
-            this.brightness
-          );
-        }
-        const material = this.materials[index];
-        if (material && material.uniforms) {
-          material.uniforms.uColor.value = this._extrusionColor[index];
-        }
-      }
-      return;
-    }
-
-    this._extrusionColor = new Color(value);
-    if (!this.materials[0]) {
-      this.materials[0] = createColorMaterial(
-        this._extrusionColor.getHex(),
-        this.ambientLight,
-        this.directionalLight,
-        this.brightness
-      );
-    }
-
-    this.materials[0].uniforms.uColor.value = this._extrusionColor;
+    this.objectsManager.setExtrusionColor(
+      Array.isArray(value) ? value.map((color) => new Color(color)) : new Color(value)
+    );
   }
 
   /**
@@ -367,7 +291,7 @@ export class SceneManager {
    * @returns Current travel move color
    */
   get travelColor(): Color {
-    return this._travelColor;
+    return this.objectsManager.travelColor;
   }
 
   /**
@@ -375,7 +299,7 @@ export class SceneManager {
    * @param value - Color value as number, string, or Color instance
    */
   set travelColor(value: number | string | Color) {
-    this._travelColor = new Color(value);
+    this.objectsManager.setTravelColor(new Color(value));
   }
 
   /**
@@ -388,10 +312,16 @@ export class SceneManager {
 
   /**
    * Sets the top layer color
+   * @remarks
+   * Highlighting the top layer picks specific paths out of the per-tool batches,
+   * so a change redraws the scene rather than recoloring in place.
    * @param value - Color value or undefined to clear
    */
   set topLayerColor(value: ColorRepresentation | undefined) {
-    this._topLayerColor = value !== undefined ? new Color(value) : undefined;
+    const next = value !== undefined ? new Color(value) : undefined;
+    if (this.sameColor(this._topLayerColor, next)) return;
+    this._topLayerColor = next;
+    if (this.job) this.render();
   }
 
   /**
@@ -404,10 +334,22 @@ export class SceneManager {
 
   /**
    * Sets the last segment color
+   * @remarks
+   * Highlighting the last segment splits the final path out of its batch, so a
+   * change redraws the scene rather than recoloring in place.
    * @param value - Color value or undefined to clear
    */
   set lastSegmentColor(value: ColorRepresentation | undefined) {
-    this._lastSegmentColor = value !== undefined ? new Color(value) : undefined;
+    const next = value !== undefined ? new Color(value) : undefined;
+    if (this.sameColor(this._lastSegmentColor, next)) return;
+    this._lastSegmentColor = next;
+    if (this.job) this.render();
+  }
+
+  /** Compares two optional colors, treating two unset colors as equal. */
+  private sameColor(a?: Color, b?: Color): boolean {
+    if (a === undefined || b === undefined) return a === b;
+    return a.equals(b);
   }
 
   /**
@@ -415,7 +357,7 @@ export class SceneManager {
    * @returns Color representation or undefined if not set
    */
   get boundingBoxColor(): ColorRepresentation | undefined {
-    return this._boundingBoxColor;
+    return this.objectsManager.boundingBoxColor;
   }
 
   /**
@@ -423,7 +365,7 @@ export class SceneManager {
    * @param value - Color value or undefined to hide the bounding box
    */
   set boundingBoxColor(value: ColorRepresentation | undefined) {
-    this._boundingBoxColor = value !== undefined ? new Color(value) : undefined;
+    this.objectsManager.setBoundingBoxColor(value !== undefined ? new Color(value) : undefined);
 
     this.renderBoundingBox();
   }
@@ -450,80 +392,99 @@ export class SceneManager {
     this.updateClippingPlanes();
   }
 
+  get renderExtrusion(): boolean {
+    return this._renderExtrusion;
+  }
+  set renderExtrusion(value: boolean) {
+    this._renderExtrusion = value;
+    this.objectsManager.setExtrusionsVisible(value);
+    if (value) this.renderMissingPaths();
+  }
+
+  get renderTravel(): boolean {
+    return this._renderTravel;
+  }
+  set renderTravel(value: boolean) {
+    this._renderTravel = value;
+    this.objectsManager.setTravelsVisible(value);
+    if (value) this.renderMissingPaths();
+  }
+
+  get renderTubes(): boolean {
+    return this.objectsManager.renderTubes;
+  }
+  set renderTubes(value: boolean) {
+    this.objectsManager.setRenderTubes(value);
+  }
+
+  get boundingBoxMesh(): LineBox | undefined {
+    return this.objectsManager.boundingBoxMesh;
+  }
+
+  get lineWidth(): number | undefined {
+    return this.objectsManager.lineWidth;
+  }
+  set lineWidth(value: number | undefined) {
+    this.objectsManager.setLineWidth(value);
+  }
+
+  get lineHeight(): number {
+    return this.objectsManager.lineHeight;
+  }
+  set lineHeight(value: number) {
+    this.objectsManager.setLineHeight(value);
+  }
+
+  get extrusionWidth(): number | undefined {
+    return this.objectsManager.extrusionWidth;
+  }
+  set extrusionWidth(value: number | undefined) {
+    this.objectsManager.setExtrusionWidth(value);
+  }
+
+  get disableGradient(): boolean {
+    return this._disableGradient;
+  }
+  set disableGradient(value: boolean) {
+    if (value === this._disableGradient) return;
+    this._disableGradient = value;
+    // the ramp is baked into the line geometry, so switching it on or off means
+    // rebuilding the extrusion lines
+    if (this.job) this.render();
+  }
+
+  /**
+   * Whether the per-layer brightness gradient should be baked into the extrusion lines.
+   * @remarks
+   * The gradient only applies to flat lines: tubes carry their own shading, and
+   * single-layer mode shows one layer that should read at full color. A non-planar
+   * job (no layers) is filtered out downstream, where the layer count is known.
+   */
+  private get gradientEnabled(): boolean {
+    return !this._disableGradient && !this._singleLayerMode && !this.renderTubes;
+  }
+
   /**
    * Updates the clipping planes for the 3D preview based on the start and end layers.
    *
    * This method calculates the minimum and maximum Z values from the specified start and end layers.
-   * If the start layer is not defined, the minimum Z value defaults to 0.
-   * If the end layer is not defined, the maximum Z value defaults to Infinity.
+   * A bound that is unset — or that sits at the very end of the layer stack — leaves that side of
+   * the range unbounded: an endLayer equal to the layer count is no restriction, so moves outside
+   * the printed layers (travel moves above the top layer, most commonly) stay visible.
    *
    * It then updates the clipping planes for shader materials and line clipping using these Z values.
    *
-   * @private
    */
-  private updateClippingPlanes() {
-    const startLayer = this.job.layers[this._startLayer - 1];
-    const endLayer = this.job.layers[this._endLayer - 1];
-    const minZ = startLayer?.z - startLayer?.height;
-    const maxZ = endLayer?.z;
+  updateClippingPlanes() {
+    const bottomLayer = this._startLayer > 1 ? this.job.layers[this._startLayer - 1] : undefined;
+    const topLayer = this._endLayer < this.job.layers.length ? this.job.layers[this._endLayer - 1] : undefined;
+    // an open bound must stay undefined: subtracting through `?.` would produce
+    // NaN, which passes the !== undefined guards and ends up in plane constants
+    // and shader uniforms, where NaN comparisons are undefined behavior in GLSL
+    const minZ = bottomLayer === undefined ? undefined : bottomLayer.z - bottomLayer.height;
+    const maxZ = topLayer?.z;
 
-    this.updateClippingPlanesForShaderMaterials(minZ, maxZ);
-    this.updateLineClipping(minZ, maxZ);
-  }
-
-  /**
-   * Updates the clipping planes for all shader materials in the scene.
-   * This method sets the min and max Z values for the clipping planes in the shader materials.
-   *
-   * @param minZ - The minimum Z value for the clipping plane.
-   * @param maxZ - The maximum Z value for the clipping plane
-   */
-
-  private updateClippingPlanesForShaderMaterials(minZ: number, maxZ: number) {
-    this.materials.forEach((material) => {
-      material.uniforms.clipMinY.value = minZ;
-      material.uniforms.clipMaxY.value = maxZ;
-    });
-  }
-
-  /**
-   * Applies clipping planes to the specified material based on the minimum and maximum Z values.
-   *
-   * This method creates clipping planes for the top and bottom of the specified Z range,
-   * then applies them to the material's clippingPlanes property.
-   *
-   * @param material - Shader material to apply clipping planes to
-   * @param minZ - The minimum Z value for the clipping plane.
-   * @param maxZ - The maximum Z value for the clipping plane.
-   */
-  private createClippingPlanes(minZ: number | undefined, maxZ: number | undefined) {
-    const planes = [];
-    if (minZ !== undefined) {
-      planes.push(new Plane(new Vector3(0, 1, 0), -minZ));
-    }
-    if (maxZ !== undefined) {
-      planes.push(new Plane(new Vector3(0, -1, 0), maxZ));
-    }
-    return planes;
-  }
-
-  /**
-   * Updates the clipping planes for all `LineSegments2` objects in the scene.
-   * This method filters the scene's children to find instances of `LineSegments2`,
-   * then applies the clipping planes to their materials.
-   *
-   * @param minZ - The minimum Z value for the clipping plane.
-   * @param maxZ - The maximum Z value for the clipping plane.
-   */
-  private updateLineClipping(minZ: number | undefined, maxZ: number | undefined) {
-    // TODO: apply clipping selectively to travels lines and extrusion lines
-    // and/or use a clipping group
-    this.scene.traverse((obj) => {
-      if (obj instanceof LineSegments2) {
-        const material = obj.material as LineMaterial;
-        material.clippingPlanes = this.createClippingPlanes(minZ, maxZ);
-      }
-    });
+    this.objectsManager.updateClippingPlanes(minZ, maxZ);
   }
 
   /**
@@ -539,7 +500,6 @@ export class SceneManager {
    * @param value - Layer number to end rendering at
    */
   set endLayer(value: number | undefined) {
-    // console.debug('set endLayer', value);
     if (typeof value === 'number') {
       this._endLayer = MathUtils.clamp(value, 1, this.job.countLayers);
     } else {
@@ -578,42 +538,36 @@ export class SceneManager {
     } else {
       this._startLayer = this.prevStartLayer;
     }
+
+    // the visible range moved, so the clipping planes have to follow
+    this.updateClippingPlanes();
+
+    // entering or leaving single-layer mode flips whether the gradient applies, so
+    // rebuild the lines to avoid leaving the lone visible layer dimmed by the ramp
+    if (!this._disableGradient && !this.renderTubes) {
+      this.render();
+    }
   }
 
   get ambientLight(): number {
-    return this._ambientLight;
+    return this.objectsManager.ambientLight;
   }
   set ambientLight(value: number) {
-    this._ambientLight = value;
-
-    // update material uniforms
-    this.materials.forEach((material) => {
-      material.uniforms.ambient.value = value;
-    });
+    this.objectsManager.setAmbientLight(value);
   }
 
   get directionalLight(): number {
-    return this._directionalLight;
+    return this.objectsManager.directionalLight;
   }
   set directionalLight(value: number) {
-    this._directionalLight = value;
-
-    // update material uniforms
-    this.materials.forEach((material) => {
-      material.uniforms.directional.value = value;
-    });
+    this.objectsManager.setDirectionalLight(value);
   }
 
   get brightness(): number {
-    return this._brightness;
+    return this.objectsManager.brightness;
   }
   set brightness(value: number) {
-    this._brightness = value;
-
-    // update material uniforms
-    this.materials.forEach((material) => {
-      material.uniforms.brightness.value = value;
-    });
+    this.objectsManager.setBrightness(value);
   }
 
   get orthographic(): boolean {
@@ -656,8 +610,8 @@ export class SceneManager {
       const size = this.job.boundingBox.size;
       return Math.max(size.x, size.y, size.z) * FRUSTUM_PADDING;
     }
-    if (this._buildVolume) {
-      return Math.max(this._buildVolume.x, this._buildVolume.y, this._buildVolume.z) * FRUSTUM_PADDING;
+    if (this.buildVolume) {
+      return Math.max(this.buildVolume.x, this.buildVolume.y, this.buildVolume.z) * FRUSTUM_PADDING;
     }
     return DEFAULT_FRUSTUM_SIZE;
   }
@@ -671,63 +625,31 @@ export class SceneManager {
     this.animationFrameId = requestAnimationFrame(() => this.animate());
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
-    this.onFrame?.();
+    this.onFrameRendered?.();
   }
 
   /**
-   * Initializes the Three.js scene by clearing the existing model
+   * Initializes the Three.js scene by creating all necessary objects
    * @remarks
-   * Clears all existing scene objects and disposables, then adds build volume visualization
+   * Adds build volume visualization
    * and lighting if 3D tube rendering is enabled.
    */
   private initScene(): void {
-    this.materials = [];
+    this.renderPaths();
 
-    // Recursively remove all children from the main group and their descendants from the scene
-    const removeRecursively = (object: Group) => {
-      while (object.children.length > 0) {
-        const child = object.children[0];
-        if ((child as Group).children && (child as Group).children.length > 0) {
-          removeRecursively(child as Group);
-        }
-        object.remove(child);
-        this.scene.remove(child);
-      }
-    };
-    if (this.group) {
-      removeRecursively(this.group);
-    }
-
-    // while (this.disposables.length > 0) {
-    //   const disposable = this.disposables.pop();
-    //   if (disposable) disposable.dispose();
-    // }
-
-    if (this._buildVolume) {
-      this.disposables.push(this._buildVolume);
-      this._buildVolume.update();
-    }
+    this.renderBoundingBox();
   }
 
-  /**
-   * Creates a new Three.js group for organizing rendered paths
-   * @param name - Name for the group
-   * @returns Configured Three.js group
+  /** Resets the scene by clearing all existing objects and re-initializing
    * @remarks
-   * Sets up the group's orientation and position based on build volume dimensions.
-   * If no build volume is defined, uses a default position.
+   * Discards every path currently in the scene along with its geometries and
+   * materials, then calls initScene to rebuild from the job.
    */
-  private createGroup(name: string): Group {
-    const group = new Group();
-    group.name = name;
-    group.quaternion.setFromEuler(new Euler(-Math.PI / 2, 0, 0));
-    if (this._buildVolume) {
-      // group.position.set(-this._buildVolume.x / 2, 0, this._buildVolume.y / 2);
-    } else {
-      // FIXME: this is just a very crude approximation for centering
-      group.position.set(-100, 0, 100);
-    }
-    return group;
+  private resetScene() {
+    this.objectsManager.reset();
+    // reset() already disposed of any tracked highlight objects in bulk
+    this.resetHighlightTracking();
+    this.initScene();
   }
 
   /**
@@ -735,19 +657,10 @@ export class SceneManager {
    */
   render(): void {
     const startRender = performance.now();
-    this.group = this.group ?? this.createGroup('allLayers');
-    this.currentChunk = this.group;
-    this.initScene();
 
-    this.renderPathIndex = 0;
+    this.resetScene();
 
-    this.renderPaths();
-    if (this.boundingBoxColor !== undefined) {
-      this.renderBoundingBox();
-    }
-
-    this.scene.add(this.group);
-    this.renderer.render(this.scene, this.camera);
+    this.renderer?.render(this.scene, this.camera);
     this.lastRenderTime = performance.now() - startRender;
   }
 
@@ -761,29 +674,49 @@ export class SceneManager {
     // sensible default for pathCount
     pathCount = pathCount ?? Math.floor(this.job.paths.length / 60);
 
-    this.initScene();
-
-    this.renderPathIndex = 0;
-
-    if (this.renderPathIndex >= this.job.paths.length - 1) {
-      this.render();
+    if (this.job.paths.length <= 1) {
+      this.renderPaths();
     } else {
       return this.renderFrameLoop(pathCount > 0 ? Math.min(pathCount, this.job.paths.length) : 1);
     }
   }
 
   /**
+   * Draws the paths parsed so far on top of what is already on screen
+   * @internal
+   * @remarks
+   * Called by GCodePreview.readStream while a G-code stream is read, so the
+   * model grows on screen as chunks arrive — use processGCodeStream rather
+   * than calling this directly. Only paths that have not been drawn yet are
+   * built, and the last path is held back: it may still be growing, and a
+   * path is only ever built once. The top-layer/last-segment highlight, if
+   * configured, moves onto whatever has most recently arrived. The continuous
+   * animation loop presents the new geometry on the next frame.
+   */
+  renderProgressive(): void {
+    if (!this.job) return;
+
+    this.renderPaths(Math.max(0, this.job.paths.length - 1));
+  }
+
+  /**
    * Animation loop that renders paths incrementally
    * @param pathCount - Number of paths to render per frame
    * @returns Promise that resolves when all paths are rendered
+   * @remarks
+   * The cursor walks the job's combined path list; the ObjectsManager routes
+   * each prefix by category and skips what it has already drawn.
    */
   private renderFrameLoop(pathCount: number): Promise<void> {
     return new Promise((resolve) => {
+      let drawnUpTo = 0;
       const loop = () => {
-        if (this.renderPathIndex >= this.job.paths.length - 1) {
+        if (drawnUpTo >= this.job.paths.length) {
+          // the returned promise is the completion signal
           resolve();
         } else {
-          this.renderFrame(pathCount);
+          drawnUpTo = Math.min(drawnUpTo + pathCount, this.job.paths.length);
+          this.renderFrame(drawnUpTo);
           requestAnimationFrame(loop);
         }
       };
@@ -792,64 +725,55 @@ export class SceneManager {
   }
 
   /**
-   * Renders a frame with the specified number of paths
-   * @param pathCount - Number of paths to render in this frame
-   * @remarks
-   * Creates a new group for the frame and renders paths up to the specified count.
-   * Updates the renderPathIndex to track progress through the job's paths.
+   * Renders one animation frame containing the paths up to the given index
+   * @param endPathNumber - End index into the job's combined path list
    */
-  private renderFrame(pathCount: number): void {
-    if (!this.group) {
-      this.group = this.createGroup('allLayers');
-      this.scene.add(this.group);
-    }
-    const chunk = new Group();
-    chunk.name = 'chunk' + this.renderPathIndex;
-    this.currentChunk = chunk;
-    const endPathNumber = Math.min(this.renderPathIndex + pathCount, this.job.paths.length - 1);
+  private renderFrame(endPathNumber: number): void {
     this.renderPaths(endPathNumber);
-    if (this._boundingBoxColor !== undefined) {
-      this.renderBoundingBox();
-    }
-    this.renderPathIndex = endPathNumber;
-    this.group?.add(chunk);
+
+    this.renderBoundingBox();
+    this.renderer.render(this.scene, this.camera);
   }
 
   private renderBoundingBox(): void {
     if (!this.job) return;
-    if (!this.job.boundingBox.isValid) {
-      console.error('Invalid bounding box, skipping rendering');
-      return;
-    }
 
-    // create the bounding box mesh if it doesn't exist
-    if (!this.boundingBoxMesh) {
-      this.boundingBoxMesh = this.createBoundingBox();
-      this.boundingBoxMesh.name = 'bounding-box';
-      this.disposables.push(this.boundingBoxMesh);
-
-      this.scene.add(this.boundingBoxMesh);
-    }
-
-    this.boundingBoxMesh.visible = this._boundingBoxColor !== undefined;
-    (this.boundingBoxMesh.material as LineBasicMaterial).color = this._boundingBoxColor;
-  }
-
-  createBoundingBox(): LineBox {
-    const bb = this.job.boundingBox;
-    const size = bb.size;
-    const mesh = new LineBox(size.x, size.z, size.y, this._boundingBoxColor, false);
-    const pos = bb.corners.min.toVector3();
-    mesh.position.set(pos.x, pos.y, pos.z);
-    return mesh;
+    this.objectsManager.updateBoundingBox(this.job.boundingBox);
   }
 
   // reset parser & processing state
   clear(): void {
+    // read the settings off the outgoing manager before it is torn down
+    const { lineWidth, lineHeight, extrusionWidth, renderTubes, ambientLight, directionalLight, brightness } =
+      this.objectsManager;
+    const { buildVolume, boundingBoxColor, extrusionColor, travelColor } = this.objectsManager;
+    // the bounding box belongs to the outgoing job, but the build volume does not:
+    // it is recreated on the replacement manager from the same dimensions
+    const buildVolumeDef = buildVolume
+      ? { x: buildVolume.x, y: buildVolume.y, z: buildVolume.z, smallGrid: buildVolume.smallGrid }
+      : undefined;
+
     this.startLayer = undefined;
     this.endLayer = Infinity;
     this._singleLayerMode = false;
     this.job = undefined;
+
+    // drop the old manager from disposables too, or dispose() would revisit it
+    this.disposables = this.disposables.filter((d) => d !== this.objectsManager);
+    this.objectsManager.dispose();
+    // dispose() already tore down any tracked highlight objects with it
+    this.resetHighlightTracking();
+    this.objectsManager = this.createObjectsManager(lineWidth, lineHeight, extrusionWidth);
+    // assign the fields directly: the fresh manager has no materials or geometry
+    // yet, so the setters' uniform writes and rebuild requests have nothing to do
+    this.objectsManager.renderTubes = renderTubes;
+    this.objectsManager.ambientLight = ambientLight;
+    this.objectsManager.directionalLight = directionalLight;
+    this.objectsManager.brightness = brightness;
+    this.objectsManager.boundingBoxColor = boundingBoxColor;
+    this.objectsManager.extrusionColor = extrusionColor;
+    this.objectsManager.travelColor = travelColor;
+    if (buildVolumeDef) this.objectsManager.setBuildVolume(buildVolumeDef);
   }
 
   resize(): void {
@@ -873,12 +797,9 @@ export class SceneManager {
   }
 
   dispose(): void {
+    this.cancelAnimation();
     this.disposables.forEach((d) => d.dispose());
     this.disposables = [];
-    this.controls.dispose();
-    this.renderer.dispose();
-
-    this.cancelAnimation();
   }
 
   /**
@@ -893,118 +814,128 @@ export class SceneManager {
   }
 
   /**
-   * Renders paths between the current render index and specified end index
-   * @param endPathNumber - End index of paths to render (default: Infinity)
+   * Builds any paths that have not been drawn yet, across the whole job.
+   * @remarks
+   * Turning a category back on reveals paths that were skipped while it was off.
+   * The ObjectsManager skips whatever it has already drawn, so this stays cheap.
+   */
+  private renderMissingPaths(): void {
+    if (!this.job) return;
+
+    this.renderPaths();
+  }
+
+  /**
+   * Draws the job's paths up to the given index of its combined path list.
+   * @param endPathNumber - End index into job.paths (default: all of them)
+   * @remarks
+   * The top layer and last segment highlights claim their paths first, so the
+   * per-tool batches leave them alone.
    */
   private renderPaths(endPathNumber: number = Infinity): void {
-    if (this.renderTravel) {
-      this.renderPathsAsLines(this.job.travels.slice(this.renderPathIndex, endPathNumber), this._travelColor);
+    this.objectsManager.setTravelsVisible(this._renderTravel);
+    this.objectsManager.setExtrusionsVisible(this._renderExtrusion);
+    this.objectsManager.gradientEnabled = this.gradientEnabled;
+    this.objectsManager.layerCount = this.job.countLayers;
+
+    const paths = this.job.paths.slice(0, endPathNumber);
+
+    if (this._renderExtrusion) {
+      this.renderTopLayerHighlight(paths);
     }
 
-    if (this.renderExtrusion) {
-      this.job.toolPaths.forEach((toolPaths, index) => {
-        const color = Array.isArray(this._extrusionColor) ? this._extrusionColor[index] : this._extrusionColor;
-        if (this.renderTubes) {
-          this.renderPathsAsTubes(toolPaths.slice(this.renderPathIndex, endPathNumber), color);
-        } else {
-          this.renderPathsAsLines(toolPaths.slice(this.renderPathIndex, endPathNumber), color);
-        }
-      });
+    this.objectsManager.renderPaths(paths, {
+      travels: this._renderTravel,
+      extrusions: this._renderExtrusion
+    });
+  }
+
+  /**
+   * Draws the topmost visible layer, and its final segment, in their highlight
+   * colors before the per-tool batches run.
+   * @param paths - The paths visible to this render call (the streaming-safe
+   * prefix during progressive rendering, or the whole job on a full render)
+   * @remarks
+   * Whichever draw claims a path first wins, so running before the per-tool
+   * batches is what lets the highlight colors take precedence.
+   *
+   * "Top layer" and "last segment" both mean the most recently *received* layer
+   * and segment, not the ones a finished print would settle on: while a stream
+   * is still being read the highlight keeps moving forward onto whatever just
+   * arrived, the same way it would on a printer's own live status display. Each
+   * time the highlighted layer or its last path changes, the previous highlight
+   * is reverted first so the layer it moved off of falls back to its normal
+   * tool color instead of staying stuck highlighted.
+   *
+   * `topLayerColor` recolors the whole visible top layer; `lastSegmentColor`
+   * recolors just the final segment of that layer's last path. When both are set
+   * the last segment is split off so it keeps its own color. When only
+   * `lastSegmentColor` is set the rest of the layer keeps its normal tool color.
+   *
+   * A structurally new top layer reverts the old highlight even if the new
+   * layer has nothing visible yet (its only path may be the streaming-safe
+   * window's held-back tail) — otherwise the previous layer would stay
+   * highlighted for as long as the new one takes to produce anything to show.
+   */
+  private renderTopLayerHighlight(paths: Path[]): void {
+    const topColor = this._topLayerColor;
+    const segColor = this._lastSegmentColor;
+    if (topColor === undefined && segColor === undefined) return;
+
+    const layers = this.job.layers;
+    // the visible top follows the end-layer clip so the highlight is never hidden
+    const topLayerIndex = (this._endLayer ?? layers.length) - 1;
+    const topLayer = layers[topLayerIndex];
+
+    // `paths` may be a prefix of the job — either the streaming-safe window
+    // during progressive rendering, or the current frame of a reveal animation
+    // — so a layer's paths only count once they have actually reached it
+    const layerExtrusions: Path[] = [];
+    if (topLayer) {
+      const visiblePaths = new Set(paths);
+      layerExtrusions.push(
+        ...topLayer.paths.filter((path) => path.travelType === PathType.Extrusion && visiblePaths.has(path))
+      );
     }
+    const lastPath: Path | undefined = layerExtrusions[layerExtrusions.length - 1];
+
+    // nothing new has arrived since the last draw: same layer, same last path
+    // (including both being empty, e.g. a non-planar job with no layers at all)
+    if (topLayerIndex === this._highlightedLayerIndex && lastPath === this._highlightedLastPath) return;
+
+    this.objectsManager.revertHighlight();
+    this._highlightedLayerIndex = topLayerIndex;
+    this._highlightedLastPath = lastPath;
+
+    if (lastPath === undefined) return; // reverted; nothing visible yet to draw in its place
+
+    // a segment needs two points; a shorter final path cannot be split
+    const splitSegment = segColor !== undefined && lastPath.vertices.length >= 6;
+
+    if (topColor !== undefined) {
+      const body = splitSegment ? layerExtrusions.slice(0, -1) : layerExtrusions;
+      this.objectsManager.renderExtrusionsInColor(body, topColor);
+    }
+
+    if (!splitSegment) return;
+
+    this.objectsManager.claimPaths([lastPath]);
+    const bodyColor = topColor ?? this.objectsManager.colorForTool(lastPath.tool);
+    const { body, segment } = lastPath.splitLastSegment();
+    if (body) this.objectsManager.renderExtrusionsInColor([body], bodyColor);
+    this.objectsManager.renderExtrusionsInColor([segment], segColor);
   }
 
-  /**
-   * Renders paths as 2D lines
-   * @param paths - Array of paths to render
-   * @param color - Color to use for the lines
+  /** Forgets which layer and path the highlight was last drawn on.
+   * @remarks
+   * Used when the scene it was drawn into is being discarded wholesale (a
+   * full reset or a fresh ObjectsManager), which drops the overlay objects
+   * themselves — without this the next draw would think the highlight is
+   * still in place and skip redrawing it.
    */
-  private renderPathsAsLines(paths: Path[], color: Color): void {
-    const minZ = this.job.layers[this._startLayer - 1]?.z;
-    const maxZ = this.job.layers[this._endLayer - 1]?.z;
-
-    let clippingPlanes: Plane[] = [];
-    clippingPlanes = this.createClippingPlanes(minZ, maxZ);
-
-    const material = new LineMaterial({
-      color: Number(color.getHex()),
-      linewidth: this.lineWidth,
-      clippingPlanes
-    });
-
-    const lineVertices: number[] = [];
-
-    // lines need to be offset.
-    // The gcode specifies the nozzle height which is the top of the extrusion.
-    // The line doesn't have a constant height in world coords so it should be rendered at horizontal midplane of the extrusion layer.
-    // Otherwise the line will be clipped by the clipping plane.
-    const offset = -this.lineHeight / 2;
-
-    paths.forEach((path) => {
-      for (let i = 0; i < path.vertices.length - 3; i += 3) {
-        lineVertices.push(path.vertices[i], path.vertices[i + 1] - 0.1, path.vertices[i + 2] + offset);
-        lineVertices.push(path.vertices[i + 3], path.vertices[i + 4] - 0.1, path.vertices[i + 5] + offset);
-      }
-    });
-
-    const geometry = new LineSegmentsGeometry().setPositions(lineVertices);
-    const line = new LineSegments2(geometry, material);
-
-    this.disposables.push(material);
-    this.disposables.push(geometry);
-    this.currentChunk?.add(line);
-  }
-
-  /**
-   * Renders paths as 3D tubes
-   * @param paths - Array of paths to render
-   * @param color - Color to use for the tubes
-   */
-  private renderPathsAsTubes(paths: Path[], color: Color): void {
-    const colorNumber = Number(color.getHex());
-    const geometries: BufferGeometry[] = [];
-
-    const material = createColorMaterial(colorNumber, this.ambientLight, this.directionalLight, this.brightness);
-
-    this.materials.push(material);
-
-    paths.forEach((path) => {
-      const geometry = path.geometry({
-        extrusionWidthOverride: this.extrusionWidth,
-        lineHeightOverride: this.lineHeight
-      });
-
-      if (!geometry) return;
-
-      this.disposables.push(geometry);
-      geometries.push(geometry);
-    });
-
-    const batchedMesh = this.createBatchMesh(geometries, material);
-    this.disposables.push(material);
-
-    this.currentChunk?.add(batchedMesh);
-  }
-
-  /**
-   * Creates a batched mesh from multiple geometries sharing the same material
-   * @param geometries - Array of geometries to batch
-   * @param material - Material to use for the batched mesh
-   * @returns Batched mesh instance
-   */
-  private createBatchMesh(geometries: BufferGeometry[], material: Material): BatchedMesh {
-    const maxVertexCount = geometries.reduce((acc, geometry) => geometry.attributes.position.count * 3 + acc, 0);
-
-    const batchedMesh = new BatchedMesh(geometries.length, maxVertexCount, undefined, material);
-    this.disposables.push(batchedMesh);
-
-    geometries.forEach((geometry) => {
-      const geometryId = batchedMesh.addGeometry(geometry);
-      // NOTE: for older versions of three.js, addInstance is not available
-      // This allow webgl1 browsers to use the batched mesh
-      batchedMesh.addInstance?.(geometryId);
-    });
-
-    return batchedMesh;
+  private resetHighlightTracking(): void {
+    this._highlightedLayerIndex = undefined;
+    this._highlightedLastPath = undefined;
   }
 
   saveCamera() {

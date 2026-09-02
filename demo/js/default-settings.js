@@ -21,14 +21,17 @@ export const defaultSettings = {
   renderTravel: false,
   travelColor: 'red',
   renderExtrusion: true,
+  disableGradient: false,
   lineWidth: 1,
   extrusionWidth: 0.4,
   colors: ['#ff0000', '#00ff00', '#0000ff', '#ffff00'],
   highlightTopLayer: false,
   topLayerColor: '#40BFBF',
   highlightLastSegment: false,
-  lastSegmentColor: null,
+  lastSegmentColor: '#FFFFFF',
   drawBuildVolume: true,
   backgroundColor: '#141414',
+  boundingBoxColor: '#A830F8',
+  drawBoundingBox: false,
   orthographic: false
 };

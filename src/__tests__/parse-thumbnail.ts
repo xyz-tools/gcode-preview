@@ -1,6 +1,6 @@
 import { test, expect } from 'vitest';
 
-import { Parser } from '../gcode-parser';
+import { Parser } from '../parser/gcode-parser';
 import { Thumbnail } from '../thumbnail';
 
 const gcodeCommentsWithThumbnail = `
@@ -39,6 +39,12 @@ test('not matching size should be invalid', () => {
   thumb.chars = encodedImg;
   thumb.charLength = encodedImg.length + 1;
   expect(thumb.isValid).toBeFalsy();
+});
+
+test('src should be a jpeg data URL of the base64 chars', () => {
+  const thumb = new Thumbnail('16x16', 16, 16, encodedImg.length);
+  thumb.chars = encodedImg;
+  expect(thumb.src).toEqual('data:image/jpeg;base64,' + encodedImg);
 });
 
 test('well-formatted thumbnail should be parsed', () => {
@@ -87,6 +93,34 @@ test('only 1 thumbnail should be parsed if "end thumbnail" is missing for the fi
   expect(Object.keys(parsed.metadata.thumbnails).length).toEqual(1);
   const secondThumb = Object.values(parsed.metadata.thumbnails)[0] as Thumbnail;
   expect(secondThumb.charLength).toEqual(secondThumb.chars.length);
+});
+
+test('thumbnail split mid-base64 across parseGCode calls should be parsed', () => {
+  // Streaming feeds each chunk to parseGCode separately, so the in-progress
+  // thumbnail must survive between calls on the same Parser instance.
+  const parser = new Parser(0);
+  const lines = gcodeCommentsWithThumbnail.trim().split('\n');
+
+  parser.parseGCode(lines.slice(0, 5).join('\n')); // begin + first data lines
+  parser.parseGCode(lines.slice(5, 9).join('\n')); // more base64, no markers
+  parser.parseGCode(lines.slice(9).join('\n')); // rest of the data + end
+
+  expect(Object.keys(parser.metadata.thumbnails).length).toEqual(1);
+  const thumb = Object.values(parser.metadata.thumbnails)[0] as Thumbnail;
+  expect(thumb.chars).toEqual(encodedImg);
+  expect(thumb.isValid).toBeTruthy();
+});
+
+test('thumbnail split between "thumbnail begin" and the data should be parsed', () => {
+  const parser = new Parser(0);
+  const lines = gcodeCommentsWithThumbnail.trim().split('\n');
+
+  parser.parseGCode(lines[0]); // only '; thumbnail begin 16x16 856'
+  parser.parseGCode(lines.slice(1).join('\n')); // all data lines + end
+
+  expect(Object.keys(parser.metadata.thumbnails).length).toEqual(1);
+  const thumb = Object.values(parser.metadata.thumbnails)[0] as Thumbnail;
+  expect(thumb.isValid).toBeTruthy();
 });
 
 test('skip thumb if not base64', () => {

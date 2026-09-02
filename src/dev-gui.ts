@@ -42,6 +42,7 @@ class DevGUI {
 
     this.gui = new GUI();
     this.gui.title('Dev info');
+    this.gui.close(); // start collapsed, so it stays out of the way until it's needed
 
     this.setup();
   }
@@ -90,7 +91,13 @@ class DevGUI {
    * Loads the state of open folders from localStorage
    */
   loadOpenFolders(): void {
-    this.openFolders = JSON.parse(localStorage.getItem('dev-gui-open') || '{}').open || [];
+    try {
+      this.openFolders = JSON.parse(localStorage.getItem('dev-gui-open') || '{}').open || [];
+    } catch {
+      // A corrupted entry must not take down the GUI (and with it the whole
+      // preview initialization); fall back to all folders closed.
+      this.openFolders = [];
+    }
   }
 
   /**
@@ -179,11 +186,38 @@ class DevGUI {
     parser.onOpenClose(() => {
       this.saveOpenFolders();
     });
-    parser.add(this.gcodePreview.job.state, 'x').listen();
-    parser.add(this.gcodePreview.job.state, 'y').listen();
-    parser.add(this.gcodePreview.job.state, 'z').listen();
+    // x/y/z are undefined until the job is homed (G28), and lil-gui cannot
+    // create a controller for an undefined value (add() returns undefined and
+    // .listen() throws). Read through a wrapper that shows NaN for an unknown
+    // axis so the controller stays numeric; reads are live so a job swap after
+    // clear() is picked up too.
+    const preview = this.gcodePreview;
+    const position = {
+      get x(): number {
+        return preview.job.state.x ?? NaN;
+      },
+      set x(value: number) {
+        preview.job.state.x = value;
+      },
+      get y(): number {
+        return preview.job.state.y ?? NaN;
+      },
+      set y(value: number) {
+        preview.job.state.y = value;
+      },
+      get z(): number {
+        return preview.job.state.z ?? NaN;
+      },
+      set z(value: number) {
+        preview.job.state.z = value;
+      }
+    };
+    parser.add(position, 'x').listen();
+    parser.add(position, 'y').listen();
+    parser.add(position, 'z').listen();
+    parser.add(this.gcodePreview.job.state, 'isHomed').listen();
     parser.add(this.gcodePreview.job.paths, 'length').name('paths.count').listen();
-    parser.add(this.gcodePreview.parser.lines, 'length').name('lines.count').listen();
+    parser.add(this.gcodePreview.parser, 'lineCount').name('lines.count').listen();
   }
 
   /**
@@ -222,7 +256,7 @@ class DevGUI {
     //   .onChange(() => {
     //     this.renderer.render();
     //   });
-    devHelpers.add(this.gcodePreview, 'render').listen();
+    devHelpers.add(this.gcodePreview.sceneManager, 'render').listen();
     devHelpers.add(this.gcodePreview, 'clear').listen();
     devHelpers.add(this.gcodePreview, 'dispose').listen();
 

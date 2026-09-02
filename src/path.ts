@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 import { BufferGeometry, Vector3 } from 'three';
 import { ExtrusionGeometry } from './extrusion-geometry';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
@@ -31,6 +30,9 @@ export class Path {
 
   /** Tool number used for this path */
   public tool: number;
+
+  /** Index of the layer this path belongs to, set by the LayersIndexer; undefined for non-planar jobs */
+  public layerIndex?: number;
 
   /** Internal storage for path vertices */
   private _vertices: number[];
@@ -66,6 +68,30 @@ export class Path {
    */
   addPoint(x: number, y: number, z: number): void {
     this._vertices.push(x, y, z);
+  }
+
+  /**
+   * Splits the path into its final segment and the body that precedes it.
+   * @returns The last two points as `segment`, and everything up to and including
+   * the segment's first point as `body` (null when the path is a single segment).
+   * Both carry this path's travel type, extrusion settings and tool.
+   * @remarks
+   * Requires at least two points; used to draw the final segment of a print in
+   * its own highlight color while the rest of the path keeps another one.
+   */
+  splitLastSegment(): { body: Path | null; segment: Path } {
+    const segment = this.subPath(this._vertices.slice(this._vertices.length - 6));
+    const body = this._vertices.length > 6 ? this.subPath(this._vertices.slice(0, this._vertices.length - 3)) : null;
+    return { body, segment };
+  }
+
+  /** Builds a path carrying this path's extrusion settings over a slice of vertices. */
+  private subPath(vertices: number[]): Path {
+    const path = new Path(this.travelType, this.extrusionWidth, this.lineHeight, this.tool);
+    for (let i = 0; i < vertices.length; i += 3) {
+      path.addPoint(vertices[i], vertices[i + 1], vertices[i + 2]);
+    }
+    return path;
   }
 
   /**
@@ -134,13 +160,5 @@ export class Path {
     }
 
     return new LineSegmentsGeometry().setPositions(lineVertices);
-  }
-
-  /**
-   * Checks if the path contains any vertical moves
-   * @returns True if any Z coordinates differ from the initial Z
-   */
-  hasVerticalMoves(): boolean {
-    return this.vertices.some((_, i, arr) => i % 3 === 2 && arr[i] !== arr[2]);
   }
 }

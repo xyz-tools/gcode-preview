@@ -164,7 +164,8 @@ Want to help out? We are open to your ideas and always willing to get you starte
    - unit tests
 
 ## Contributors 
-- ❤️ Thank you @sophiedeziel for rendering extrusion as tubes.
+- ❤️ Thank you @0xTHAC0 for adding the orthographic camera.
+- ❤️ Thank you @sophiedeziel for rendering extrusion as tubes and creating a new interpreter.
 - ❤️ Thank you @Sindarius for implementing G2/G3 arc support.
 - ❤️ Thank you @Zeng95 for providing a React & Typescript example.
 

@@ -1,4 +1,27 @@
-import { BufferGeometry, Float32BufferAttribute, Vector2, Vector3 } from 'three';
+import { BufferAttribute, BufferGeometry, Vector2, Vector3 } from 'three';
+
+// The ring of sines and cosines depends only on radialSegments, and in
+// practice every geometry is built with the same value, so the tables are
+// cached at module level and shared across all ExtrusionGeometry instances.
+// The cached arrays are shared: they must only ever be read, never mutated.
+const ringCache = new Map<number, { sin: Float64Array; cos: Float64Array }>();
+
+function ringTrig(radialSegments: number): { sin: Float64Array; cos: Float64Array } {
+  let ring = ringCache.get(radialSegments);
+  if (ring) return ring;
+
+  const sin = new Float64Array(radialSegments + 1);
+  const cos = new Float64Array(radialSegments + 1);
+  for (let j = 0; j <= radialSegments; j++) {
+    const angle = (j / radialSegments) * Math.PI * 2;
+    sin[j] = Math.sin(angle);
+    cos[j] = -Math.cos(angle);
+  }
+
+  ring = { sin, cos };
+  ringCache.set(radialSegments, ring);
+  return ring;
+}
 
 /**
  * A geometry class for extruding 3D paths into volumetric shapes
@@ -16,8 +39,6 @@ class ExtrusionGeometry extends BufferGeometry {
     lineHeight: number;
     /** Number of segments around the circumference */
     radialSegments: number;
-    /** Whether the path is closed */
-    closed: boolean;
   };
 
   /**
@@ -46,8 +67,7 @@ class ExtrusionGeometry extends BufferGeometry {
       points: points,
       lineWidth: lineWidth,
       lineHeight: lineHeight,
-      radialSegments: radialSegments,
-      closed: false
+      radialSegments: radialSegments
     };
 
     // helper variables
@@ -56,12 +76,40 @@ class ExtrusionGeometry extends BufferGeometry {
     const normal = new Vector3();
     const uv = new Vector2();
 
-    // buffer
+    // Scratch vectors for computeCornerAngles. It runs once per point, and
+    // allocating a fresh set each time means hundreds of thousands of short
+    // lived Vector3 on a real model. Every one is fully overwritten before use,
+    // and generateSegment consumes the result before the next call, so they are
+    // safe to share.
+    const tangent = new Vector3();
+    const cornerNormal = new Vector3();
+    const cornerBinormal = new Vector3();
+    const cross = new Vector3();
+    const nextDirection = new Vector3();
 
-    const vertices: number[] = [];
-    const normals: number[] = [];
-    const uvs: number[] = [];
-    const indices: number[] = [];
+    // buffers, sized up front from the path topology so they are filled in
+    // place. Growing plain arrays and letting three.js copy them into typed
+    // arrays afterwards costs both the repeated growth and the copy.
+    const ringSize = radialSegments + 1;
+    // one ring per point, plus the closing ring generateBufferData adds
+    const vertexCount = (points.length + 1) * ringSize;
+    const uvCount = points.length * ringSize;
+    const indexCount = Math.max(0, points.length - 1) * radialSegments * 6;
+
+    // Shared, read-only trig tables (see ringCache above); do not mutate.
+    const { sin: ringSin, cos: ringCos } = ringTrig(radialSegments);
+
+    const vertices = new Float32Array(vertexCount * 3);
+    const normals = new Float32Array(vertexCount * 3);
+    const uvs = new Float32Array(uvCount * 2);
+    // indices only ever reference this geometry's own vertices, so the widest
+    // value is vertexCount - 1
+    const indices = vertexCount > 65535 ? new Uint32Array(indexCount) : new Uint16Array(indexCount);
+
+    let vertexCursor = 0;
+    let normalCursor = 0;
+    let uvCursor = 0;
+    let indexCursor = 0;
 
     // create buffer data
 
@@ -69,10 +117,10 @@ class ExtrusionGeometry extends BufferGeometry {
 
     // build geometry
 
-    this.setIndex(indices);
-    this.setAttribute('position', new Float32BufferAttribute(vertices, 3));
-    this.setAttribute('normal', new Float32BufferAttribute(normals, 3));
-    this.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
+    this.setIndex(new BufferAttribute(indices, 1));
+    this.setAttribute('position', new BufferAttribute(vertices, 3));
+    this.setAttribute('normal', new BufferAttribute(normals, 3));
+    this.setAttribute('uv', new BufferAttribute(uvs, 2));
 
     // functions
 
@@ -84,15 +132,12 @@ class ExtrusionGeometry extends BufferGeometry {
         generateSegment(i);
       }
 
-      // if the geometry is not closed, generate the last row of vertices and normals
-      // at the regular position on the given path
-      //
-      // if the geometry is closed, duplicate the first row of vertices and normals (uvs will differ)
+      // generate the last row of vertices and normals at the regular position
+      // on the given path
 
-      generateSegment(closed === false ? points.length - 1 : 0);
+      generateSegment(points.length - 1);
 
-      // uvs are generated in a separate function.
-      // this makes it easy compute correct values for closed geometries
+      // uvs are generated in a separate function
 
       generateUVs();
 
@@ -113,9 +158,8 @@ class ExtrusionGeometry extends BufferGeometry {
       // generate points around the tangent
 
       for (let j = 0; j <= radialSegments; j++) {
-        const v = (j / radialSegments) * Math.PI * 2;
-        const sin = Math.sin(v);
-        const cos = -Math.cos(v);
+        const sin = ringSin[j];
+        const cos = ringCos[j];
 
         // normal
         normal.x = cos * N.x + sin * B.x;
@@ -123,14 +167,18 @@ class ExtrusionGeometry extends BufferGeometry {
         normal.z = cos * N.z + sin * B.z;
 
         normal.normalize();
-        normals.push(normal.x, normal.y, normal.z);
+        normals[normalCursor++] = normal.x;
+        normals[normalCursor++] = normal.y;
+        normals[normalCursor++] = normal.z;
 
         // vertex
 
         vertex.x = P.x + lineWidth * normal.x * 0.5;
         vertex.y = P.y + lineWidth * normal.y * 0.5;
         vertex.z = P.z + lineHeight * normal.z * 0.5;
-        vertices.push(vertex.x, vertex.y, vertex.z - lineHeight * 0.5);
+        vertices[vertexCursor++] = vertex.x;
+        vertices[vertexCursor++] = vertex.y;
+        vertices[vertexCursor++] = vertex.z - lineHeight * 0.5;
       }
     }
 
@@ -147,8 +195,12 @@ class ExtrusionGeometry extends BufferGeometry {
 
           // faces
 
-          indices.push(a, b, d);
-          indices.push(b, c, d);
+          indices[indexCursor++] = a;
+          indices[indexCursor++] = b;
+          indices[indexCursor++] = d;
+          indices[indexCursor++] = b;
+          indices[indexCursor++] = c;
+          indices[indexCursor++] = d;
         }
       }
     }
@@ -162,28 +214,36 @@ class ExtrusionGeometry extends BufferGeometry {
           uv.x = i / points.length;
           uv.y = j / radialSegments;
 
-          uvs.push(uv.x, uv.y);
+          uvs[uvCursor++] = uv.x;
+          uvs[uvCursor++] = uv.y;
         }
       }
     }
 
     /**
      * Computes the corner angles (position, normal, binormal) for a segment
+     *
+     * Note: the returned N/B vectors are shared scratch — consume them before
+     * the next call; do not store references.
      * @param i - Index of the segment
      * @returns Array containing position, normal and binormal vectors
      */
     function computeCornerAngles(i: number): Array<Vector3> {
       const P = points[i];
-      const tangent = new Vector3();
-      const N = new Vector3();
-      const B = new Vector3();
-      const vec = new Vector3();
+      const N = cornerNormal;
+      const B = cornerBinormal;
+      const vec = cross;
 
       tangent
         .copy(P)
         .sub(points[i - 1] || P)
         .normalize()
-        .add((points[i + 1] || P).clone().sub(P).normalize())
+        .add(
+          nextDirection
+            .copy(points[i + 1] || P)
+            .sub(P)
+            .normalize()
+        )
         .normalize();
 
       // Calculate the normal and binormal vectors for the segment

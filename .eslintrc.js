@@ -9,7 +9,7 @@ module.exports = {
     '@typescript-eslint/no-unused-vars': ['error'],
     '@typescript-eslint/no-unsafe-declaration-merging': 'off'
   },
-  ignorePatterns: ['dist', 'examples', 'demo/lib', 'demo/js/vue.esm-browser.prod.js'],
+  ignorePatterns: ['dist', 'demo/lib', 'demo/js/vue.esm-browser.prod.js'],
   env: {
     browser: true
   }

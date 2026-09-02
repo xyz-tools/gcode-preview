@@ -46,10 +46,11 @@ Every change, **intended or not**, must be:
 1. **Documented and visible.** Behavior changes (including bug fixes that alter
    rendering/output for existing files) must be called out explicitly in the PR
    description, not buried in the diff.
-2. **Truly covered by tests, in a convincing way.** A test must fail before your
-   change and pass after it. 
-3. **Tested end-to-end where applicable.** Supporting a new gcode command requires
-   at least one test that feeds a gcode snippet through the whole pipeline:
+2. **Truly covered by tests, in a convincing way.** Bug fixes should include
+   regression tests: a test that fails before your change and passes after it.
+3. **Tested end-to-end where applicable.** Supporting a new or updated gcode
+   command requires at least one test that feeds a gcode snippet through the
+   whole pipeline:
    `Parser.parseGCode` → `Interpreter.execute` (or the library's process entry point).
    Hand-instantiated `GCodeCommand` objects only prove the handler logic; they don't
    prove the parser maps the command word to the handler.
