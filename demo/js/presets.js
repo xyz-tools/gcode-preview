@@ -111,6 +111,27 @@ export const presets = {
       z: 0
     }
   },
+  treefrog: {
+    title: '2-color tree frog',
+    file: 'https://storage.googleapis.com/gcode-preview.firebasestorage.app/2color_treefrog.gcode',
+    model: {
+      name: '2-color tree frog',
+      designer: 'nervoussystem',
+      license: 'CC BY-NC',
+      original: 'https://www.thingiverse.com/thing:329436'
+    },
+    extrusionWidth: 0.45,
+    lineHeight: 0.2,
+    colors: ['#4a9c3f', '#e0a030'],
+    travelColor: 'red',
+    topLayerColor: undefined,
+    lastSegmentColor: undefined,
+    buildVolume: {
+      x: 250,
+      y: 250,
+      z: 0
+    }
+  },
   calicat: {
     title: 'Bounding box',
     file: 'gcodes/calicat.gcode',
