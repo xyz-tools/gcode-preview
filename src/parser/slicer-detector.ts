@@ -1,11 +1,19 @@
 import { GCodeCommand } from './gcode-parser';
 import { SlicerMetadataParser, SlicerMetadataResult } from './metadata-parser-base';
+import { CuraMetadataParser } from './cura-parser';
 import { PrusaFamilyMetadataParser } from './prusa-family-parser';
+import { Simplify3DMetadataParser } from './simplify3d-parser';
+import { Slic3rMetadataParser } from './slic3r-parser';
 
 /**
  * Available slicer metadata parsers
  */
-const AVAILABLE_PARSERS: SlicerMetadataParser[] = [new PrusaFamilyMetadataParser()];
+const AVAILABLE_PARSERS: SlicerMetadataParser[] = [
+  new PrusaFamilyMetadataParser(),
+  new Simplify3DMetadataParser(),
+  new Slic3rMetadataParser(),
+  new CuraMetadataParser()
+];
 
 /**
  * Detects which slicer generated the gcode and returns appropriate parser
