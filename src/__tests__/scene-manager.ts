@@ -1,19 +1,14 @@
 /* eslint-disable @typescript-eslint/no-empty-function */
 
-import { test, expect, vi, assert } from 'vitest';
+import { test, expect, vi } from 'vitest';
 
 import { SceneManager } from '../scene-manager';
 import { GCodeCommand } from '../parser/gcode-parser';
 
-// add a test for destroying the scene manager which should cancel the render loop.
-test('destroying the scene manager should dispose renderer and controls', async () => {
+test('destroying the scene manager should dispose renderer and controls', () => {
   const mock = createMockSceneManager();
   // dispose() empties the array, so keep a reference to assert against afterwards
   const disposables = [...mock.disposables];
-
-  SceneManager.prototype.animate.call(mock);
-  // wait 50ms
-  await new Promise((resolve) => setTimeout(resolve, 50));
 
   // destroy the scene manager
   SceneManager.prototype.dispose.call(mock);
@@ -27,44 +22,50 @@ test('destroying the scene manager should dispose renderer and controls', async 
   disposables.forEach((d) => {
     expect(d.dispose).toHaveBeenCalledTimes(1);
   });
-});
-
-// add a test for destroying the scene manager which should cancel the render loop.
-test('destroying the scene manager should call cancelAnimation', async () => {
-  const mock = createMockSceneManager();
-
-  SceneManager.prototype.animate.call(mock);
-
-  // wait 50ms
-  await new Promise((resolve) => setTimeout(resolve, 50));
-  let callCount = mock.renderer.render.mock.calls.length;
-  assert(callCount > 2, 'callCount > 2');
-  callCount = mock.controls.update.mock.calls.length;
-  assert(callCount > 2, 'callCount > 2');
-
-  // destroy the renderer
-  SceneManager.prototype.dispose.call(mock);
+  // no frame was pending, so there was nothing to cancel — but the id is cleared
   expect(mock.cancelAnimation).toHaveBeenCalledTimes(1);
 });
 
-test('cancelAnimation should cancel the render loop', async () => {
+test('requestRender draws exactly one frame, then goes idle', async () => {
   const mock = createMockSceneManager();
 
-  SceneManager.prototype.animate.call(mock);
-
-  // wait 50ms
-  await new Promise((resolve) => setTimeout(resolve, 50));
-
-  mock.cancelAnimation();
+  SceneManager.prototype.requestRender.call(mock);
 
   await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(mock.renderer.render).toHaveBeenCalledTimes(1);
 
-  const callCountAfterDestroy = mock.renderer.render.mock.calls.length;
+  // no self-rearming loop: with nothing else requested, no further frames draw
   await new Promise((resolve) => setTimeout(resolve, 50));
-  const callCountAfterDestroy2 = mock.renderer.render.mock.calls.length;
+  expect(mock.renderer.render).toHaveBeenCalledTimes(1);
+});
 
-  // expect no more calls to render
-  expect(callCountAfterDestroy).toBe(callCountAfterDestroy2);
+test('a burst of requestRender calls coalesces into a single frame', async () => {
+  const mock = createMockSceneManager();
+
+  SceneManager.prototype.requestRender.call(mock);
+  SceneManager.prototype.requestRender.call(mock);
+  SceneManager.prototype.requestRender.call(mock);
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(mock.renderer.render).toHaveBeenCalledTimes(1);
+
+  // the pending flag was cleared, so a new request draws a new frame
+  SceneManager.prototype.requestRender.call(mock);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(mock.renderer.render).toHaveBeenCalledTimes(2);
+});
+
+test('destroying the scene manager should cancel a pending frame', async () => {
+  const mock = createMockSceneManager();
+
+  SceneManager.prototype.requestRender.call(mock);
+
+  // destroy the scene manager before the frame fires
+  SceneManager.prototype.dispose.call(mock);
+  expect(mock.cancelAnimation).toHaveBeenCalledTimes(1);
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(mock.renderer.render).not.toHaveBeenCalled();
 });
 
 test('renderProgressive draws the paths parsed so far, holding back the still-growing last one', () => {
@@ -146,7 +147,7 @@ function createMockSceneManager() {
     addLineSegment: () => {},
     doRenderExtrusion: () => {},
     render: vi.fn(() => {}),
-    animate: vi.fn(SceneManager.prototype.animate),
+    requestRender: vi.fn(SceneManager.prototype.requestRender),
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     cancelAnimation: vi.fn(SceneManager.prototype.cancelAnimation)

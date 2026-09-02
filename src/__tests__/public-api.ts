@@ -95,7 +95,7 @@ describe('public API surface', () => {
 
     const methods: Record<string, number> = {
       updateClippingPlanes: 0,
-      animate: 0,
+      requestRender: 0,
       render: 0,
       renderAnimated: 0,
       clear: 0,

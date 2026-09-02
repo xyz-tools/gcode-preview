@@ -34,6 +34,15 @@ vi.mock('three/examples/jsm/controls/OrbitControls.js', () => {
       screenSpacePanning = false;
       update = vi.fn();
       dispose = vi.fn();
+      // enough of an EventDispatcher for the on-demand rendering wiring: the
+      // SceneManager listens for 'change' and the tests fire it
+      private listeners: Record<string, Array<() => void>> = {};
+      addEventListener(type: string, listener: () => void) {
+        (this.listeners[type] ??= []).push(listener);
+      }
+      dispatchEvent({ type }: { type: string }) {
+        (this.listeners[type] ?? []).forEach((listener) => listener());
+      }
     }
   };
 });
@@ -79,7 +88,7 @@ describe('SceneManager properties', () => {
   });
 
   afterEach(() => {
-    // stops the requestAnimationFrame loop started by the constructor
+    // cancels any on-demand frame still pending from the constructor or a setter
     sceneManager.dispose();
     vi.useRealTimers();
     vi.restoreAllMocks();
@@ -1226,13 +1235,130 @@ describe('SceneManager properties', () => {
       fresh.dispose();
     });
 
-    test('reports each rendered frame through onFrameRendered', () => {
+    test('reports each rendered frame through onFrameRendered', async () => {
       const onFrameRendered = vi.fn();
       sceneManager.onFrameRendered = onFrameRendered;
 
-      sceneManager.animate();
+      sceneManager.requestRender();
+      await flushFrame();
 
       expect(onFrameRendered).toHaveBeenCalled();
+    });
+  });
+
+  describe('on-demand rendering', () => {
+    const renderCount = () => vi.mocked(sceneManager.renderer.render).mock.calls.length;
+
+    test('the constructor schedules the first frame instead of drawing synchronously', async () => {
+      expect(renderCount()).toBe(0);
+
+      await flushFrame();
+
+      expect(renderCount()).toBe(1);
+    });
+
+    test('an idle scene draws no further frames', async () => {
+      await flushFrame();
+      const drawn = renderCount();
+
+      await flushFrame();
+      await flushFrame();
+
+      expect(renderCount()).toBe(drawn);
+    });
+
+    test('camera movement reported by the controls requests a frame', async () => {
+      await flushFrame();
+      const drawn = renderCount();
+
+      sceneManager.controls.dispatchEvent({ type: 'change' });
+      await flushFrame();
+
+      expect(renderCount()).toBe(drawn + 1);
+    });
+
+    test('a burst of changes coalesces into a single frame', async () => {
+      await flushFrame();
+      const drawn = renderCount();
+
+      sceneManager.backgroundColor = '#123456';
+      sceneManager.travelColor = '#654321';
+      sceneManager.ambientLight = 0.5;
+      await flushFrame();
+
+      expect(renderCount()).toBe(drawn + 1);
+    });
+
+    test('every visual property change requests a frame', () => {
+      const requested = vi.spyOn(sceneManager, 'requestRender');
+
+      const mutations: Array<() => void> = [
+        () => (sceneManager.backgroundColor = '#111111'),
+        () => (sceneManager.extrusionColor = '#222222'),
+        () => (sceneManager.travelColor = '#333333'),
+        () => (sceneManager.boundingBoxColor = '#444444'),
+        () => (sceneManager.buildVolume = { x: 100, y: 100, z: 100 }),
+        () => (sceneManager.startLayer = 1),
+        () => (sceneManager.endLayer = 2),
+        () => (sceneManager.singleLayerMode = true),
+        () => (sceneManager.renderExtrusion = false),
+        () => (sceneManager.renderTravel = true),
+        () => (sceneManager.ambientLight = 0.6),
+        () => (sceneManager.directionalLight = 1.1),
+        () => (sceneManager.brightness = 1.0),
+        () => sceneManager.resize()
+      ];
+
+      mutations.forEach((mutate, index) => {
+        mutate();
+        // strictly monotonic: each mutation added at least one request of its own
+        expect(requested.mock.calls.length).toBeGreaterThan(index);
+      });
+    });
+
+    test('the orthographic swap keeps camera movement requesting frames', async () => {
+      sceneManager.orthographic = true;
+      await flushFrame();
+      const drawn = renderCount();
+
+      // the swap replaced the controls; the listener must be bound to the new ones
+      sceneManager.controls.dispatchEvent({ type: 'change' });
+      await flushFrame();
+
+      expect(renderCount()).toBe(drawn + 1);
+    });
+
+    test('renderProgressive requests a frame to present the new paths', async () => {
+      await flushFrame();
+      const drawn = renderCount();
+
+      sceneManager.renderProgressive();
+      await flushFrame();
+
+      expect(renderCount()).toBe(drawn + 1);
+    });
+
+    test('clear requests a frame to present the emptied scene', async () => {
+      await flushFrame();
+      const drawn = renderCount();
+
+      sceneManager.clear();
+      await flushFrame();
+
+      expect(renderCount()).toBe(drawn + 1);
+    });
+
+    test('a geometry rebuild with no job presents the emptied scene without a rebuild', () => {
+      vi.useFakeTimers();
+      sceneManager.clear(); // leaves the manager without a job
+      const requested = vi.spyOn(sceneManager, 'requestRender');
+      const rendered = vi.spyOn(sceneManager, 'render');
+
+      sceneManager.lineWidth = 5;
+      vi.advanceTimersByTime(ObjectsManager.rebuildDebounce);
+
+      expect(requested).toHaveBeenCalled();
+      expect(rendered).not.toHaveBeenCalled();
     });
   });
 
@@ -1329,6 +1455,11 @@ describe('SceneManager properties', () => {
     });
   });
 });
+
+/** Waits for the animation frame an on-demand render is scheduled on. */
+function flushFrame(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
 
 /** Reaches the private ObjectsManager the SceneManager delegates to. */
 function objectsManager(sceneManager: SceneManager): ObjectsManager {
