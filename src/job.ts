@@ -1,4 +1,4 @@
-import { Path } from './path';
+import { Path, PathType } from './path';
 import { State } from './state';
 import { Layer } from './layer';
 import {
@@ -11,6 +11,7 @@ import {
 } from './indexers';
 import { BoundingBox } from './bounding-box';
 import { Metadata } from './parser/gcode-parser';
+import { JobStats } from './job-stats';
 
 /**
  * Represents a complete print job containing paths, layers, and state
@@ -39,6 +40,9 @@ export class Job {
   inprogressPath: Path | undefined;
   public boundingBox: BoundingBox = new BoundingBox();
   private _metadata: Metadata | undefined;
+
+  /** Statistics accumulated while interpreting the job's G-code */
+  public stats: JobStats = new JobStats();
 
   /**
    * Creates a new Job instance
@@ -133,6 +137,36 @@ export class Job {
       this.addPath(this.inprogressPath);
       this.inprogressPath = undefined;
     }
+  }
+
+  /**
+   * Resolves the current state's position for rendering.
+   * @returns The position as concrete `x`, `y`, `z` numbers
+   * @remarks
+   * An axis that has not been homed has an unknown (`undefined`) position. The
+   * job chooses to assume the origin (`0`) for such axes so the viewer can
+   * still render best-effort (see #361); `state.isHomed` lets a consumer tell
+   * these assumed coordinates from real ones.
+   */
+  resolvePosition(): { x: number; y: number; z: number } {
+    return { x: this.state.x ?? 0, y: this.state.y ?? 0, z: this.state.z ?? 0 };
+  }
+
+  /**
+   * Finalizes the current in-progress path and starts a new one of the given type
+   * @param newType - Type of the new path
+   * @returns The newly created path, seeded with the current position
+   * @remarks
+   * Called when a path type change is detected (e.g. switching between travel
+   * and extrusion moves).
+   */
+  breakPath(newType: PathType): Path {
+    this.finishPath();
+    const currentPath = new Path(newType, 0.6, 0.2, this.state.tool);
+    const pos = this.resolvePosition();
+    currentPath.addPoint(pos.x, pos.y, pos.z);
+    this.inprogressPath = currentPath;
+    return currentPath;
   }
 
   /**

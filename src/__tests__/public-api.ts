@@ -205,7 +205,9 @@ describe('public API surface', () => {
     const methods: Record<string, number> = {
       addPath: 1,
       finishPath: 0,
-      resumeLastPath: 0
+      breakPath: 1,
+      resumeLastPath: 0,
+      resolvePosition: 0
     };
 
     it.each(Object.entries(methods))('has method %s with %d required parameter(s)', (name, arity) => {
@@ -225,6 +227,13 @@ describe('public API surface', () => {
       expect(job.boundingBox).toBeDefined();
       expect(job.inprogressPath).toBeUndefined();
     });
+
+    it.each(['retractions', 'deretractions', 'feedrateChanges', 'others', 'points', 'extrusionDistance'] as const)(
+      'starts stats counter %s at 0',
+      (name) => {
+        expect(new Job().stats[name]).toBe(0);
+      }
+    );
   });
 
   describe('no unexpected public surface shrinkage', () => {
