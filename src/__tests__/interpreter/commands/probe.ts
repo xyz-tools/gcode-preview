@@ -108,6 +108,16 @@ describe('probe (G31)', () => {
     expect(job.paths[0].vertices).toEqual([0, 0, 0, 5, 0, 0, 5, 0, -2]);
   });
 
+  test('a repeated probe without a lift stays at the trigger plane', () => {
+    // fast-probe-then-slow-probe without an intervening retract: the head is
+    // already sitting on the trigger, so the second probe must not dive
+    // through the plane
+    const job = run(['G0 Z0.5', 'G31 Z-10', 'G31 Z-2'].join('\n'));
+
+    expect(job.state.z).toEqual(0);
+    expect(job.paths[0].vertices.slice(-1)[0]).toEqual(0);
+  });
+
   test('a touch-off cycle converges instead of drifting upward', () => {
     // The mach3.gcode idiom: probe, re-zero, lift, re-zero — twice. Without the
     // assumed Z0 trigger the position shift would grow every cycle (#437).

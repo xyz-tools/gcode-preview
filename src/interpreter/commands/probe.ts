@@ -7,11 +7,13 @@ import type { CommandHandler } from '../../interpreter';
  * @param job - Job instance to update
  * @remarks
  * A probe moves toward its target and stops on contact, at a point a previewer
- * cannot know. For a downward Z probe crossing the origin plane, the trigger
- * is assumed at physical Z0 (the material top on the origin plane), which
- * makes the G92 re-zeroes that follow a touch-off converge each cycle exactly
- * like on a real machine (see #437). Other probes render as a plain travel to
- * the commanded target. The trigger is assumed on the Z axis only; X/Y targets
+ * cannot know. A probe below the origin plane from a known Z at or above it is
+ * assumed to trigger at physical Z0 (the material top on the origin plane),
+ * which makes the G92 re-zeroes that follow a touch-off converge each cycle
+ * exactly like on a real machine, and keeps a repeated probe without a lift
+ * sitting on the plane instead of diving through it (see #437). Other probes —
+ * including from an un-homed Z, whose real position is unknown — render as a
+ * plain travel to the commanded target. The trigger is assumed on the Z axis only; X/Y targets
  * are kept as commanded. A G31 carrying a P word is RepRapFirmware's
  * set-trigger-values form, not a move, and is ignored; one without any axis
  * words (e.g. Marlin's dock-sled G31) is also ignored.
@@ -33,8 +35,7 @@ export const probe: CommandHandler = (command, job) => {
     return;
   }
 
-  const from = job.resolvePosition();
-  if (z !== undefined && z < 0 && from.z > 0) {
+  if (z !== undefined && z < 0 && state.z !== undefined && state.z >= 0) {
     z = 0;
   }
 
