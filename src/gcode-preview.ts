@@ -147,7 +147,9 @@ export class GCodePreview {
     this.opts = opts;
     this._parser = this.createParser();
     this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
-    this.stats = this.devMode ? new Stats() : undefined;
+    // note: reads opts.devMode because this.devMode is only assigned below,
+    // once the scene manager needed by its setter exists
+    this.stats = opts.devMode ? new Stats() : undefined;
     this._sceneManager = this.createSceneManager();
     // the devMode setter also creates the dev GUI, so no separate initGui() call
     this.devMode = opts?.devMode;

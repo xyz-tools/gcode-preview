@@ -24,6 +24,7 @@ describe('GCodePreview', () => {
   let mockDevGui: ReturnType<typeof vi.fn>;
   let mockJob: ReturnType<typeof vi.fn>;
   let mockInterpreter: ReturnType<typeof vi.fn>;
+  let mockStats: { update: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn>; dom: HTMLDivElement };
 
   beforeEach(() => {
     // Create mock canvas
@@ -88,16 +89,20 @@ describe('GCodePreview', () => {
     vi.mocked(DevGUI).mockImplementation(function () {
       return mockDevGui;
     } as never);
+    mockStats = {
+      update: vi.fn(),
+      end: vi.fn(),
+      dom: document.createElement('div')
+    };
     vi.mocked(Stats).mockImplementation(function () {
-      return {
-        update: vi.fn(),
-        dom: document.createElement('div')
-      };
+      return mockStats;
     } as never);
   });
 
   afterEach(() => {
     vi.clearAllMocks();
+    // initStats appends the stats dom to document.body by default
+    mockStats.dom.remove();
   });
 
   describe('constructor', () => {
@@ -518,13 +523,55 @@ describe('GCodePreview', () => {
   describe('initStats method', () => {
     it('should not create stats when devMode is false', () => {
       preview = new GCodePreview({ canvas: mockCanvas, devMode: false });
+      expect(Stats).not.toHaveBeenCalled();
       expect(preview.stats).toBeUndefined();
     });
 
-    it('should not create stats initially when devMode is not set', () => {
+    it('should not create stats when devMode is not set', () => {
       preview = new GCodePreview({ canvas: mockCanvas });
-      // Stats should not be created initially because devMode is undefined at line 92
+      expect(Stats).not.toHaveBeenCalled();
       expect(preview.stats).toBeUndefined();
+    });
+
+    // regression: the constructor used to read this.devMode before assigning
+    // it from opts, so stats were never created even with devMode enabled
+    it('should create stats and append them to document.body when devMode is true', () => {
+      preview = new GCodePreview({ canvas: mockCanvas, devMode: true });
+
+      expect(Stats).toHaveBeenCalledTimes(1);
+      expect(mockStats.dom.parentElement).toBe(document.body);
+      expect(mockStats.dom.classList.contains('stats')).toBe(true);
+    });
+
+    it('should append stats to the statsContainer from devMode options', () => {
+      const statsContainer = document.createElement('div');
+      preview = new GCodePreview({ canvas: mockCanvas, devMode: { statsContainer } });
+
+      expect(mockStats.dom.parentElement).toBe(statsContainer);
+      expect(mockStats.dom.classList.contains('stats')).toBe(true);
+    });
+
+    it('should fall back to document.body when devMode options have no statsContainer', () => {
+      preview = new GCodePreview({ canvas: mockCanvas, devMode: {} });
+
+      expect(mockStats.dom.parentElement).toBe(document.body);
+    });
+  });
+
+  describe('stats updates on rendered frames', () => {
+    it('should update stats when the sceneManager reports a rendered frame', () => {
+      preview = new GCodePreview({ canvas: mockCanvas, devMode: true });
+
+      mockSceneManager.onFrameRendered();
+
+      expect(mockStats.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('should tolerate rendered frames when stats are disabled', () => {
+      preview = new GCodePreview({ canvas: mockCanvas });
+
+      expect(() => mockSceneManager.onFrameRendered()).not.toThrow();
+      expect(mockStats.update).not.toHaveBeenCalled();
     });
   });
 
@@ -538,6 +585,35 @@ describe('GCodePreview', () => {
       // Should not throw when disposing without stats
       expect(() => preview.dispose()).not.toThrow();
       expect(mockSceneManager.dispose).toHaveBeenCalled();
+    });
+
+    it('should stop stats and remove their dom element when stats exist', () => {
+      preview = new GCodePreview({ canvas: mockCanvas, devMode: true });
+      expect(mockStats.dom.parentElement).toBe(document.body);
+
+      preview.dispose();
+
+      expect(mockStats.end).toHaveBeenCalled();
+      expect(mockStats.dom.parentElement).toBeNull();
+    });
+  });
+
+  describe('initGui edge cases', () => {
+    it('should not create a dev GUI once the sceneManager is disposed', () => {
+      preview = new GCodePreview({ canvas: mockCanvas });
+      preview.dispose();
+
+      preview.devMode = true;
+
+      expect(DevGUI).not.toHaveBeenCalled();
+    });
+
+    it('should not create a dev GUI for a truthy devMode that is neither boolean nor object', () => {
+      preview = new GCodePreview({ canvas: mockCanvas });
+
+      preview.devMode = 'invalid' as never;
+
+      expect(DevGUI).not.toHaveBeenCalled();
     });
   });
 

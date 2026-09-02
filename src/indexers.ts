@@ -164,9 +164,6 @@ export class ToolIndexer extends Indexer {
   sortIn(path: Path): void {
     if (path.travelType === PathType.Extrusion) {
       this.indexes[path.tool] = this.indexes[path.tool] || [];
-      if (this.indexes[path.tool] === undefined) {
-        this.indexes[path.tool] = [];
-      }
       this.indexes[path.tool].push(path);
     }
   }
