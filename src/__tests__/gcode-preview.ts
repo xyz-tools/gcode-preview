@@ -486,6 +486,8 @@ describe('GCodePreview', () => {
 
     it('should handle empty stream chunks', async () => {
       preview = new GCodePreview({ canvas: mockCanvas });
+      const onStreamEnd = vi.fn();
+      preview.onStreamEnd = onStreamEnd;
 
       const stream = new ReadableStream({
         start(controller) {
@@ -496,8 +498,35 @@ describe('GCodePreview', () => {
 
       await preview.readStream(stream);
 
-      // Should handle empty chunk gracefully
+      // An empty chunk is skipped, not treated as end-of-stream: there is
+      // nothing to parse, but the stream still finishes normally
       expect(preview.parser.parseGCode).not.toHaveBeenCalled();
+      expect(onStreamEnd).toHaveBeenCalledTimes(1);
+    });
+
+    it('should process every chunk after an empty mid-stream chunk', async () => {
+      preview = new GCodePreview({ canvas: mockCanvas });
+      const onStreamEnd = vi.fn();
+      preview.onStreamEnd = onStreamEnd;
+
+      const stream = new ReadableStream({
+        start(controller) {
+          // TextDecoderStream can emit '' for a chunk holding only a partial
+          // multi-byte sequence; it must not truncate the rest of the stream
+          controller.enqueue('G1 X0 Y0\n');
+          controller.enqueue('');
+          controller.enqueue('G1 X10 Y10\n');
+          controller.close();
+        }
+      });
+
+      await preview.readStream(stream);
+
+      expect(preview.parser.parseGCode).toHaveBeenCalledTimes(2);
+      expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(1, 'G1 X0 Y0');
+      expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(2, 'G1 X10 Y10');
+      expect(mockInterpreter.execute).toHaveBeenCalledTimes(2);
+      expect(onStreamEnd).toHaveBeenCalledTimes(1);
     });
 
     it('should handle stream with tail data', async () => {
@@ -517,6 +546,27 @@ describe('GCodePreview', () => {
       // Should process all complete lines
       expect(preview.parser.parseGCode).toHaveBeenCalledTimes(2);
       expect(mockInterpreter.execute).toHaveBeenCalledTimes(2);
+    });
+
+    it('should flush and parse the tail when the last chunk has no trailing newline', async () => {
+      preview = new GCodePreview({ canvas: mockCanvas });
+
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue('G0 X0 Y0\n');
+          controller.enqueue('G1 X10 Y10');
+          controller.close();
+        }
+      });
+
+      await preview.readStream(stream);
+
+      // chunk 1 completes 'G0 X0 Y0', chunk 2 has no newline so it completes
+      // nothing (''), and the leftover tail is flushed after the stream ends
+      expect(preview.parser.parseGCode).toHaveBeenCalledTimes(3);
+      expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(1, 'G0 X0 Y0');
+      expect(preview.parser.parseGCode).toHaveBeenLastCalledWith('G1 X10 Y10');
+      expect(mockInterpreter.execute).toHaveBeenCalledTimes(3);
     });
   });
 
