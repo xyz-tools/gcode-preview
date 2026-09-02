@@ -35,13 +35,12 @@ export default defineConfig({
       reporter: ['text', 'html', 'lcov'],
       include: ['src/**/*.ts'],
       exclude: ['src/__tests__/**'],
-      // 100% coverage is the default for every file under src/. Files listed
-      // below are grandfathered at their current coverage and fail CI if they
-      // regress. Raise (and eventually remove) an entry as coverage improves.
+      // 100% coverage is required for every file under src/. To grandfather a
+      // file at lower coverage, add an entry after the spread pinning its
+      // current numbers, and raise (then remove) it as coverage improves.
       thresholds: {
         perFile: true,
-        ...Object.fromEntries(sourceFiles.map((file) => [file, fullCoverage])),
-        'src/extra/dom-utils.ts': { statements: 0, branches: 0, functions: 0, lines: 0 }
+        ...Object.fromEntries(sourceFiles.map((file) => [file, fullCoverage]))
       }
     }
   }
