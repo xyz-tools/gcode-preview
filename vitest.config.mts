@@ -41,7 +41,6 @@ export default defineConfig({
       thresholds: {
         perFile: true,
         ...Object.fromEntries(sourceFiles.map((file) => [file, fullCoverage])),
-        'src/dev-gui.ts': { statements: 0, branches: 0, functions: 0, lines: 0 },
         'src/extra/dom-utils.ts': { statements: 0, branches: 0, functions: 0, lines: 0 }
       }
     }

@@ -91,7 +91,13 @@ class DevGUI {
    * Loads the state of open folders from localStorage
    */
   loadOpenFolders(): void {
-    this.openFolders = JSON.parse(localStorage.getItem('dev-gui-open') || '{}').open || [];
+    try {
+      this.openFolders = JSON.parse(localStorage.getItem('dev-gui-open') || '{}').open || [];
+    } catch {
+      // A corrupted entry must not take down the GUI (and with it the whole
+      // preview initialization); fall back to all folders closed.
+      this.openFolders = [];
+    }
   }
 
   /**
