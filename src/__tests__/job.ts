@@ -556,6 +556,7 @@ describe('.finishPath', () => {
     const path = new Path(PathType.Extrusion, 0.6, 0.2, 0);
 
     path.addPoint(0, 0, 0);
+    path.addPoint(1, 2, 0);
 
     job.inprogressPath = path;
     job.finishPath();
@@ -573,11 +574,27 @@ describe('.finishPath', () => {
     expect(job.paths).toEqual([]);
   });
 
+  test('keeps a single-point path in progress instead of committing it', () => {
+    // A path holding only its seeded start point (e.g. left by a G92
+    // reposition) has no geometry: it must stay resumable, not be indexed
+    const job = new Job();
+    const path = new Path(PathType.Extrusion, 0.6, 0.2, 0);
+
+    path.addPoint(0, 0, 0);
+
+    job.inprogressPath = path;
+    job.finishPath();
+
+    expect(job.paths).toEqual([]);
+    expect(job.inprogressPath).toEqual(path);
+  });
+
   test('clears the in progress path', () => {
     const job = new Job();
     const path = new Path(PathType.Extrusion, 0.6, 0.2, 0);
 
     path.addPoint(0, 0, 0);
+    path.addPoint(1, 2, 0);
 
     job.inprogressPath = path;
     job.finishPath();
@@ -604,6 +621,23 @@ describe('.resumeLastPath', () => {
 
     expect(job.inprogressPath).toEqual(path);
     expect(job.paths).toEqual([]);
+  });
+
+  test('does not clobber a path that is already in progress', () => {
+    // e.g. a repositioned start point carried over from the previous chunk
+    const job = new Job();
+    const committed = append_path(job, PathType.Extrusion, [
+      [0, 0, 0],
+      [1, 2, 0]
+    ]);
+    const seed = new Path(PathType.Extrusion, 0.6, 0.2, 0);
+    seed.addPoint(5, 5, 0);
+    job.inprogressPath = seed;
+
+    job.resumeLastPath();
+
+    expect(job.inprogressPath).toEqual(seed);
+    expect(job.paths).toEqual([committed]);
   });
 
   test('the path is removed from indexes to not appear twice', () => {
