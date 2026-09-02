@@ -97,6 +97,20 @@ describe('.execute', () => {
     expect(job.paths[0].vertices[7]).toEqual(command2.params.y);
     expect(job.paths[0].vertices[8]).toEqual(command2.params.z);
   });
+
+  test('switches positioning modes in parsed G-code', () => {
+    const parser = new Parser();
+    const interpreter = new Interpreter();
+    const { commands } = parser.parseGCode(['G0 X10 Y10 Z10', 'G91', 'G1 X2 Y-3 Z1', 'G90', 'G1 X4 Y5 Z6']);
+
+    const result = interpreter.execute(commands);
+
+    expect(result.state.x).toEqual(4);
+    expect(result.state.y).toEqual(5);
+    expect(result.state.z).toEqual(6);
+    expect(result.state.positioning).toEqual('absolute');
+    expect(result.paths[0].vertices).toEqual([0, 0, 0, 10, 10, 10, 12, 7, 11, 4, 5, 6]);
+  });
 });
 
 describe('handler registry', () => {
@@ -106,6 +120,70 @@ describe('handler registry', () => {
 
   test('G3 is handled by the same handler as G2', () => {
     expect(handlers.get('g3')).toBe(handlers.get('g2'));
+  });
+});
+
+describe('positioning modes through the whole pipeline', () => {
+  const runGCode = (lines: string[]): { job: Job; arc: number[][] } => {
+    const parser = new Parser();
+    const interpreter = new Interpreter();
+    const job = interpreter.execute(parser.parseGCode(lines).commands);
+    const vertices = job.paths[0].vertices;
+    const points: number[][] = [];
+    for (let index = 0; index < vertices.length; index += 3) {
+      points.push([vertices[index], vertices[index + 1], vertices[index + 2]]);
+    }
+    // Drop the job origin and the point the setup move lands on, leaving the arc.
+    return { job, arc: points.slice(2) };
+  };
+
+  const distanceTo = (point: number[], centerX: number, centerY: number): number =>
+    Math.sqrt(Math.pow(point[0] - centerX, 2) + Math.pow(point[1] - centerY, 2));
+
+  test('an R-mode arc resolves its endpoint relative to the current position', () => {
+    // The radius branch derives deltaX/deltaY (and from those hDivD, i and j) from the
+    // resolved targets, so a raw x/y would put the whole arc in the wrong place rather
+    // than only misplacing the endpoint.
+    const { job, arc } = runGCode(['G0 X10 Y20', 'G91', 'G2 X10 Y0 R5']);
+
+    expect(job.state.x).toBeCloseTo(20);
+    expect(job.state.y).toBeCloseTo(20);
+    // A semicircle from (10,20) to (20,20): centre (15,20), radius 5.
+    arc.forEach((point) => expect(distanceTo(point, 15, 20)).toBeCloseTo(5));
+  });
+
+  test('a relative move leaves the axes it omits unchanged', () => {
+    const { job } = runGCode(['G0 X10 Y20 Z30', 'G91', 'G1 X10']);
+
+    expect(job.state.x).toEqual(20);
+    expect(job.state.y).toEqual(20);
+    expect(job.state.z).toEqual(30);
+  });
+
+  test('an arc without an X/Y endpoint draws a full circle', () => {
+    // No X/Y means start == end, which used to divide by a zero distance and emit NaN
+    // vertices. The whole-circle branch now sweeps a full 2*PI instead.
+    const { job, arc } = runGCode(['G0 X10 Y20', 'G2 I5 J0']);
+
+    expect(job.state.x).toEqual(10);
+    expect(job.state.y).toEqual(20);
+    arc.forEach((point) => {
+      expect(point.every((value) => Number.isFinite(value))).toBe(true);
+      expect(distanceTo(point, 15, 20)).toBeCloseTo(5);
+    });
+    // A partial arc would stay on one side of the centre; a full circle spans both.
+    expect(Math.min(...arc.map((point) => point[0]))).toBeCloseTo(10);
+    expect(Math.max(...arc.map((point) => point[0]))).toBeCloseTo(20);
+  });
+
+  test('I/J offsets stay relative to the arc start in relative mode', () => {
+    // Per the G-code spec, G90/G91 never applies to arc centre offsets. Routing i/j
+    // through resolvePosition would move this centre from (15,20) to (25,20).
+    const absolute = runGCode(['G0 X10 Y20', 'G90', 'G2 X20 Y20 I5 J0']);
+    const relative = runGCode(['G0 X10 Y20', 'G91', 'G2 X10 Y0 I5 J0']);
+
+    expect(relative.arc).toEqual(absolute.arc);
+    relative.arc.forEach((point) => expect(distanceTo(point, 15, 20)).toBeCloseTo(5));
   });
 });
 

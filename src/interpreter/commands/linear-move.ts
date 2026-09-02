@@ -1,5 +1,6 @@
 import { PathType } from '../../path';
 import type { CommandHandler } from '../../interpreter';
+import { resolvePosition } from './resolve-position';
 
 /**
  * Executes a linear move command (G0/G1)
@@ -44,9 +45,10 @@ export const linearMove: CommandHandler = (command, job) => {
 
   // e is omitted bc currently we're assuming relative extrusion distances
   // see also https://github.com/xyz-tools/gcode-preview/issues/179
-  state.x = x ?? state.x;
-  state.y = y ?? state.y;
-  state.z = z ?? state.z;
+  const relative = state.positioning === 'relative';
+  state.x = resolvePosition(x, state.x, relative);
+  state.y = resolvePosition(y, state.y, relative);
+  state.z = resolvePosition(z, state.z, relative);
 
   const pos = job.resolvePosition();
   currentPath.addPoint(pos.x, pos.y, pos.z);

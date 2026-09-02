@@ -7,7 +7,9 @@ import {
   setInchUnits,
   setMillimeterUnits,
   home,
-  selectTool
+  selectTool,
+  setAbsolutePositioning,
+  setRelativePositioning
 } from './interpreter/commands';
 
 /** Options for the {@link Interpreter} */
@@ -47,6 +49,8 @@ export const handlers: ReadonlyMap<string, CommandHandler> = new Map<string, Com
   ['g20', setInchUnits],
   ['g21', setMillimeterUnits],
   ['g28', home],
+  ['g90', setAbsolutePositioning],
+  ['g91', setRelativePositioning],
   ['t0', selectTool],
   ['t1', selectTool],
   ['t2', selectTool],

@@ -18,6 +18,8 @@ export class State {
   tool = 0;
   /** Current units (millimeters or inches) */
   units: Units = 'mm';
+  /** Current positioning mode for motion commands */
+  positioning: 'absolute' | 'relative' = 'absolute';
   /**
    * Whether the axes have been homed (G28).
    * @remarks
@@ -30,7 +32,7 @@ export class State {
 
   /**
    * Gets a new State instance with default initial values
-   * @returns New State with an un-homed (unknown) position, e=0, tool=0, units='mm'
+   * @returns New State with an un-homed (unknown) position, e=0, tool=0, units='mm', positioning='absolute'
    */
   static get initial(): State {
     return new State();
