@@ -229,7 +229,10 @@ export class GCodePreview {
       result = await reader.read();
       const length = result.value?.length ?? 0;
       if (length === 0) {
-        break;
+        // TextDecoderStream can legitimately emit an empty chunk (e.g. one
+        // holding only a partial multi-byte sequence). Skip it and keep
+        // reading; the loop only ends when the stream reports done.
+        continue;
       }
       console.debug('reading from stream', Math.floor(length / 1024), 'kB');
       size += length;
@@ -257,6 +260,13 @@ export class GCodePreview {
         lastDrawnAt = performance.now();
       }
     } while (!result.done);
+
+    // flush the leftover tail: a file whose last line has no trailing newline
+    // still needs that final command parsed and executed
+    if (tail !== '') {
+      const { commands } = this.parser.parseGCode(tail);
+      this.executeCommands(commands);
+    }
 
     console.debug('total read from stream', Math.floor(size / 1024), 'kB');
     this.onStreamEnd?.();

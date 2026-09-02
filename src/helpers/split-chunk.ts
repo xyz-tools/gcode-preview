@@ -10,15 +10,15 @@
  * The returned `tail` excludes the newline itself, so prepending it to the
  * next chunk never fabricates an empty line at a chunk boundary.
  *
- * A chunk containing no newline at all keeps its historical behaviour: it is
- * split before its last character. That is a known quirk, preserved here so
- * this helper changes nothing but the boundary newline.
+ * A chunk containing no newline at all completes nothing: the whole chunk is
+ * carried into the tail, so a line is only ever parsed once its terminating
+ * newline (or the end of the stream) has arrived.
  */
 export function splitChunk(tail: string, chunk: string): { complete: string; tail: string } {
   const idxNewLine = chunk.lastIndexOf('\n');
 
   if (idxNewLine < 0) {
-    return { complete: tail + chunk.slice(0, -1), tail: chunk.slice(-1) };
+    return { complete: '', tail: tail + chunk };
   }
 
   return { complete: tail + chunk.slice(0, idxNewLine), tail: chunk.slice(idxNewLine + 1) };
