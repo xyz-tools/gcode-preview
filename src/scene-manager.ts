@@ -117,6 +117,8 @@ export class SceneManager {
   static readonly defaultExtrusionColor = ObjectsManager.defaultExtrusionColor;
   /** Handle of the frame scheduled by requestRender, if one is pending */
   private animationFrameId?: number;
+  /** Set by dispose(); a disposed renderer must never be asked to draw again */
+  private disposed = false;
   /** Previous start layer before single layer mode */
   private prevStartLayer = 0;
   // colors
@@ -608,7 +610,12 @@ export class SceneManager {
     this.camera.position.copy(oldPosition);
 
     this.controls.dispose();
+    // the old controls were just disposed by hand, so swap their entry out of
+    // the disposables for the replacement — otherwise dispose() would revisit
+    // the dead ones and never tear down the live ones
+    this.disposables = this.disposables.filter((d) => d !== this.controls);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.disposables.push(this.controls);
     this.controls.target.copy(oldTarget);
     // the fresh controls have no listeners yet, so camera movement would stop
     // requesting frames without this
@@ -653,6 +660,9 @@ export class SceneManager {
    * mutating the scene graph from the outside.
    */
   requestRender(): void {
+    // a stray call after dispose() — a leftover listener, a late setter — must
+    // not schedule a draw on the disposed renderer
+    if (this.disposed) return;
     // the layer-range setters run in the constructor before the renderer
     // exists; construction ends with a request of its own, so these can skip
     if (!this.renderer) return;
@@ -847,6 +857,7 @@ export class SceneManager {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.cancelAnimation();
     this.disposables.forEach((d) => d.dispose());
     this.disposables = [];

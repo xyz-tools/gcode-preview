@@ -1348,6 +1348,35 @@ describe('SceneManager properties', () => {
       expect(renderCount()).toBe(drawn + 1);
     });
 
+    test('the orthographic swap replaces the controls in the disposables', () => {
+      const oldControls = sceneManager.controls;
+
+      sceneManager.orthographic = true;
+      const newControls = sceneManager.controls;
+      sceneManager.dispose();
+
+      // the swap disposed the old controls once by hand; dispose() must tear
+      // down the replacement instead of revisiting the dead ones
+      expect(vi.mocked(oldControls.dispose)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(newControls.dispose)).toHaveBeenCalledTimes(1);
+    });
+
+    test('a change event after dispose draws nothing on the disposed renderer', async () => {
+      const oldControls = sceneManager.controls;
+      sceneManager.orthographic = true;
+      await flushFrame(); // drain the frame the toggle itself requested
+      const drawn = renderCount();
+
+      sceneManager.dispose();
+      // neither the swap's undead controls nor the live ones may schedule a
+      // draw once the manager is disposed
+      oldControls.dispatchEvent({ type: 'change' });
+      sceneManager.controls.dispatchEvent({ type: 'change' });
+      await flushFrame();
+
+      expect(renderCount()).toBe(drawn);
+    });
+
     test('a geometry rebuild with no job presents the emptied scene without a rebuild', () => {
       vi.useFakeTimers();
       sceneManager.clear(); // leaves the manager without a job
