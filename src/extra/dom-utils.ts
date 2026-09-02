@@ -22,6 +22,7 @@ export function makeDroppable(previewInstance: GCodePreview): void {
     element.classList.remove('dragging');
     const files: FileList | [] = evt.dataTransfer?.files ?? [];
     const file = files[0];
+    if (!file) return;
 
     previewInstance.clear(); // TODO: remove?
 
