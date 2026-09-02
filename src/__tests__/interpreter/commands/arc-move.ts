@@ -79,16 +79,18 @@ describe('arcMove (G2/G3)', () => {
     expect(segCount(inch)).toBeGreaterThan(segCount(mm));
   });
 
-  test('a tiny arc still emits at least the endpoint (segment count clamped to 1)', () => {
-    // arcRadius * totalArc / 0.5 drops below 1 for a sub-millimetre arc; the count is
-    // clamped to 1 so the endpoint is always emitted and the loop adds no interior points.
+  test('an arc shorter than one chord step still emits the endpoint (segment count clamped to 1)', () => {
+    // A ~0.05 rad sweep on r=10 is below the chord-tolerance step (~0.2 rad), so the
+    // count is clamped to 1: the endpoint is always emitted and the loop adds no
+    // interior points. (A sub-millimetre *radius* no longer exercises the clamp: the
+    // max-segment-angle cap deliberately keeps tiny circles round instead.)
     // A travel lead-in keeps the extrusion arc on its own path so we count only its points.
-    const job = run(['G0 X10 Y10 Z1', 'G2 X10.01 Y10 I0.005 J0 E1'].join('\n'));
+    const job = run(['G0 X10 Y10 Z1', 'G2 X10.0125 Y10.4998 I10 J0 E1'].join('\n'));
 
     const arcPath = job.paths[job.paths.length - 1];
     const points = arcPath.path();
     // start-of-path point + endpoint only, no interior segments
     expect(points.length).toEqual(2);
-    expect(points[points.length - 1]).toMatchObject({ x: 10.01, y: 10 });
+    expect(points[points.length - 1]).toMatchObject({ x: 10.0125, y: 10.4998 });
   });
 });

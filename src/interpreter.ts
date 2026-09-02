@@ -1,6 +1,24 @@
 import { GCodeCommand } from './parser/gcode-parser';
 import { Job } from './job';
-import { linearMove, arcMove, setInchUnits, setMillimeterUnits, home, selectTool } from './interpreter/commands';
+import {
+  linearMove,
+  arcMove,
+  makeArcMove,
+  setInchUnits,
+  setMillimeterUnits,
+  home,
+  selectTool
+} from './interpreter/commands';
+
+/** Options for the {@link Interpreter} */
+export interface InterpreterOptions {
+  /**
+   * Maximum deviation, in millimeters, between tessellated G2/G3 arc chords
+   * and the true arc (default 0.05). Lower values produce smoother arcs at
+   * the cost of more geometry.
+   */
+  arcChordTolerance?: number;
+}
 
 /**
  * Executes a single G-code command against a job
@@ -50,6 +68,24 @@ export const handlers: ReadonlyMap<string, CommandHandler> = new Map<string, Com
  * handler are ignored.
  */
 export class Interpreter {
+  private handlers: ReadonlyMap<string, CommandHandler>;
+
+  /**
+   * Creates an interpreter, optionally with custom arc tessellation
+   * @param options - Interpreter options
+   * @remarks
+   * A custom arcChordTolerance swaps the shared G2/G3 handler for one built
+   * around its own tessellator; every other command keeps the shared registry.
+   */
+  constructor(options: InterpreterOptions = {}) {
+    if (options.arcChordTolerance === undefined) {
+      this.handlers = handlers;
+    } else {
+      const customArcMove = makeArcMove({ chordTolerance: options.arcChordTolerance });
+      this.handlers = new Map([...handlers, ['g2', customArcMove], ['g3', customArcMove]]);
+    }
+  }
+
   /**
    * Executes an array of G-code commands, updating the provided job
    * @param commands - Array of GCodeCommand objects to execute
@@ -59,7 +95,7 @@ export class Interpreter {
   execute(commands: GCodeCommand[], job = new Job()): Job {
     job.resumeLastPath();
     commands.forEach((command) => {
-      const handler = handlers.get(command.gcode);
+      const handler = this.handlers.get(command.gcode);
       handler?.(command, job);
     });
     job.finishPath();

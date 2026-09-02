@@ -111,6 +111,12 @@ describe('GCodePreview', () => {
       expect(preview).toBeInstanceOf(GCodePreview);
     });
 
+    it('passes arcChordTolerance to the interpreter', () => {
+      preview = new GCodePreview({ canvas: mockCanvas, arcChordTolerance: 0.01 });
+
+      expect(Interpreter).toHaveBeenCalledWith({ arcChordTolerance: 0.01 });
+    });
+
     it('should expose renderer, parser, and job as public properties', () => {
       const options = { canvas: mockCanvas };
       preview = new GCodePreview(options);
