@@ -153,6 +153,26 @@ export const presets = {
       z: 0
     }
   },
+  calabaza: {
+    title: 'Calabaza Sombrero (32MB)',
+    file: 'https://storage.googleapis.com/gcode-preview.firebasestorage.app/calabaza-sombrero.gcode',
+    model: {
+      name: 'Calabaza Sombrero',
+      designer: 'Printxss',
+      license: 'CC - Public Domain'
+    },
+    extrusionWidth: 0.45,
+    lineHeight: 0.2,
+    colors: ['orange'],
+    travelColor: 'red',
+    topLayerColor: undefined,
+    lastSegmentColor: undefined,
+    buildVolume: {
+      x: 250,
+      y: 250,
+      z: 0
+    }
+  },
   calicat: {
     title: 'Bounding box',
     file: 'gcodes/calicat.gcode',
