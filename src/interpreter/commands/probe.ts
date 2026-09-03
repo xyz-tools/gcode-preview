@@ -16,7 +16,10 @@ import type { CommandHandler } from '../../interpreter';
  * plain travel to the commanded target. The trigger is assumed on the Z axis only; X/Y targets
  * are kept as commanded. A G31 carrying a P word is RepRapFirmware's
  * set-trigger-values form, not a move, and is ignored; one without any axis
- * words (e.g. Marlin's dock-sled G31) is also ignored.
+ * words (e.g. Marlin's dock-sled G31) is also ignored. The G38 variants only
+ * differ in probe direction and error semantics (G38.4/G38.5 probe away from
+ * the workpiece; the odd variants tolerate a missed trigger), neither of which
+ * a preview can observe, so all of them share this behavior.
  */
 export const probe: CommandHandler = (command, job) => {
   const { state } = job;
