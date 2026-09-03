@@ -15,8 +15,15 @@ import type { CommandHandler } from '../../interpreter';
 export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler => {
   const arcTessellator = new ArcTessellator(options);
   return (command, job) => {
-    const { x, y, z, e, i, j, r } = command.params;
+    const { e, i, j, r } = command.params;
     const { state } = job;
+    // The endpoint arrives in logical coordinates; translate it into physical
+    // space up front so the tessellator's derived values agree with `from`.
+    // I/J/R are relative distances and need no shift.
+    const { positionShift } = state;
+    const x = command.params.x === undefined ? undefined : command.params.x + positionShift.x;
+    const y = command.params.y === undefined ? undefined : command.params.y + positionShift.y;
+    const z = command.params.z === undefined ? undefined : command.params.z + positionShift.z;
     // Starting position for the arc, with any un-homed axis assumed at the origin.
     const from = job.resolvePosition();
 

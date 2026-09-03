@@ -44,9 +44,9 @@ export const linearMove: CommandHandler = (command, job) => {
 
   // e is omitted bc currently we're assuming relative extrusion distances
   // see also https://github.com/xyz-tools/gcode-preview/issues/179
-  state.x = x ?? state.x;
-  state.y = y ?? state.y;
-  state.z = z ?? state.z;
+  state.x = x === undefined ? state.x : x + state.positionShift.x;
+  state.y = y === undefined ? state.y : y + state.positionShift.y;
+  state.z = z === undefined ? state.z : z + state.positionShift.z;
 
   const pos = job.resolvePosition();
   currentPath.addPoint(pos.x, pos.y, pos.z);
