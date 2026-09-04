@@ -14,6 +14,19 @@ export class State {
   z: number | undefined = undefined;
   /** Current extrusion amount */
   e = 0;
+  /**
+   * Shift between the logical G-code coordinates and the physical position,
+   * created by G92: `physical = logical + positionShift`.
+   * @remarks
+   * G92 gives the current position new coordinates without moving the
+   * printhead. The state keeps tracking the physical position in `x`/`y`/`z`,
+   * so move handlers add this shift to incoming X/Y/Z parameters to translate
+   * them back into physical space. Mirrors Marlin's `position_shift`, and is
+   * kept separate from future home offsets (M206/M428) so the two can compose.
+   * E is deliberately not part of the shift: as in Marlin, `G92 E` sets the
+   * extruder position (`e`) directly.
+   */
+  positionShift = { x: 0, y: 0, z: 0 };
   /** Currently active tool */
   tool = 0;
   /** Current units (millimeters or inches) */

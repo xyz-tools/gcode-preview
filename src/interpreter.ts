@@ -7,6 +7,8 @@ import {
   setInchUnits,
   setMillimeterUnits,
   home,
+  setPosition,
+  probe,
   selectTool
 } from './interpreter/commands';
 
@@ -47,6 +49,12 @@ export const handlers: ReadonlyMap<string, CommandHandler> = new Map<string, Com
   ['g20', setInchUnits],
   ['g21', setMillimeterUnits],
   ['g28', home],
+  ['g31', probe],
+  ['g38.2', probe],
+  ['g38.3', probe],
+  ['g38.4', probe],
+  ['g38.5', probe],
+  ['g92', setPosition],
   ['t0', selectTool],
   ['t1', selectTool],
   ['t2', selectTool],
@@ -64,8 +72,8 @@ export const handlers: ReadonlyMap<string, CommandHandler> = new Map<string, Com
  * This class looks up each command in the handler registry and executes it,
  * translating commands into movements and state changes in the print job. It
  * supports common G-code commands including linear moves (G0/G1), arcs (G2/G3),
- * unit changes (G20/G21), and tool selection. Commands without a registered
- * handler are ignored.
+ * unit changes (G20/G21), homing (G28), position setting (G92), and tool
+ * selection. Commands without a registered handler are ignored.
  */
 export class Interpreter {
   private handlers: ReadonlyMap<string, CommandHandler>;
