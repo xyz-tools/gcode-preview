@@ -212,7 +212,7 @@ canvas:focus {
 .file-info {
   text-align: center;
   font-size: smaller;
-  width: 220px;
+  width: 100%;
   color: var(--bulma-text);
 }
 
