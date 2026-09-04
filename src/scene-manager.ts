@@ -115,8 +115,10 @@ export class SceneManager {
   private disposables: Disposable[] = [];
   /** Default extrusion color */
   static readonly defaultExtrusionColor = ObjectsManager.defaultExtrusionColor;
-  /** Animation frame ID */
+  /** Handle of the frame scheduled by requestRender, if one is pending */
   private animationFrameId?: number;
+  /** Set by dispose(); a disposed renderer must never be asked to draw again */
+  private disposed = false;
   /** Previous start layer before single layer mode */
   private prevStartLayer = 0;
   // colors
@@ -139,7 +141,9 @@ export class SceneManager {
   /**
    * Called after every rendered frame, for consumers that track render stats.
    * @remarks
-   * Holds a single callback: assigning it replaces any previous one.
+   * Holds a single callback: assigning it replaces any previous one. Frames
+   * are drawn on demand rather than continuously, so this reports renders
+   * per second — an idle scene reports nothing.
    */
   onFrameRendered?: () => void;
   private objectsManager: ObjectsManager;
@@ -214,10 +218,14 @@ export class SceneManager {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.target.set(this.buildVolume.x / 2, 0, -this.buildVolume.y / 2);
     this.disposables.push(this.controls);
+    this.bindControls();
     this.loadCamera();
+    // aim the camera at the target once: frames are drawn on demand, so there
+    // is no per-frame update() loop to do it (damping and auto-rotate are off)
+    this.controls.update();
 
     this.initScene();
-    this.animate();
+    this.requestRender();
   }
 
   /**
@@ -228,7 +236,12 @@ export class SceneManager {
    */
   private createObjectsManager(lineWidth: number, lineHeight?: number, extrusionWidth?: number): ObjectsManager {
     const manager = new ObjectsManager(this.scene, lineWidth, lineHeight, extrusionWidth, () => {
-      if (this.job) this.render();
+      if (this.job) {
+        this.render();
+      } else {
+        // no job to rebuild from, but the reset emptied the scene, so present that
+        this.requestRender();
+      }
     });
     this.disposables.push(manager);
 
@@ -249,6 +262,7 @@ export class SceneManager {
    */
   set buildVolume(value: BuildVolumeDef | undefined) {
     this.objectsManager.setBuildVolume(value);
+    this.requestRender();
   }
 
   /**
@@ -267,6 +281,7 @@ export class SceneManager {
     this.objectsManager.setExtrusionColor(
       Array.isArray(value) ? value.map((color) => new Color(color)) : new Color(value)
     );
+    this.requestRender();
   }
 
   /**
@@ -284,6 +299,7 @@ export class SceneManager {
   set backgroundColor(value: number | string | Color) {
     this._backgroundColor = new Color(value);
     this.scene.background = this._backgroundColor;
+    this.requestRender();
   }
 
   /**
@@ -300,6 +316,7 @@ export class SceneManager {
    */
   set travelColor(value: number | string | Color) {
     this.objectsManager.setTravelColor(new Color(value));
+    this.requestRender();
   }
 
   /**
@@ -368,6 +385,7 @@ export class SceneManager {
     this.objectsManager.setBoundingBoxColor(value !== undefined ? new Color(value) : undefined);
 
     this.renderBoundingBox();
+    this.requestRender();
   }
 
   /**
@@ -390,6 +408,7 @@ export class SceneManager {
     }
 
     this.updateClippingPlanes();
+    this.requestRender();
   }
 
   get renderExtrusion(): boolean {
@@ -399,6 +418,7 @@ export class SceneManager {
     this._renderExtrusion = value;
     this.objectsManager.setExtrusionsVisible(value);
     if (value) this.renderMissingPaths();
+    this.requestRender();
   }
 
   get renderTravel(): boolean {
@@ -408,6 +428,7 @@ export class SceneManager {
     this._renderTravel = value;
     this.objectsManager.setTravelsVisible(value);
     if (value) this.renderMissingPaths();
+    this.requestRender();
   }
 
   get renderTubes(): boolean {
@@ -511,6 +532,7 @@ export class SceneManager {
     }
 
     this.updateClippingPlanes();
+    this.requestRender();
   }
 
   /**
@@ -541,6 +563,7 @@ export class SceneManager {
 
     // the visible range moved, so the clipping planes have to follow
     this.updateClippingPlanes();
+    this.requestRender();
 
     // entering or leaving single-layer mode flips whether the gradient applies, so
     // rebuild the lines to avoid leaving the lone visible layer dimmed by the ramp
@@ -554,6 +577,7 @@ export class SceneManager {
   }
   set ambientLight(value: number) {
     this.objectsManager.setAmbientLight(value);
+    this.requestRender();
   }
 
   get directionalLight(): number {
@@ -561,6 +585,7 @@ export class SceneManager {
   }
   set directionalLight(value: number) {
     this.objectsManager.setDirectionalLight(value);
+    this.requestRender();
   }
 
   get brightness(): number {
@@ -568,6 +593,7 @@ export class SceneManager {
   }
   set brightness(value: number) {
     this.objectsManager.setBrightness(value);
+    this.requestRender();
   }
 
   get orthographic(): boolean {
@@ -584,8 +610,16 @@ export class SceneManager {
     this.camera.position.copy(oldPosition);
 
     this.controls.dispose();
+    // the old controls were just disposed by hand, so swap their entry out of
+    // the disposables for the replacement — otherwise dispose() would revisit
+    // the dead ones and never tear down the live ones
+    this.disposables = this.disposables.filter((d) => d !== this.controls);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.disposables.push(this.controls);
     this.controls.target.copy(oldTarget);
+    // the fresh controls have no listeners yet, so camera movement would stop
+    // requesting frames without this
+    this.bindControls();
     if (value) {
       this.controls.screenSpacePanning = true;
     }
@@ -616,16 +650,49 @@ export class SceneManager {
     return DEFAULT_FRUSTUM_SIZE;
   }
 
-  /** @internal */
   /**
-   * Animation loop that continuously renders the scene
-   * @internal
+   * Schedules a frame to be drawn on the next animation frame.
+   * @remarks
+   * Frames are drawn on demand instead of in a continuous loop: a burst of
+   * changes coalesces into a single draw, and an idle scene draws nothing at
+   * all. Everything that changes the picture — camera movement, the property
+   * setters, resize — requests a frame this way; call it directly after
+   * mutating the scene graph from the outside.
+   */
+  requestRender(): void {
+    // a stray call after dispose() — a leftover listener, a late setter — must
+    // not schedule a draw on the disposed renderer
+    if (this.disposed) return;
+    // the layer-range setters run in the constructor before the renderer
+    // exists; construction ends with a request of its own, so these can skip
+    if (!this.renderer) return;
+    if (this.animationFrameId !== undefined) return;
+    this.animationFrameId = requestAnimationFrame(() => {
+      this.animationFrameId = undefined;
+      this.renderer.render(this.scene, this.camera);
+      this.onFrameRendered?.();
+    });
+  }
+
+  /**
+   * Schedules a coalesced on-demand frame, exactly like {@link requestRender}.
+   * @deprecated Use requestRender() instead.
+   * @remarks
+   * Kept for external callers of the old continuous loop's entry point. It no
+   * longer re-arms itself: one call draws (at most) one frame.
    */
   animate(): void {
-    this.animationFrameId = requestAnimationFrame(() => this.animate());
-    this.controls.update();
-    this.renderer.render(this.scene, this.camera);
-    this.onFrameRendered?.();
+    this.requestRender();
+  }
+
+  /**
+   * Requests a frame whenever the controls move the camera.
+   * @remarks
+   * Also called by the orthographic swap: listeners do not carry over to the
+   * controls instance it creates, so each new instance is bound again.
+   */
+  private bindControls(): void {
+    this.controls.addEventListener('change', () => this.requestRender());
   }
 
   /**
@@ -690,13 +757,14 @@ export class SceneManager {
    * than calling this directly. Only paths that have not been drawn yet are
    * built, and the last path is held back: it may still be growing, and a
    * path is only ever built once. The top-layer/last-segment highlight, if
-   * configured, moves onto whatever has most recently arrived. The continuous
-   * animation loop presents the new geometry on the next frame.
+   * configured, moves onto whatever has most recently arrived. A frame is
+   * requested to present the new geometry.
    */
   renderProgressive(): void {
     if (!this.job) return;
 
     this.renderPaths(Math.max(0, this.job.paths.length - 1));
+    this.requestRender();
   }
 
   /**
@@ -774,6 +842,8 @@ export class SceneManager {
     this.objectsManager.extrusionColor = extrusionColor;
     this.objectsManager.travelColor = travelColor;
     if (buildVolumeDef) this.objectsManager.setBuildVolume(buildVolumeDef);
+    // present the emptied scene rather than leaving the old job's pixels up
+    this.requestRender();
   }
 
   resize(): void {
@@ -794,19 +864,20 @@ export class SceneManager {
     this.camera.updateProjectionMatrix();
     this.renderer.setPixelRatio(window.devicePixelRatio);
     this.renderer.setSize(w, h, false);
+    this.requestRender();
   }
 
   dispose(): void {
+    this.disposed = true;
     this.cancelAnimation();
     this.disposables.forEach((d) => d.dispose());
     this.disposables = [];
   }
 
   /**
-   * Cancels the current animation frame request
+   * Cancels a frame scheduled by requestRender, if one is still pending
    * @remarks
-   * Stops the animation loop and clears the animation frame ID.
-   * Called during cleanup to prevent memory leaks.
+   * Called during cleanup so a disposed renderer is never asked to draw.
    */
   private cancelAnimation(): void {
     if (this.animationFrameId !== undefined) cancelAnimationFrame(this.animationFrameId);
