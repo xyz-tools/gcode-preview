@@ -1,3 +1,15 @@
+/**
+ * P1 reproduction: stream-layer-metadata
+ *
+ * Split Prusa input between ;LAYER_CHANGE and its ;Z:0.2 / ;HEIGHT:0.2.
+ * Expected: both stream layouts retain layers at Z0.2 and Z0.4.
+ * Actual: the split loses the first Z/height and collapses both layers into one.
+ * The whole-file control passes; the split-block regression fails.
+ *
+ * Run: NODE_OPTIONS=--no-experimental-webstorage npm test -- src/__tests__/p1-reproduction.ts
+ * The Node 26 flag avoids the happy-dom storage conflict. Failures are intentional
+ * until the implementation is fixed.
+ */
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { GCodePreview } from '../gcode-preview';
 
