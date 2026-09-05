@@ -1,3 +1,15 @@
+/**
+ * P1 reproduction: arc-defaults
+ *
+ * From X0 Y0 Z0.2, compare G2 X10 Y0 I5 J0 E1 with omitted J0 or Y0.
+ * Expected: all forms produce the same curved semicircle.
+ * Actual: each omitted-word form emits only the start and endpoint.
+ * The explicit-parameter control passes; both omitted-word regressions fail.
+ *
+ * Run: NODE_OPTIONS=--no-experimental-webstorage npm test -- src/__tests__/p1-reproduction.ts
+ * The Node 26 flag avoids the happy-dom storage conflict. Failures are intentional
+ * until the implementation is fixed.
+ */
 import { expect, test } from 'vitest';
 import { Parser } from '../parser/gcode-parser';
 import { Interpreter } from '../interpreter';
