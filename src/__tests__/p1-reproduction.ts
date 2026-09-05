@@ -1,3 +1,15 @@
+/**
+ * P1 reproduction: quick-start
+ *
+ * Construct the README preview with a canvas and extrusionColor only.
+ * Expected: construction succeeds and the diagonal extrusion is rendered.
+ * Actual: SceneManager reads buildVolume.x although buildVolume is optional,
+ * throwing before the example can process G-code.
+ *
+ * Run: NODE_OPTIONS=--no-experimental-webstorage npm test -- src/__tests__/p1-reproduction.ts
+ * The Node 26 flag avoids the happy-dom storage conflict. Failures are intentional
+ * until the implementation is fixed.
+ */
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { GCodePreview } from '../gcode-preview';
 
