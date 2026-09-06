@@ -1,0 +1,111 @@
+/* Shared devtools theming: semantic variables + the light/dark toggle.
+ *
+ * Pages link this AFTER /style.css and use ONLY the --dt-* variables for
+ * their own colors. Dark reproduces the historical devtools look exactly;
+ * light re-derives it on the same teal hue with WCAG-ish contrast.
+ *
+ * The 3D preview canvases and their holders stay dark in BOTH themes
+ * (--dt-canvas-well): render output must not depend on the page theme, or
+ * visual-diff captures and benchmark numbers would change with it. */
+
+:root {
+  --dt-canvas-well: #0a0a0a;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --dt-bg: #141414;
+  --dt-surface: #0a0a0a;
+  --dt-text: var(--my-theme-300);
+  --dt-text-strong: var(--my-theme-100);
+  --dt-text-muted: var(--my-theme-600);
+  --dt-border: var(--my-theme-800);
+  --dt-border-strong: var(--my-theme-700);
+  --dt-border-hover: var(--my-theme-400);
+  --dt-accent: var(--my-theme-500);
+  --dt-accent-contrast: var(--my-theme-950);
+  --dt-table-head-bg: var(--my-theme-950);
+  --dt-good: #6bd06b;
+  --dt-bad: #ff6b6b;
+  --dt-chart-surface: #141414;
+  --dt-chart-line: var(--my-theme-300);
+  --dt-chart-grid: var(--my-theme-800);
+  --dt-chart-text: var(--my-theme-100);
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+  --dt-bg: hsl(185, 45%, 96%);
+  --dt-surface: #ffffff;
+  --dt-text: hsl(195, 36%, 22%);
+  --dt-text-strong: hsl(196, 45%, 12%);
+  --dt-text-muted: hsl(192, 24%, 38%);
+  --dt-border: hsl(186, 30%, 78%);
+  --dt-border-strong: hsl(188, 30%, 60%);
+  --dt-border-hover: hsl(190, 52%, 36%);
+  --dt-accent: hsl(190, 52%, 30%);
+  --dt-accent-contrast: #ffffff;
+  --dt-table-head-bg: hsl(185, 48%, 88%);
+  --dt-good: hsl(140, 65%, 26%);
+  --dt-bad: hsl(2, 72%, 40%);
+  --dt-chart-surface: #ffffff;
+  --dt-chart-line: hsl(190, 60%, 30%);
+  --dt-chart-grid: hsl(186, 25%, 78%);
+  --dt-chart-text: hsl(195, 36%, 22%);
+
+  /* the demo stylesheet's bulma vars are dark-oriented; re-aim them */
+  --bulma-text: var(--dt-text);
+  --bulma-link-text: hsl(191, 60%, 26%);
+  --bulma-border: var(--dt-border-strong);
+  --bulma-arrow-color: var(--dt-text-strong);
+  --bulma-link-h: 191deg;
+  --bulma-link-l: 26%;
+}
+
+/* the demo stylesheet colors selects for dark directly, not via vars */
+[data-theme='light'] .bulma-select select {
+  background-color: var(--dt-surface);
+  color: var(--dt-text-strong);
+  border-color: var(--dt-border-strong);
+}
+
+/* bulma paints <html> from its own dark body-background var, which would
+   leave a dark band under short pages; keep it on the page background */
+html[data-theme] {
+  background-color: var(--dt-bg);
+}
+
+/* bulma's anchor color resolves through link-*-l vars that ignore our
+   --bulma-link-text override; pin anchors directly in light mode */
+[data-theme='light'] a {
+  color: hsl(191, 60%, 26%);
+}
+
+[data-theme='light'] a:hover {
+  color: hsl(191, 60%, 16%);
+}
+
+/* toggle button, top-right of every page's heading row */
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+button.theme-toggle {
+  flex: none;
+  margin-top: 1rem;
+  background-color: transparent;
+  color: var(--dt-text);
+  border: 1px solid var(--dt-border-strong);
+  border-radius: 4px;
+  padding: 0.3rem 0.9rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+button.theme-toggle:hover {
+  border-color: var(--dt-border-hover);
+  color: var(--dt-text-strong);
+}

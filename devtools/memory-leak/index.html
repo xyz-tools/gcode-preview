@@ -4,6 +4,8 @@
   <meta charset="utf-8" />
   <title>GCode Preview — Memory-leak tester</title>
   <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="../lib/theme.css" />
+  <script src="../lib/theme.js"></script>
   <style>
     /* the demo stylesheet disables page scrolling; devtools pages need it */
     html,
@@ -15,9 +17,9 @@
 
     body {
       margin: 0;
-      background-color: #141414;
+      background-color: var(--dt-bg);
       font-family: var(--bulma-family-primary, sans-serif);
-      color: var(--my-theme-300);
+      color: var(--dt-text);
     }
 
     .bench-page {
@@ -42,22 +44,22 @@
 
     .bench-controls label {
       font-size: 0.75rem;
-      color: var(--my-theme-100);
+      color: var(--dt-text-strong);
     }
 
     .bench-status {
       min-height: 1.5rem;
       font-size: 0.85rem;
       margin-bottom: 1rem;
-      color: var(--my-theme-100);
+      color: var(--dt-text-strong);
     }
 
     .bench-status.error {
-      color: #ff6b6b;
+      color: var(--dt-bad);
     }
 
     .bench-viewport {
-      border: 1px solid var(--my-theme-700);
+      border: 1px solid var(--dt-border-strong);
       border-radius: 6px;
       overflow: hidden;
       margin-bottom: 1rem;
@@ -66,15 +68,15 @@
     .bench-viewport header {
       padding: 0.35rem 0.75rem;
       font-size: 0.8rem;
-      color: var(--my-theme-100);
-      background-color: var(--my-theme-950);
+      color: var(--dt-text-strong);
+      background-color: var(--dt-table-head-bg);
       display: flex;
       justify-content: space-between;
     }
 
     .bench-viewport .frame-holder {
       height: 260px;
-      background-color: #0a0a0a;
+      background-color: var(--dt-canvas-well);
     }
 
     .bench-viewport iframe {
@@ -85,7 +87,7 @@
     }
 
     .chart-panel {
-      border: 1px solid var(--my-theme-800);
+      border: 1px solid var(--dt-border);
       border-radius: 6px;
       padding: 0.75rem;
       margin-bottom: 1rem;
@@ -94,7 +96,7 @@
     .chart-panel h2 {
       font-size: 0.8rem;
       font-weight: normal;
-      color: var(--my-theme-100);
+      color: var(--dt-text-strong);
       margin: 0 0 0.5rem 0;
     }
 
@@ -106,34 +108,34 @@
 
     .chart-empty {
       font-size: 0.8rem;
-      color: var(--my-theme-600);
+      color: var(--dt-text-muted);
       padding: 1rem 0;
     }
 
     .verdict {
       display: none;
-      border: 1px solid var(--my-theme-800);
+      border: 1px solid var(--dt-border);
       border-radius: 6px;
       padding: 0.6rem 0.9rem;
       font-size: 0.9rem;
       margin-bottom: 1rem;
-      color: var(--my-theme-100);
+      color: var(--dt-text-strong);
     }
 
     .verdict.ok {
-      border-color: #6bd06b;
-      color: #6bd06b;
+      border-color: var(--dt-good);
+      color: var(--dt-good);
     }
 
     .verdict.bad {
-      border-color: #ff6b6b;
-      color: #ff6b6b;
+      border-color: var(--dt-bad);
+      color: var(--dt-bad);
     }
 
     .verdict .verdict-note {
       display: block;
       margin-top: 0.25rem;
-      color: #ff6b6b;
+      color: var(--dt-bad);
     }
 
     table.bench-results {
@@ -144,7 +146,7 @@
 
     table.bench-results th,
     table.bench-results td {
-      border: 1px solid var(--my-theme-800);
+      border: 1px solid var(--dt-border);
       padding: 0.4rem 0.75rem;
       text-align: right;
     }
@@ -155,19 +157,19 @@
     }
 
     table.bench-results thead th {
-      color: var(--my-theme-100);
-      background-color: var(--my-theme-950);
+      color: var(--dt-text-strong);
+      background-color: var(--dt-table-head-bg);
     }
 
     .bench-note {
       font-size: 0.75rem;
-      color: var(--my-theme-600);
+      color: var(--dt-text-muted);
       margin-top: 0.75rem;
     }
 
     button.bench-run {
-      background-color: var(--my-theme-500);
-      color: var(--my-theme-950);
+      background-color: var(--dt-accent);
+      color: var(--dt-accent-contrast);
       border: 0;
       border-radius: 4px;
       padding: 0.5rem 1.5rem;
@@ -188,7 +190,10 @@
 
 <body>
   <div class="bench-page">
-    <h1 class="m-3 mb-2">GCode Preview Memory-leak Tester</h1>
+    <div class="page-head">
+      <h1 class="m-3 mb-2">GCode Preview Memory-leak Tester</h1>
+      <button id="theme-toggle" class="theme-toggle" type="button">Light</button>
+    </div>
     <p class="mb-4">
       <a class="back-link" href="../">&larr; dev tools</a> &middot;
       <a class="back-link" href="/index.html">demo</a>

@@ -25,8 +25,45 @@ let filterCache = { filter: null, indices: null };
 let preview = null;
 let metadata = undefined;
 let debugIndex = -1;
+// kept for rebuilding the preview when the parent applies edited settings
+let libModule = null;
+let lastGoodSettings = null;
 
-async function handleLoad({ gcode, settings }) {
+// A rebuilt preview gets a brand-new canvas: reusing one whose WebGL context
+// belonged to a disposed renderer invites context-state surprises.
+function freshCanvas() {
+  const old = document.getElementById('canvas');
+  const next = document.createElement('canvas');
+  next.id = 'canvas';
+  old.replaceWith(next);
+  return next;
+}
+
+// May throw (bad colors, missing buildVolume, …) — callers decide the
+// fallback story.
+function instantiate(settings) {
+  return new libModule.GCodePreview({ canvas: freshCanvas(), ...settings });
+}
+
+// What the scene manager actually ended up with, so the parent can confirm
+// applied settings without reading WebGL pixels back.
+function settingsEcho() {
+  try {
+    const sceneManager = preview.sceneManager;
+    const hex = (color) => (typeof color?.getHexString === 'function' ? `#${color.getHexString()}` : null);
+    return {
+      travelColor: hex(sceneManager.travelColor),
+      backgroundColor: hex(sceneManager.backgroundColor),
+      renderTravel: sceneManager.renderTravel,
+      renderTubes: sceneManager.renderTubes,
+      orthographic: sceneManager.orthographic
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function handleLoad({ gcode, settings, fallbackSettings }) {
   const module = await import('gcode-preview');
 
   // 2.18 exports only WebGLPreview: no Parser export, no processGCodeStream
@@ -39,14 +76,25 @@ async function handleLoad({ gcode, settings }) {
     });
     return;
   }
+  libModule = module;
 
   // Interpreter-level view: fill preview.job (stats, layers, paths) without
   // rendering anything. The same preview instance later hosts the debug
   // session (after a clear()).
-  preview = new module.GCodePreview({
-    canvas: document.getElementById('canvas'),
-    ...settings
-  });
+  //
+  // `settings` may carry a user override; if the constructor rejects it, fall
+  // back to the computed defaults (sent separately) and tell the parent.
+  let settingsLoadError = null;
+  let activeSettings = settings;
+  try {
+    preview = instantiate(settings);
+  } catch (error) {
+    if (!fallbackSettings) throw error;
+    settingsLoadError = String(error?.message ?? error);
+    activeSettings = fallbackSettings;
+    preview = instantiate(fallbackSettings);
+  }
+  lastGoodSettings = activeSettings;
   await preview.processGCodeStream(gcode, { render: false });
 
   // Parser-level view: a standalone Parser gives the raw command list without
@@ -79,6 +127,8 @@ async function handleLoad({ gcode, settings }) {
     type: 'loaded',
     debuggable,
     firstCommandIndex,
+    settingsError: settingsLoadError,
+    settingsEcho: settingsEcho(),
     summary: {
       lines: preview.parser.lineCount,
       commands: commands.length,
@@ -225,6 +275,41 @@ async function handleDebugContinue({ breakpoints = [], toEnd = false }) {
   sendDebug(performance.now() - start);
 }
 
+// Rebuilds the preview with parent-edited settings, preserving the session:
+// same command list, same index (re-executed onto the fresh job), and the
+// parent keeps its breakpoints. A constructor throw falls back to the last
+// settings that worked, so the page never ends up with a dead preview.
+function handleApplySettings({ settings }) {
+  if (!preview || !libModule) return;
+  const start = performance.now();
+  const target = debugIndex;
+
+  let ok = true;
+  let message = null;
+  try {
+    preview.dispose();
+  } catch {
+    // an already-broken preview must not block the rebuild
+  }
+  try {
+    preview = instantiate(settings);
+    lastGoodSettings = settings;
+  } catch (error) {
+    ok = false;
+    message = String(error?.message ?? error);
+    preview = instantiate(lastGoodSettings);
+  }
+
+  startSession();
+  if (target >= 0) {
+    preview.interpreter.execute(commands.slice(0, target + 1), preview.job);
+    debugIndex = target;
+    preview.sceneManager.render();
+  }
+  send({ type: 'settings-applied', ok, message, echo: settingsEcho() });
+  sendDebug(performance.now() - start);
+}
+
 // ---------------------------------------------------------------------------
 // Command browser
 
@@ -281,6 +366,7 @@ const handlers = {
   load: handleLoad,
   query: handleQuery,
   resize: handleResize,
+  'apply-settings': handleApplySettings,
   'debug-step': handleDebugStep,
   'debug-seek': handleDebugSeek,
   'debug-continue': handleDebugContinue
@@ -289,8 +375,10 @@ const handlers = {
 window.addEventListener('message', (event) => {
   const message = event.data;
   if (!message || typeof message.type !== 'string') return;
+  // own-property guard: a type like '__proto__' must not dispatch into
+  // Object.prototype (CodeQL: unvalidated dynamic method call)
+  if (!Object.hasOwn(handlers, message.type)) return;
   const handler = handlers[message.type];
-  if (!handler) return;
   Promise.resolve(handler(message)).catch((error) => {
     console.error(error);
     send({ type: 'error', message: String(error?.message ?? error) });

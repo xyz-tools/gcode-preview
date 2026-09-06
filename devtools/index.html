@@ -4,6 +4,8 @@
   <meta charset="utf-8" />
   <title>GCode Preview — Dev Tools</title>
   <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="lib/theme.css" />
+  <script src="lib/theme.js"></script>
   <style>
     /* the demo stylesheet disables page scrolling; devtools pages need it */
     html,
@@ -15,9 +17,9 @@
 
     body {
       margin: 0;
-      background-color: #141414;
+      background-color: var(--dt-bg);
       font-family: var(--bulma-family-primary, sans-serif);
-      color: var(--my-theme-300);
+      color: var(--dt-text);
     }
 
     .tools-page {
@@ -28,7 +30,7 @@
 
     .tool-card {
       display: block;
-      border: 1px solid var(--my-theme-700);
+      border: 1px solid var(--dt-border-strong);
       border-radius: 6px;
       padding: 1rem 1.25rem;
       margin-bottom: 1rem;
@@ -36,19 +38,19 @@
     }
 
     .tool-card:hover {
-      border-color: var(--my-theme-400);
+      border-color: var(--dt-border-hover);
     }
 
     .tool-card h2 {
       margin: 0 0 0.25rem;
       font-size: 1.1rem;
-      color: var(--my-theme-100);
+      color: var(--dt-text-strong);
     }
 
     .tool-card p {
       margin: 0;
       font-size: 0.85rem;
-      color: var(--my-theme-400);
+      color: var(--dt-text);
     }
 
     a.back-link {
@@ -59,7 +61,10 @@
 
 <body>
   <div class="tools-page">
-    <h1 class="m-3 mb-2">GCode Preview Dev Tools</h1>
+    <div class="page-head">
+      <h1 class="m-3 mb-2">GCode Preview Dev Tools</h1>
+      <button id="theme-toggle" class="theme-toggle" type="button">Light</button>
+    </div>
     <p class="mb-4"><a class="back-link" href="/index.html">&larr; back to demo</a></p>
 
     <a class="tool-card" href="debugger/">

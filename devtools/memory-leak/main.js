@@ -21,15 +21,27 @@ function setStatus(message, isError = false) {
 // ---------------------------------------------------------------------------
 // Chart — single-series line of heap MB per cycle on a plain 2D canvas.
 
-const themeStyles = getComputedStyle(document.documentElement);
-const theme = (step, fallback) => themeStyles.getPropertyValue(`--my-theme-${step}`).trim() || fallback;
+// Colors resolve from the shared theme vars at DRAW time (getters), so a
+// theme toggle just needs a redraw — see the 'devtools-themechange' listener.
+const themeColor = (name, fallback) =>
+  getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 
 const CHART = {
-  surface: '#141414',
-  line: theme(300, '#86d1da'),
-  grid: theme(800, '#2a444d'),
-  ink: theme(100, '#dff4f5'),
-  muted: theme(600, '#2c6f7f'),
+  get surface() {
+    return themeColor('--dt-chart-surface', '#141414');
+  },
+  get line() {
+    return themeColor('--dt-chart-line', '#86d1da');
+  },
+  get grid() {
+    return themeColor('--dt-chart-grid', '#2a444d');
+  },
+  get ink() {
+    return themeColor('--dt-chart-text', '#dff4f5');
+  },
+  get muted() {
+    return themeColor('--dt-text-muted', '#2c6f7f');
+  },
   padding: { top: 14, right: 18, bottom: 26, left: 58 },
   height: 220
 };
@@ -372,6 +384,8 @@ el('run-test').addEventListener('click', async () => {
 });
 
 window.addEventListener('resize', drawChart);
+// an existing chart must flip its colors when the page theme changes
+document.addEventListener('devtools-themechange', drawChart);
 
 populatePresetSelect(el('gcode-select'), 'benchy');
 loadVersions().then((versions) => {

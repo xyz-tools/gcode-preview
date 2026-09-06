@@ -11,7 +11,8 @@ The demo dev server also serves this directory:
 npm run dev          # or: npm run demo
 ```
 
-then open <http://localhost:8080/devtools/>.
+then open <http://localhost:8080/devtools/>. Every page has a light/dark toggle
+top right; the choice persists across pages and reloads.
 
 The pages reuse the demo's assets over the same server: `/style.css`, the preset
 catalog (`/js/presets.js`), the bundled gcode files (`/gcodes/…`), and the local
@@ -51,6 +52,13 @@ units, isHomed) with the keys that changed on the last step highlighted.
 Stepping back re-executes from the start, which stays fast even on benchy
 (163k commands re-execute in tens of milliseconds). The loaded file and
 breakpoints persist across reloads via localStorage.
+
+A collapsed "Instantiation settings" editor exposes the full options object
+the library is constructed with: edit the JSON and Apply (the session rebuilds
+with breakpoints and position preserved), pick a curated preset (lines, travel,
+orthographic, high-contrast), or Reset to default. Edits persist across
+reloads. The commands/panel split is resizable by dragging the separator
+(double-click resets).
 
 ### Benchmark (`benchmark/`)
 

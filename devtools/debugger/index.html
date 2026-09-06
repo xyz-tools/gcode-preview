@@ -4,6 +4,8 @@
   <meta charset="utf-8" />
   <title>GCode Preview — Debugger</title>
   <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="../lib/theme.css" />
+  <script src="../lib/theme.js"></script>
   <style>
     /* the demo stylesheet disables page scrolling; devtools pages need it.
        body must stay overflow: visible — any other value makes it a scroll
@@ -25,13 +27,15 @@
 
     body {
       margin: 0;
-      background-color: #141414;
+      background-color: var(--dt-bg);
       font-family: var(--bulma-family-primary, sans-serif);
-      color: var(--my-theme-300);
+      color: var(--dt-text);
     }
 
+    /* Full-width page: the command table absorbs the extra room while the
+       debug panel keeps a fixed-ish width (see .debugger-grid). */
     .inspector-page {
-      max-width: 1200px;
+      max-width: none;
       margin: 0 auto;
       padding: 1.5rem;
     }
@@ -52,13 +56,13 @@
 
     .inspector-controls label {
       font-size: 0.75rem;
-      color: var(--my-theme-100);
+      color: var(--dt-text-strong);
     }
 
     textarea#gcode-text {
-      background-color: #0a0a0a;
-      color: var(--my-theme-300);
-      border: 1px solid var(--my-theme-700);
+      background-color: var(--dt-surface);
+      color: var(--dt-text);
+      border: 1px solid var(--dt-border-strong);
       border-radius: 4px;
       padding: 0.4rem 0.6rem;
       font-family: monospace;
@@ -73,11 +77,11 @@
       min-height: 1.5rem;
       font-size: 0.85rem;
       margin-bottom: 1rem;
-      color: var(--my-theme-100);
+      color: var(--dt-text-strong);
     }
 
     .inspector-status.error {
-      color: #ff6b6b;
+      color: var(--dt-bad);
     }
 
     .inspector-section {
@@ -87,7 +91,7 @@
     .inspector-section h2,
     details.inspector-section summary {
       font-size: 1rem;
-      color: var(--my-theme-100);
+      color: var(--dt-text-strong);
       margin: 0 0 0.5rem;
     }
 
@@ -97,7 +101,7 @@
     }
 
     details.inspector-section summary::marker {
-      color: var(--my-theme-500);
+      color: var(--dt-accent);
     }
 
     .inspector-grid {
@@ -121,7 +125,7 @@
 
     table.inspector-table th,
     table.inspector-table td {
-      border: 1px solid var(--my-theme-800);
+      border: 1px solid var(--dt-border);
       padding: 0.35rem 0.75rem;
       text-align: right;
     }
@@ -132,8 +136,8 @@
     }
 
     table.inspector-table thead th {
-      color: var(--my-theme-100);
-      background-color: var(--my-theme-950);
+      color: var(--dt-text-strong);
+      background-color: var(--dt-table-head-bg);
     }
 
     /* Virtualized commands list: a header table above a scroll container
@@ -165,12 +169,12 @@
     table.commands-table th,
     table.commands-table td {
       border: 0;
-      border-bottom: 1px solid var(--my-theme-800);
+      border-bottom: 1px solid var(--dt-border);
     }
 
     table.commands-table th:not(:first-child),
     table.commands-table td:not(:first-child) {
-      border-left: 1px solid var(--my-theme-800);
+      border-left: 1px solid var(--dt-border);
     }
 
     table.commands-table td {
@@ -187,7 +191,7 @@
     }
 
     .commands-head {
-      border: 1px solid var(--my-theme-800);
+      border: 1px solid var(--dt-border);
       border-bottom: 0;
     }
 
@@ -196,7 +200,7 @@
       overflow-y: auto;
       height: calc(100vh - 260px);
       min-height: 360px;
-      border: 1px solid var(--my-theme-800);
+      border: 1px solid var(--dt-border);
     }
 
     #commands-spacer {
@@ -211,12 +215,12 @@
     }
 
     #commands .row-loading td {
-      color: var(--my-theme-700);
+      color: var(--dt-text-muted);
     }
 
     table.commands-table td.col-index {
       text-align: right;
-      color: var(--my-theme-600);
+      color: var(--dt-text-muted);
     }
 
     .browser-controls {
@@ -228,9 +232,9 @@
     }
 
     input#command-filter {
-      background-color: #0a0a0a;
-      color: var(--my-theme-300);
-      border: 1px solid var(--my-theme-700);
+      background-color: var(--dt-surface);
+      color: var(--dt-text);
+      border: 1px solid var(--dt-border-strong);
       border-radius: 4px;
       padding: 0.3rem 0.6rem;
       font-family: monospace;
@@ -240,8 +244,8 @@
 
     button.inspector-button {
       background-color: transparent;
-      color: var(--my-theme-300);
-      border: 1px solid var(--my-theme-700);
+      color: var(--dt-text);
+      border: 1px solid var(--dt-border-strong);
       border-radius: 4px;
       padding: 0.3rem 0.9rem;
       font-size: 0.8rem;
@@ -249,8 +253,8 @@
     }
 
     button.inspector-button:hover:enabled {
-      border-color: var(--my-theme-400);
-      color: var(--my-theme-100);
+      border-color: var(--dt-border-hover);
+      color: var(--dt-text-strong);
     }
 
     button.inspector-button:disabled {
@@ -259,8 +263,8 @@
     }
 
     button.inspector-load {
-      background-color: var(--my-theme-500);
-      color: var(--my-theme-950);
+      background-color: var(--dt-accent);
+      color: var(--dt-accent-contrast);
       border: 0;
       border-radius: 4px;
       padding: 0.5rem 1.5rem;
@@ -275,7 +279,7 @@
 
     .inspector-note {
       font-size: 0.75rem;
-      color: var(--my-theme-600);
+      color: var(--dt-text-muted);
       margin-top: 0.75rem;
     }
 
@@ -283,18 +287,91 @@
       font-size: 0.8rem;
     }
 
+    /* Instantiation-settings editor */
+    .settings-editor {
+      max-width: 46rem;
+    }
+
+    textarea#settings-json {
+      background-color: var(--dt-surface);
+      color: var(--dt-text);
+      border: 1px solid var(--dt-border-strong);
+      border-radius: 4px;
+      padding: 0.5rem 0.75rem;
+      font-family: monospace;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      width: 100%;
+      height: 22rem;
+      resize: vertical;
+      overflow: auto;
+      white-space: pre;
+      box-sizing: border-box;
+    }
+
+    .settings-validation {
+      font-family: monospace;
+      font-size: 0.8rem;
+      min-height: 1.2rem;
+      margin: 0.35rem 0 0.5rem;
+    }
+
+    .settings-validation.valid {
+      color: var(--dt-good);
+    }
+
+    .settings-validation.error {
+      color: var(--dt-bad);
+    }
+
+    .settings-buttons {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
     /* Debugger layout: command table on the left, live preview + transport +
        state panel stacked in a sticky column on the right. */
     .debugger-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 26rem;
-      gap: 1.5rem;
+      /* --panel-w is driven by the drag handle (main.js) and persisted */
+      grid-template-columns: minmax(0, 1fr) 8px var(--panel-w, 28rem);
+      gap: 0.75rem;
       align-items: start;
+    }
+
+    .split-handle {
+      align-self: stretch;
+      width: 8px;
+      border-radius: 4px;
+      cursor: col-resize;
+      background-color: var(--dt-border);
+      touch-action: none;
+    }
+
+    .split-handle:hover,
+    .split-handle.active {
+      background-color: var(--dt-border-hover);
+    }
+
+    body.dragging-split {
+      user-select: none;
+      cursor: col-resize;
+    }
+
+    /* iframes swallow pointermove; a drag crossing the preview would stick */
+    body.dragging-split #frame-holder iframe {
+      pointer-events: none;
     }
 
     @media (max-width: 1100px) {
       .debugger-grid {
         grid-template-columns: 1fr;
+      }
+
+      .split-handle {
+        display: none;
       }
     }
 
@@ -304,17 +381,17 @@
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
-      background-color: #141414;
+      background-color: var(--dt-bg);
       z-index: 1;
     }
 
     #frame-holder {
       width: 100%;
       height: 380px;
-      border: 1px solid var(--my-theme-800);
+      border: 1px solid var(--dt-border);
       border-radius: 4px;
       overflow: hidden;
-      background: #0a0a0a;
+      background: var(--dt-canvas-well);
     }
 
     #frame-holder iframe {
@@ -334,13 +411,13 @@
     .debug-readout {
       font-family: monospace;
       font-size: 0.8rem;
-      color: var(--my-theme-100);
+      color: var(--dt-text-strong);
       min-height: 2.4rem;
       line-height: 1.4;
     }
 
     .debug-readout .debug-command {
-      color: var(--my-theme-400);
+      color: var(--dt-text);
       display: block;
       white-space: nowrap;
       overflow: hidden;
@@ -348,7 +425,7 @@
     }
 
     table.state-table td:first-child {
-      color: var(--my-theme-100);
+      color: var(--dt-text-strong);
     }
 
     table.state-table tr.changed td {
@@ -356,8 +433,8 @@
     }
 
     table.state-table tr.state-group td {
-      background-color: var(--my-theme-950);
-      color: var(--my-theme-100);
+      background-color: var(--dt-table-head-bg);
+      color: var(--dt-text-strong);
       font-size: 0.75rem;
       text-align: left;
     }
@@ -378,7 +455,7 @@
     }
 
     table.commands-table td.col-bp:hover::before {
-      color: var(--my-theme-600);
+      color: var(--dt-text-muted);
     }
 
     table.commands-table td.col-bp.bp-on::before {
@@ -397,7 +474,10 @@
 
 <body>
   <div class="inspector-page">
-    <h1 class="m-3 mb-2">GCode Debugger</h1>
+    <div class="page-head">
+      <h1 class="m-3 mb-2">GCode Debugger</h1>
+      <button id="theme-toggle" class="theme-toggle" type="button">Light</button>
+    </div>
     <p class="mb-4">
       <a class="back-link" href="../">&larr; dev tools</a> &middot;
       <a class="back-link" href="/index.html">demo</a>
@@ -422,6 +502,24 @@
     <div id="status" class="inspector-status">Pick a version and a file, then hit load.</div>
 
     <div id="results" style="display: none">
+      <details class="inspector-section" id="settings-section">
+        <summary>Instantiation settings</summary>
+        <div class="settings-editor">
+          <textarea id="settings-json" spellcheck="false" wrap="off"></textarea>
+          <div id="settings-validation" class="settings-validation"></div>
+          <div class="settings-buttons">
+            <button id="settings-apply" class="inspector-button">Apply</button>
+            <button id="settings-reset" class="inspector-button">Reset to default</button>
+            <div class="bulma-select"><select id="settings-preset"></select></div>
+          </div>
+          <p class="inspector-note">
+            The full options object passed to the GCodePreview constructor (minus canvas). Apply
+            rebuilds the debug session with the edited settings, keeping breakpoints and the
+            current command. Edits persist across reloads until "Reset to default".
+          </p>
+        </div>
+      </details>
+
       <div class="inspector-grid">
         <details class="inspector-section" id="summary-section">
           <summary>Summary</summary>
@@ -464,6 +562,7 @@
               </table>
             </div>
           </div>
+          <div id="split-handle" class="split-handle" title="drag to resize; double-click to reset"></div>
           <div class="debug-panel">
             <div id="frame-holder"></div>
             <div class="transport-controls">

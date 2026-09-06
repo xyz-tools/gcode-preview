@@ -11,8 +11,9 @@
 // lib/runner-frame.js resolves on the first 'result' and stops listening, so
 // it cannot serve follow-up page queries; this page manages its own iframe.
 // Protocol (runner → parent / parent → runner):
-//   'ready'                          → { type: 'load', gcode, settings }
-//   { type: 'loaded', debuggable, firstCommandIndex, summary, histogram }
+//   'ready'                          → { type: 'load', gcode, settings, fallbackSettings }
+//   { type: 'loaded', debuggable, firstCommandIndex, settingsError, settingsEcho, summary, histogram }
+//   { type: 'apply-settings', settings } → { type: 'settings-applied', ok, message, echo } + a 'debug' stop
 //   { type: 'query', offset, limit, filter } → { type: 'page', rows, total, offset, filter }
 //   { type: 'debug-step' } | { type: 'debug-seek', index }
 //   { type: 'debug-continue', breakpoints, toEnd }
@@ -66,7 +67,10 @@ function spawnFrame(importMap, handlers) {
     if (!frame || event.source !== iframe.contentWindow) return;
     const message = event.data;
     if (!message || typeof message.type !== 'string') return;
-    handlers[message.type]?.(message);
+    // own-property guard: a type like '__proto__' must not dispatch into
+    // Object.prototype (CodeQL: unvalidated dynamic method call)
+    if (!Object.hasOwn(handlers, message.type)) return;
+    handlers[message.type](message);
   };
   window.addEventListener('message', onMessage);
 
@@ -95,7 +99,9 @@ const post = (message) => frame?.iframe.contentWindow.postMessage(message, '*');
 //
 // One JSON blob under one key:
 //   { version, source: { type:'preset', key } | { type:'text', text } | null,
-//     breakpoints: number[] }
+//     breakpoints: number[], settingsOverride: string | null }
+// settingsOverride is the raw settings-editor text (saved verbatim on every
+// edit); a non-string or unparsable value is silently ignored at use time.
 // source is null when the pasted text was too large to store. The debug
 // position is deliberately not persisted. Storage is treated as hostile: a
 // corrupt value is removed and ignored (this repo has shipped a
@@ -132,7 +138,17 @@ function readStoredState() {
     if (!Array.isArray(state.breakpoints) || !state.breakpoints.every((n) => Number.isInteger(n) && n >= 0)) {
       throw new Error('bad breakpoints');
     }
-    return { version: state.version, source, breakpoints: state.breakpoints };
+    // a bad override is dropped on its own rather than condemning the blob
+    const settingsOverride = typeof state.settingsOverride === 'string' ? state.settingsOverride : null;
+    // likewise for the column split: wrong type or out of range → default
+    const splitPx =
+      typeof state.splitPx === 'number' &&
+      Number.isFinite(state.splitPx) &&
+      state.splitPx >= 320 &&
+      state.splitPx <= 4000
+        ? state.splitPx
+        : null;
+    return { version: state.version, source, breakpoints: state.breakpoints, settingsOverride, splitPx };
   } catch {
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -148,7 +164,9 @@ function persistState() {
   const payload = {
     version: session.version,
     source: session.source,
-    breakpoints: [...debug.breakpoints].sort((a, b) => a - b)
+    breakpoints: [...debug.breakpoints].sort((a, b) => a - b),
+    settingsOverride: overrideText,
+    splitPx
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -170,6 +188,7 @@ function restoreSession() {
   versionSelect.value = hasVersion ? stored.version : LOCAL_VERSION;
 
   pendingBreakpoints = stored.breakpoints;
+  overrideText = stored.settingsOverride;
   if (!stored.source) return; // nothing auto-loadable was stored
 
   if (stored.source.type === 'preset') {
@@ -181,6 +200,231 @@ function restoreSession() {
     el('gcode-text').value = stored.source.text;
   }
   el('load-button').click();
+}
+
+// ---------------------------------------------------------------------------
+// Resizable split between the commands list and the debug panel
+//
+// The drag handle drives the grid's --panel-w custom property. The value is
+// persisted (splitPx in the storage blob) on drag end; double-click resets to
+// the CSS default. Pointer capture keeps the drag alive across the preview
+// iframe (whose pointer events are disabled while dragging).
+
+const PANEL_MIN_PX = 320;
+const COMMANDS_MIN_PX = 360;
+
+let splitPx = readStoredState()?.splitPx ?? null;
+
+function applySplit() {
+  const grid = document.querySelector('.debugger-grid');
+  if (splitPx === null) {
+    grid.style.removeProperty('--panel-w');
+  } else {
+    grid.style.setProperty('--panel-w', `${splitPx}px`);
+  }
+}
+
+function maxPanelWidth() {
+  const grid = document.querySelector('.debugger-grid');
+  // handle (8px) + two 0.75rem gaps ≈ 32px of non-column width
+  return Math.max(PANEL_MIN_PX, grid.getBoundingClientRect().width - COMMANDS_MIN_PX - 32);
+}
+
+{
+  const handle = el('split-handle');
+  let drag = null;
+
+  handle.addEventListener('pointerdown', (event) => {
+    const panel = document.querySelector('.debug-panel');
+    drag = { startX: event.clientX, startWidth: panel.getBoundingClientRect().width };
+    try {
+      handle.setPointerCapture(event.pointerId);
+    } catch {
+      // capture is an optimization; a pointer id the browser doesn't track
+      // (synthetic events) still gets move/up through the handle listeners
+    }
+    handle.classList.add('active');
+    document.body.classList.add('dragging-split');
+    event.preventDefault();
+  });
+
+  handle.addEventListener('pointermove', (event) => {
+    if (!drag) return;
+    // handle sits left of the panel: dragging left grows the panel
+    const width = drag.startWidth + (drag.startX - event.clientX);
+    splitPx = Math.round(Math.min(maxPanelWidth(), Math.max(PANEL_MIN_PX, width)));
+    applySplit();
+    renderVirtual(true);
+  });
+
+  const endDrag = () => {
+    if (!drag) return;
+    drag = null;
+    handle.classList.remove('active');
+    document.body.classList.remove('dragging-split');
+    persistState();
+    renderVirtual(true);
+    post({ type: 'resize' }); // the preview canvas changed size
+  };
+  handle.addEventListener('pointerup', endDrag);
+  handle.addEventListener('pointercancel', endDrag);
+
+  handle.addEventListener('dblclick', () => {
+    splitPx = null;
+    applySplit();
+    persistState();
+    renderVirtual(true);
+    post({ type: 'resize' });
+  });
+
+  applySplit();
+}
+
+// ---------------------------------------------------------------------------
+// Instantiation-settings editor
+//
+// The editor shows the full options object handed to the GCodePreview
+// constructor (minus canvas). With no override it shows the current file's
+// computed per-preset defaults; an override (raw editor text, persisted on
+// every edit) wins verbatim at every instantiation until Reset.
+
+// Computed defaults of the currently loaded file (set by loadFile).
+let computedDefaults = null;
+// Raw editor text override, or null when running on defaults. Initialized
+// from storage so a manual load before restoreSession still honors it.
+let overrideText = readStoredState()?.settingsOverride ?? null;
+
+// Curated variants; each is the current file's defaults plus a small delta,
+// so buildVolume/camera stay appropriate for the loaded gcode.
+const SETTINGS_PRESETS = [
+  { key: 'default', label: 'Default', delta: {} },
+  { key: 'lines', label: 'Lines (no tubes)', delta: { renderTubes: false } },
+  { key: 'tubes', label: 'Tubes (3D)', delta: { renderTubes: true } },
+  { key: 'travel', label: 'Travel visible', delta: { renderTravel: true, travelColor: '#00ff00' } },
+  { key: 'ortho', label: 'Orthographic camera', delta: { orthographic: true } },
+  {
+    key: 'contrast',
+    label: 'High-contrast colors',
+    delta: {
+      backgroundColor: '#000000',
+      extrusionColor: '#ffffff',
+      topLayerColor: '#ff0080',
+      lastSegmentColor: '#00ffff',
+      renderTravel: true,
+      travelColor: '#ffff00'
+    }
+  }
+];
+
+// Throws with a readable message when the text is not a settings object.
+function parseSettingsText(text) {
+  const value = JSON.parse(text);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('settings must be a JSON object');
+  }
+  return value;
+}
+
+// The stored override as an object, or null when absent/unparsable (in which
+// case instantiation silently uses the computed defaults).
+function parsedOverride() {
+  if (typeof overrideText !== 'string' || overrideText.trim() === '') return null;
+  try {
+    return parseSettingsText(overrideText);
+  } catch {
+    return null;
+  }
+}
+
+function setValidation(message, kind) {
+  const line = el('settings-validation');
+  line.textContent = message;
+  line.className = `settings-validation ${kind}`;
+}
+
+// Parses the editor text into the validation line; returns the object or null.
+function refreshValidation() {
+  try {
+    const value = parseSettingsText(el('settings-json').value);
+    setValidation('valid JSON — Apply rebuilds the session with it', 'valid');
+    return value;
+  } catch (error) {
+    setValidation(String(error?.message ?? error), 'error');
+    return null;
+  }
+}
+
+function fillSettingsEditor() {
+  el('settings-json').value = overrideText ?? JSON.stringify(computedDefaults, null, 2);
+  refreshValidation();
+}
+
+function applySettingsToRunner(settings) {
+  if (!debug.available || debug.busy) return;
+  debug.busy = true;
+  updateTransport();
+  post({ type: 'apply-settings', settings });
+}
+
+function onSettingsApplied({ ok, message, echo }) {
+  if (ok) {
+    setValidation('applied — session rebuilt with these settings', 'valid');
+  } else {
+    setValidation(`constructor rejected: ${message} — reverted to last working settings`, 'error');
+  }
+  // echo of what the scene manager actually holds, inspectable via tooltip
+  el('settings-validation').title = echo ? JSON.stringify(echo) : '';
+}
+
+let settingsDebounce;
+el('settings-json').addEventListener('input', () => {
+  clearTimeout(settingsDebounce);
+  settingsDebounce = setTimeout(() => {
+    overrideText = el('settings-json').value;
+    refreshValidation();
+    persistState();
+  }, 300);
+});
+
+el('settings-apply').addEventListener('click', () => {
+  const value = refreshValidation();
+  if (!value) return;
+  overrideText = el('settings-json').value;
+  persistState();
+  applySettingsToRunner(value);
+});
+
+el('settings-reset').addEventListener('click', () => {
+  overrideText = null;
+  persistState();
+  fillSettingsEditor();
+  if (computedDefaults) applySettingsToRunner(computedDefaults);
+});
+
+el('settings-preset').addEventListener('change', (event) => {
+  const preset = SETTINGS_PRESETS.find((entry) => entry.key === event.target.value);
+  event.target.value = ''; // snap back to the placeholder
+  if (!preset || !computedDefaults) return;
+  const merged = { ...computedDefaults, ...preset.delta };
+  overrideText = JSON.stringify(merged, null, 2);
+  el('settings-json').value = overrideText;
+  refreshValidation();
+  persistState();
+  applySettingsToRunner(merged);
+});
+
+{
+  const select = el('settings-preset');
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = 'presets…';
+  select.appendChild(placeholder);
+  for (const { key, label } of SETTINGS_PRESETS) {
+    const option = document.createElement('option');
+    option.value = key;
+    option.textContent = label;
+    select.appendChild(option);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -345,6 +589,10 @@ function updateTransport() {
   el('debug-continue').disabled = gate || atEnd;
   el('debug-run-first').disabled = gate || debug.firstCommand < 0;
   el('debug-run').disabled = gate || atEnd;
+  // the settings editor rebuilds the session, so it shares the same gate
+  el('settings-apply').disabled = gate;
+  el('settings-reset').disabled = gate;
+  el('settings-preset').disabled = gate;
 }
 
 function updateBreakpointButton() {
@@ -522,14 +770,20 @@ async function loadFile() {
   // no preset to supply one) still needs a build volume.
   const settings =
     pasted !== '' ? { backgroundColor: '#141414', buildVolume: { x: 200, y: 200, z: 0 } } : presetSettings(presetKey);
+  computedDefaults = settings;
+  // a stored override wins verbatim at every instantiation until Reset; the
+  // computed defaults ride along as the constructor-failure fallback
+  const override = parsedOverride();
+  const effectiveSettings = override ?? settings;
 
   setStatus('Resolving version…');
   const importMap = await buildImportMap(version);
 
   setStatus(`Parsing ${source} with ${version}…`);
   spawnFrame(importMap, {
-    ready: () => post({ type: 'load', gcode, settings }),
-    loaded: ({ summary, histogram, debuggable, firstCommandIndex }) => {
+    ready: () =>
+      post({ type: 'load', gcode, settings: effectiveSettings, fallbackSettings: override ? settings : undefined }),
+    loaded: ({ summary, histogram, debuggable, firstCommandIndex, settingsError, settingsEcho }) => {
       finishLoad();
       browser.loaded = true;
       renderSummary(summary);
@@ -559,6 +813,11 @@ async function loadFile() {
           'This build does not expose the interpreter — debugging needs the local build (or a version that does).';
       }
       updateTransport();
+      fillSettingsEditor();
+      if (settingsError) {
+        setValidation(`stored settings rejected by constructor: ${settingsError} — defaults used`, 'error');
+      }
+      el('settings-validation').title = settingsEcho ? JSON.stringify(settingsEcho) : '';
       virtual.total = summary.commands;
       updateSpacer();
       el('commands').scrollTop = 0;
@@ -567,6 +826,7 @@ async function loadFile() {
       // renderer its canvas has a real size now
       requestAnimationFrame(() => post({ type: 'resize' }));
     },
+    'settings-applied': (message) => onSettingsApplied(message),
     page: (message) => onPage(message),
     debug: (message) => onDebugStopped(message),
     progress: ({ index, target }) => {

@@ -4,6 +4,8 @@
   <meta charset="utf-8" />
   <title>GCode Preview — Visual diff</title>
   <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="../lib/theme.css" />
+  <script src="../lib/theme.js"></script>
   <style>
     /* the demo stylesheet disables page scrolling; devtools pages need it */
     html,
@@ -15,9 +17,9 @@
 
     body {
       margin: 0;
-      background-color: #141414;
+      background-color: var(--dt-bg);
       font-family: var(--bulma-family-primary, sans-serif);
-      color: var(--my-theme-300);
+      color: var(--dt-text);
     }
 
     .diff-page {
@@ -42,22 +44,22 @@
 
     .diff-controls label {
       font-size: 0.75rem;
-      color: var(--my-theme-100);
+      color: var(--dt-text-strong);
     }
 
     input#threshold {
       width: 5rem;
-      background-color: var(--my-theme-950);
-      color: var(--my-theme-100);
-      border: 1px solid var(--my-theme-700);
+      background-color: var(--dt-surface);
+      color: var(--dt-text-strong);
+      border: 1px solid var(--dt-border-strong);
       border-radius: 4px;
       padding: 0.35rem 0.5rem;
       font-size: 0.9rem;
     }
 
     button.diff-run {
-      background-color: var(--my-theme-500);
-      color: var(--my-theme-950);
+      background-color: var(--dt-accent);
+      color: var(--dt-accent-contrast);
       border: 0;
       border-radius: 4px;
       padding: 0.5rem 1.5rem;
@@ -74,11 +76,11 @@
       min-height: 1.5rem;
       font-size: 0.85rem;
       margin-bottom: 1rem;
-      color: var(--my-theme-100);
+      color: var(--dt-text-strong);
     }
 
     .diff-status.error {
-      color: #ff6b6b;
+      color: var(--dt-bad);
     }
 
     .diff-viewports {
@@ -89,7 +91,7 @@
     }
 
     .diff-viewport {
-      border: 1px solid var(--my-theme-700);
+      border: 1px solid var(--dt-border-strong);
       border-radius: 6px;
       overflow: hidden;
       flex: none;
@@ -98,8 +100,8 @@
     .diff-viewport header {
       padding: 0.35rem 0.75rem;
       font-size: 0.8rem;
-      color: var(--my-theme-100);
-      background-color: var(--my-theme-950);
+      color: var(--dt-text-strong);
+      background-color: var(--dt-table-head-bg);
       display: flex;
       justify-content: space-between;
     }
@@ -108,7 +110,7 @@
     .diff-viewport .frame-holder {
       width: 640px;
       height: 480px;
-      background-color: #0a0a0a;
+      background-color: var(--dt-canvas-well);
     }
 
     .diff-viewport iframe {
@@ -126,7 +128,7 @@
     }
 
     .diff-panel {
-      border: 1px solid var(--my-theme-700);
+      border: 1px solid var(--dt-border-strong);
       border-radius: 6px;
       overflow: hidden;
       flex: none;
@@ -135,14 +137,14 @@
     .diff-panel header {
       padding: 0.35rem 0.75rem;
       font-size: 0.8rem;
-      color: var(--my-theme-100);
-      background-color: var(--my-theme-950);
+      color: var(--dt-text-strong);
+      background-color: var(--dt-table-head-bg);
     }
 
     .diff-panel .panel-holder {
       width: 440px;
       height: 330px;
-      background-color: #0a0a0a;
+      background-color: var(--dt-canvas-well);
     }
 
     .diff-panel canvas {
@@ -156,12 +158,12 @@
       min-height: 1.5rem;
       font-size: 0.9rem;
       margin-bottom: 1rem;
-      color: var(--my-theme-100);
+      color: var(--dt-text-strong);
     }
 
     .diff-note {
       font-size: 0.75rem;
-      color: var(--my-theme-600);
+      color: var(--dt-text-muted);
       margin-top: 0.75rem;
     }
   </style>
@@ -169,7 +171,10 @@
 
 <body>
   <div class="diff-page">
-    <h1 class="m-3 mb-2">GCode Preview Visual Diff</h1>
+    <div class="page-head">
+      <h1 class="m-3 mb-2">GCode Preview Visual Diff</h1>
+      <button id="theme-toggle" class="theme-toggle" type="button">Light</button>
+    </div>
     <p class="mb-4">
       <a class="back-link" href="../">&larr; dev tools</a> &middot;
       <a class="back-link" href="/index.html">demo</a>
