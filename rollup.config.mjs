@@ -18,7 +18,8 @@ const config = [
         format: 'umd', // deprecated. might not work at some point
         name: 'GCodePreview', // the global which can be used in a browser
         globals: {
-          three: 'THREE'
+          three: 'THREE',
+          'lil-gui': 'lil'
         }
       }
     ],
