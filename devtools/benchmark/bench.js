@@ -15,6 +15,8 @@ const METRICS = [
 const el = (id) => document.getElementById(id);
 const statusEl = el('status');
 
+const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
 function setStatus(message, isError = false) {
   statusEl.textContent = message;
   statusEl.classList.toggle('error', isError);
@@ -105,10 +107,10 @@ function renderResults(labelA, labelB, aggregateA, aggregateB, runCount) {
   const bodyRows = rows
     .map(
       ({ metric, aText, bText, deltaText, deltaClass }) => `<tr>
-      <td>${metric.label}</td>
-      <td>${aText}</td>
-      <td>${bText}</td>
-      <td class="${deltaClass}">${deltaText}</td>
+      <td>${escapeHtml(metric.label)}</td>
+      <td>${escapeHtml(aText)}</td>
+      <td>${escapeHtml(bText)}</td>
+      <td class="${deltaClass}">${escapeHtml(deltaText)}</td>
     </tr>`
     )
     .join('');
@@ -116,10 +118,10 @@ function renderResults(labelA, labelB, aggregateA, aggregateB, runCount) {
   el('results').innerHTML = `<table class="bench-results">
     <thead>
       <tr>
-        <th>${metricHeader}</th>
-        <th>${headerA}</th>
-        <th>${headerB}</th>
-        <th>${headerDelta}</th>
+        <th>${escapeHtml(metricHeader)}</th>
+        <th>${escapeHtml(headerA)}</th>
+        <th>${escapeHtml(headerB)}</th>
+        <th>${escapeHtml(headerDelta)}</th>
       </tr>
     </thead>
     <tbody>${bodyRows}</tbody>

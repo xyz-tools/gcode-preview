@@ -21,6 +21,8 @@ const METRIC_LABELS = {
 const FLOAT_DECIMALS = 4;
 
 const el = (id) => document.getElementById(id);
+
+const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const statusEl = el('status');
 
 function setStatus(message, isError = false) {
@@ -65,9 +67,9 @@ function renderResults({ whole, streamed }) {
   const bodyRows = rows
     .map(
       (row) => `<tr>
-      <td>${row.label}</td>
-      <td>${row.wholeText}</td>
-      <td>${row.streamedText}</td>
+      <td>${escapeHtml(row.label)}</td>
+      <td>${escapeHtml(row.wholeText)}</td>
+      <td>${escapeHtml(row.streamedText)}</td>
       <td class="${row.match ? 'match-yes' : 'match-no'}">${row.match ? '✓' : '✗'}</td>
     </tr>`
     )
@@ -114,7 +116,7 @@ async function runCheck() {
 
   if (!streamingSupported) {
     el('results').innerHTML = `<div class="verdict unsupported">
-      Streaming is not supported by gcode-preview ${version} — nothing to compare.
+      Streaming is not supported by gcode-preview ${escapeHtml(version)} — nothing to compare.
     </div>`;
     setStatus('Done — streaming unsupported in this version.');
     return;
