@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>GCode Preview — Dev Tools</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    body {
+      margin: 0;
+      background-color: #141414;
+      font-family: var(--bulma-family-primary, sans-serif);
+      color: var(--my-theme-300);
+    }
+
+    .tools-page {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+
+    .tool-card {
+      display: block;
+      border: 1px solid var(--my-theme-700);
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+      text-decoration: none;
+    }
+
+    .tool-card:hover {
+      border-color: var(--my-theme-400);
+    }
+
+    .tool-card h2 {
+      margin: 0 0 0.25rem;
+      font-size: 1.1rem;
+      color: var(--my-theme-100);
+    }
+
+    .tool-card p {
+      margin: 0;
+      font-size: 0.85rem;
+      color: var(--my-theme-400);
+    }
+
+    a.back-link {
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="tools-page">
+    <h1 class="m-3 mb-2">GCode Preview Dev Tools</h1>
+    <p class="mb-4"><a class="back-link" href="/index.html">&larr; back to demo</a></p>
+
+    <a class="tool-card" href="benchmark/">
+      <h2>Benchmark</h2>
+      <p>Compare two library versions (npm or the local build) on a demo gcode file: parse time, time to first render, FPS while orbiting, peak heap.</p>
+    </a>
+  </div>
+</body>
+</html>

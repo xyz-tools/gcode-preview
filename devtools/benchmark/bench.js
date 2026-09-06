@@ -1,5 +1,7 @@
-import { presets } from '../presets.js';
-import { defaultSettings } from '../default-settings.js';
+// Served alongside the demo (see devtools/README.md): the demo is the server
+// root, so its preset catalog, gcodes, and library builds are one fetch away.
+import { presets } from '/js/presets.js';
+import { defaultSettings } from '/js/default-settings.js';
 
 // Preset keys that affect what geometry gets built and where the camera sits.
 // Sourced from defaultSettings + the selected preset (like the demo does), and
@@ -92,9 +94,9 @@ async function buildImportMap(version) {
   if (version === LOCAL_VERSION) {
     return {
       imports: {
-        'gcode-preview': new URL('dist/gcode-preview.es.js', document.baseURI).href,
-        three: new URL('lib/three/build/three.module.min.js', document.baseURI).href,
-        'lil-gui': new URL('lib/lil-gui/dist/lil-gui.esm.min.js', document.baseURI).href
+        'gcode-preview': new URL('/dist/gcode-preview.es.js', document.baseURI).href,
+        three: new URL('/lib/three/build/three.module.min.js', document.baseURI).href,
+        'lil-gui': new URL('/lib/lil-gui/dist/lil-gui.esm.min.js', document.baseURI).href
       }
     };
   }
@@ -119,7 +121,7 @@ async function buildImportMap(version) {
 }
 
 function runnerHtml(importMap) {
-  const runnerUrl = new URL('js/bench/runner.js', document.baseURI).href;
+  const runnerUrl = new URL('runner.js', import.meta.url).href;
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -298,7 +300,8 @@ async function runBenchmark() {
   const versionA = el('version-a').value;
   const versionB = el('version-b').value;
   const preset = presets[el('gcode-select').value];
-  const file = preset.file;
+  // Preset files are demo-root-relative ('gcodes/…') or absolute URLs.
+  const file = /^https?:\/\//.test(preset.file) ? preset.file : `/${preset.file}`;
   const runCount = parseInt(el('run-count').value, 10);
 
   const settings = { renderTubes: el('render-mode').value === 'tubes', backgroundColor: '#141414' };
