@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>GCode Preview — Parser Inspector</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    body {
+      margin: 0;
+      background-color: #141414;
+      font-family: var(--bulma-family-primary, sans-serif);
+      color: var(--my-theme-300);
+    }
+
+    .inspector-page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+
+    .inspector-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: flex-end;
+      margin-bottom: 1rem;
+    }
+
+    .inspector-controls .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .inspector-controls label {
+      font-size: 0.75rem;
+      color: var(--my-theme-100);
+    }
+
+    textarea#gcode-text {
+      background-color: #0a0a0a;
+      color: var(--my-theme-300);
+      border: 1px solid var(--my-theme-700);
+      border-radius: 4px;
+      padding: 0.4rem 0.6rem;
+      font-family: monospace;
+      font-size: 0.8rem;
+      width: 26rem;
+      max-width: 100%;
+      height: 4.5rem;
+      resize: vertical;
+    }
+
+    .inspector-status {
+      min-height: 1.5rem;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+      color: var(--my-theme-100);
+    }
+
+    .inspector-status.error {
+      color: #ff6b6b;
+    }
+
+    .inspector-section {
+      margin-bottom: 1.5rem;
+    }
+
+    .inspector-section h2 {
+      font-size: 1rem;
+      color: var(--my-theme-100);
+      margin: 0 0 0.5rem;
+    }
+
+    .inspector-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    @media (max-width: 900px) {
+      .inspector-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    table.inspector-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    table.inspector-table th,
+    table.inspector-table td {
+      border: 1px solid var(--my-theme-800);
+      padding: 0.35rem 0.75rem;
+      text-align: right;
+    }
+
+    table.inspector-table th:first-child,
+    table.inspector-table td:first-child {
+      text-align: left;
+    }
+
+    table.inspector-table thead th {
+      color: var(--my-theme-100);
+      background-color: var(--my-theme-950);
+    }
+
+    table.commands-table td {
+      text-align: left;
+      font-family: monospace;
+      font-size: 0.8rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 24rem;
+    }
+
+    table.commands-table td.col-index {
+      text-align: right;
+      color: var(--my-theme-600);
+    }
+
+    .browser-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    input#command-filter {
+      background-color: #0a0a0a;
+      color: var(--my-theme-300);
+      border: 1px solid var(--my-theme-700);
+      border-radius: 4px;
+      padding: 0.3rem 0.6rem;
+      font-family: monospace;
+      font-size: 0.85rem;
+      width: 16rem;
+    }
+
+    .browser-pager {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      font-size: 0.85rem;
+      color: var(--my-theme-100);
+    }
+
+    button.inspector-button {
+      background-color: transparent;
+      color: var(--my-theme-300);
+      border: 1px solid var(--my-theme-700);
+      border-radius: 4px;
+      padding: 0.3rem 0.9rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    button.inspector-button:hover:enabled {
+      border-color: var(--my-theme-400);
+      color: var(--my-theme-100);
+    }
+
+    button.inspector-button:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+
+    button.inspector-load {
+      background-color: var(--my-theme-500);
+      color: var(--my-theme-950);
+      border: 0;
+      border-radius: 4px;
+      padding: 0.5rem 1.5rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    button.inspector-load:disabled {
+      opacity: 0.5;
+      cursor: wait;
+    }
+
+    .inspector-note {
+      font-size: 0.75rem;
+      color: var(--my-theme-600);
+      margin-top: 0.75rem;
+    }
+
+    a.back-link {
+      font-size: 0.8rem;
+    }
+
+    /* The runner iframe does no rendering; it only needs to exist. */
+    #frame-holder {
+      width: 0;
+      height: 0;
+      overflow: hidden;
+    }
+
+    #frame-holder iframe {
+      width: 0;
+      height: 0;
+      border: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="inspector-page">
+    <h1 class="m-3 mb-2">Parser / Interpreter Inspector</h1>
+    <p class="mb-4">
+      <a class="back-link" href="../">&larr; dev tools</a> &middot;
+      <a class="back-link" href="/index.html">demo</a>
+    </p>
+
+    <div class="inspector-controls">
+      <div class="control-group">
+        <label for="version-select">Version</label>
+        <div class="bulma-select"><select id="version-select"></select></div>
+      </div>
+      <div class="control-group">
+        <label for="preset-select">GCode preset</label>
+        <div class="bulma-select"><select id="preset-select"></select></div>
+      </div>
+      <div class="control-group">
+        <label for="gcode-text">&hellip;or paste gcode (wins when non-empty)</label>
+        <textarea id="gcode-text" spellcheck="false" placeholder="G28&#10;G1 X10 Y10 E1"></textarea>
+      </div>
+      <button id="load-button" class="inspector-load">Load</button>
+    </div>
+
+    <div id="status" class="inspector-status">Pick a version and a file, then hit load.</div>
+
+    <div id="results" style="display: none">
+      <div class="inspector-grid">
+        <div class="inspector-section">
+          <h2>Summary</h2>
+          <div id="summary"></div>
+        </div>
+        <div class="inspector-section">
+          <h2>Command types</h2>
+          <div id="histogram"></div>
+        </div>
+      </div>
+
+      <div class="inspector-section">
+        <h2>Commands</h2>
+        <div class="browser-controls">
+          <input id="command-filter" type="text"
+            placeholder="filter: gcode (g92) or src/comment text" />
+          <div class="browser-pager">
+            <button id="page-prev" class="inspector-button">&larr; Prev</button>
+            <span id="page-label"></span>
+            <button id="page-next" class="inspector-button">Next &rarr;</button>
+          </div>
+          <span id="filter-total"></span>
+        </div>
+        <div id="commands"></div>
+      </div>
+    </div>
+
+    <div id="frame-holder"></div>
+
+    <p class="inspector-note">
+      The selected version parses the file inside a hidden iframe with its own import map and keeps
+      the full command list in memory there; only summaries and 200-row pages cross to this page.
+      Full inspection needs a 3.x build (2.x doesn't export the parser). "local build" uses
+      <code>dist/gcode-preview.es.js</code> from this checkout (run <code>npm run build</code> first).
+    </p>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

@@ -18,6 +18,19 @@ catalog (`/js/presets.js`), the bundled gcode files (`/gcodes/…`), and the loc
 library build (`/dist/gcode-preview.es.js` — produced by `npm run build`, or kept
 fresh by `npm run dev`'s watcher).
 
+## Shared infrastructure (`lib/`)
+
+- `versions.js` — lists published versions from jsDelivr and builds a per-version
+  import map (each release gets the three/lil-gui versions it was published
+  against; `local` maps to `/dist`).
+- `runner-frame.js` — runs a tool's runner script in a sandboxed iframe with its
+  own import map, with a small postMessage protocol
+  (`ready`/`phase`/`progress`/`result`/`error`).
+- `preview-compat.js` — version-agnostic construction: 3.x `GCodePreview`
+  (scene bits under `.sceneManager`) vs 2.x `WebGLPreview` (flat).
+- `demo-presets.js` — the demo's preset catalog, file URLs, and merged display
+  settings.
+
 ## Tools
 
 ### Benchmark (`benchmark/`)
@@ -35,3 +48,29 @@ table reports medians. Results can be copied as CSV or Markdown.
 
 Peak-heap numbers need Chrome (`performance.memory`); everything else works in
 any browser.
+
+### Memory-leak tester (`memory-leak/`)
+
+Release-gate check: runs repeated create → load → render → dispose cycles
+(fresh canvas each cycle, like a framework remount) and charts JS heap plus
+`renderer.info.memory` per cycle. A regression over the tail of the run flags
+"possible leak" vs "looks flat". Heap numbers need Chrome.
+
+### Streaming equivalence checker (`streaming-equivalence/`)
+
+Loads the same file twice in one version — once as a whole string, once as a
+ReadableStream chunked at a configurable size (small chunks maximize
+command-split-across-chunks coverage) — and diffs parser/job stats plus a
+rendered-triangles fingerprint. Any mismatch is a parser streaming bug.
+
+### Parser / interpreter inspector (`parser-inspector/`)
+
+Load a preset or paste gcode and inspect the parse result: summary stats,
+command-type histogram, and a paged, filterable command table (e.g. show only
+`G92`s). Full inspection targets 3.x builds (2.x doesn't export the parser).
+
+### Visual diff (`visual-diff/`)
+
+Renders the same file in two versions with a pinned camera/target, captures
+both canvases, and pixel-diffs them (changed pixels highlighted, % reported,
+adjustable threshold). Catches rendering regressions that timing numbers miss.

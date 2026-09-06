@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>GCode Preview — Memory-leak tester</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    body {
+      margin: 0;
+      background-color: #141414;
+      font-family: var(--bulma-family-primary, sans-serif);
+      color: var(--my-theme-300);
+    }
+
+    .bench-page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+
+    .bench-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: flex-end;
+      margin-bottom: 1rem;
+    }
+
+    .bench-controls .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .bench-controls label {
+      font-size: 0.75rem;
+      color: var(--my-theme-100);
+    }
+
+    .bench-status {
+      min-height: 1.5rem;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+      color: var(--my-theme-100);
+    }
+
+    .bench-status.error {
+      color: #ff6b6b;
+    }
+
+    .bench-viewport {
+      border: 1px solid var(--my-theme-700);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 1rem;
+    }
+
+    .bench-viewport header {
+      padding: 0.35rem 0.75rem;
+      font-size: 0.8rem;
+      color: var(--my-theme-100);
+      background-color: var(--my-theme-950);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .bench-viewport .frame-holder {
+      height: 260px;
+      background-color: #0a0a0a;
+    }
+
+    .bench-viewport iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+    }
+
+    .chart-panel {
+      border: 1px solid var(--my-theme-800);
+      border-radius: 6px;
+      padding: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .chart-panel h2 {
+      font-size: 0.8rem;
+      font-weight: normal;
+      color: var(--my-theme-100);
+      margin: 0 0 0.5rem 0;
+    }
+
+    #heap-chart {
+      display: block;
+      width: 100%;
+      height: 220px;
+    }
+
+    .chart-empty {
+      font-size: 0.8rem;
+      color: var(--my-theme-600);
+      padding: 1rem 0;
+    }
+
+    .verdict {
+      display: none;
+      border: 1px solid var(--my-theme-800);
+      border-radius: 6px;
+      padding: 0.6rem 0.9rem;
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+      color: var(--my-theme-100);
+    }
+
+    .verdict.ok {
+      border-color: #6bd06b;
+      color: #6bd06b;
+    }
+
+    .verdict.bad {
+      border-color: #ff6b6b;
+      color: #ff6b6b;
+    }
+
+    .verdict .verdict-note {
+      display: block;
+      margin-top: 0.25rem;
+      color: #ff6b6b;
+    }
+
+    table.bench-results {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    table.bench-results th,
+    table.bench-results td {
+      border: 1px solid var(--my-theme-800);
+      padding: 0.4rem 0.75rem;
+      text-align: right;
+    }
+
+    table.bench-results th:first-child,
+    table.bench-results td:first-child {
+      text-align: left;
+    }
+
+    table.bench-results thead th {
+      color: var(--my-theme-100);
+      background-color: var(--my-theme-950);
+    }
+
+    .bench-note {
+      font-size: 0.75rem;
+      color: var(--my-theme-600);
+      margin-top: 0.75rem;
+    }
+
+    button.bench-run {
+      background-color: var(--my-theme-500);
+      color: var(--my-theme-950);
+      border: 0;
+      border-radius: 4px;
+      padding: 0.5rem 1.5rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    button.bench-run:disabled {
+      opacity: 0.5;
+      cursor: wait;
+    }
+
+    a.back-link {
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="bench-page">
+    <h1 class="m-3 mb-2">GCode Preview Memory-leak Tester</h1>
+    <p class="mb-4">
+      <a class="back-link" href="../">&larr; dev tools</a> &middot;
+      <a class="back-link" href="/index.html">demo</a>
+    </p>
+
+    <div class="bench-controls">
+      <div class="control-group">
+        <label for="version-select">Version</label>
+        <div class="bulma-select"><select id="version-select"></select></div>
+      </div>
+      <div class="control-group">
+        <label for="gcode-select">GCode file</label>
+        <div class="bulma-select"><select id="gcode-select"></select></div>
+      </div>
+      <div class="control-group">
+        <label for="cycle-count">Cycles</label>
+        <div class="bulma-select">
+          <select id="cycle-count">
+            <option value="5">5</option>
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+          </select>
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="render-mode">Geometry</label>
+        <div class="bulma-select">
+          <select id="render-mode">
+            <option value="tubes">Tubes</option>
+            <option value="lines">Lines</option>
+          </select>
+        </div>
+      </div>
+      <button id="run-test" class="bench-run">Run test</button>
+    </div>
+
+    <div id="status" class="bench-status">Pick a version and a file, then hit run.</div>
+
+    <div class="bench-viewport">
+      <header><span>Runner</span><span id="frame-label"></span></header>
+      <div class="frame-holder" id="frame-holder"></div>
+    </div>
+
+    <div class="chart-panel">
+      <h2 id="chart-title">JS heap after dispose (MB), per cycle</h2>
+      <canvas id="heap-chart"></canvas>
+      <div id="chart-empty" class="chart-empty">Run the test to chart heap usage per cycle.</div>
+    </div>
+
+    <div id="verdict" class="verdict"></div>
+
+    <div id="results"></div>
+
+    <p class="bench-note">
+      Each run does repeated create &rarr; load &rarr; render &rarr; dispose cycles against a fresh
+      <code>&lt;canvas&gt;</code> (mimicking a framework remount) in one iframe, then samples heap and
+      renderer counters after every dispose. A healthy build holds heap, geometries, and textures flat
+      across cycles (release gate from issue #402). Heap numbers need Chrome
+      (<code>performance.memory</code>); geometry/texture counts work in any browser. "local build" uses
+      <code>dist/gcode-preview.es.js</code> from this checkout (run <code>npm run build</code> first).
+    </p>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
