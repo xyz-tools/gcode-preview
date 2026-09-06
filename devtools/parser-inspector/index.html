@@ -84,10 +84,20 @@
       margin-bottom: 1.5rem;
     }
 
-    .inspector-section h2 {
+    .inspector-section h2,
+    details.inspector-section summary {
       font-size: 1rem;
       color: var(--my-theme-100);
       margin: 0 0 0.5rem;
+    }
+
+    details.inspector-section summary {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    details.inspector-section summary::marker {
+      color: var(--my-theme-500);
     }
 
     .inspector-grid {
@@ -126,22 +136,41 @@
       background-color: var(--my-theme-950);
     }
 
+    /* Virtualized commands list: a header table above a scroll container
+       whose inner spacer is total × row height; only the visible window of
+       rows is rendered, in a body table absolutely positioned at its offset.
+       Fixed layout + shared colgroups keep the two tables' columns aligned;
+       separate borders + border-box heights make every row exactly 28px
+       (main.js relies on that for the spacer math). */
     table.commands-table {
-      /* auto table layout ignores cell max-widths, letting long src/params
-         push the table out of its grid column and under the debug panel */
       table-layout: fixed;
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin: 0;
     }
 
-    table.commands-table th.col-bp-head {
-      width: 1.5rem;
+    table.commands-table col.c-bp {
+      width: 1.6rem;
     }
 
-    table.commands-table th.col-index-head {
+    table.commands-table col.c-idx {
       width: 5.5rem;
     }
 
-    table.commands-table th.col-gcode-head {
+    table.commands-table col.c-gcode {
       width: 4.5rem;
+    }
+
+    table.commands-table th,
+    table.commands-table td {
+      border: 0;
+      border-bottom: 1px solid var(--my-theme-800);
+    }
+
+    table.commands-table th:not(:first-child),
+    table.commands-table td:not(:first-child) {
+      border-left: 1px solid var(--my-theme-800);
     }
 
     table.commands-table td {
@@ -151,7 +180,38 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 24rem;
+      box-sizing: border-box;
+      height: 28px;
+      padding: 0 0.75rem;
+      line-height: 27px;
+    }
+
+    .commands-head {
+      border: 1px solid var(--my-theme-800);
+      border-bottom: 0;
+    }
+
+    #commands {
+      position: relative;
+      overflow-y: auto;
+      height: calc(100vh - 260px);
+      min-height: 360px;
+      border: 1px solid var(--my-theme-800);
+    }
+
+    #commands-spacer {
+      width: 1px;
+    }
+
+    #commands-body {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+    }
+
+    #commands .row-loading td {
+      color: var(--my-theme-700);
     }
 
     table.commands-table td.col-index {
@@ -176,14 +236,6 @@
       font-family: monospace;
       font-size: 0.85rem;
       width: 16rem;
-    }
-
-    .browser-pager {
-      display: flex;
-      gap: 0.5rem;
-      align-items: center;
-      font-size: 0.85rem;
-      color: var(--my-theme-100);
     }
 
     button.inspector-button {
@@ -313,10 +365,9 @@
     /* breakpoint gutter */
     table.commands-table td.col-bp {
       cursor: pointer;
-      width: 1.2rem;
-      min-width: 1.2rem;
       text-align: center;
-      padding: 0.35rem 0.3rem;
+      /* keep the 28px row height — the generic td padding is already 0 */
+      padding: 0 0.3rem;
       user-select: none;
     }
 
@@ -372,14 +423,14 @@
 
     <div id="results" style="display: none">
       <div class="inspector-grid">
-        <div class="inspector-section">
-          <h2>Summary</h2>
+        <details class="inspector-section" id="summary-section">
+          <summary>Summary</summary>
           <div id="summary"></div>
-        </div>
-        <div class="inspector-section">
-          <h2>Command types</h2>
+        </details>
+        <details class="inspector-section" id="histogram-section">
+          <summary>Command types</summary>
           <div id="histogram"></div>
-        </div>
+        </details>
       </div>
 
       <div class="inspector-section">
@@ -389,14 +440,29 @@
             <div class="browser-controls">
               <input id="command-filter" type="text"
                 placeholder="filter: gcode (g92) or src/comment text" />
-              <div class="browser-pager">
-                <button id="page-prev" class="inspector-button">&larr; Prev</button>
-                <span id="page-label"></span>
-                <button id="page-next" class="inspector-button">Next &rarr;</button>
-              </div>
               <span id="filter-total"></span>
             </div>
-            <div id="commands"></div>
+            <div class="commands-head">
+              <table class="inspector-table commands-table">
+                <colgroup>
+                  <col class="c-bp" /><col class="c-idx" /><col class="c-gcode" />
+                  <col /><col /><col />
+                </colgroup>
+                <thead>
+                  <tr><th></th><th>#</th><th>gcode</th><th>params</th><th>comment</th><th>src</th></tr>
+                </thead>
+              </table>
+            </div>
+            <div id="commands">
+              <div id="commands-spacer"></div>
+              <table id="commands-body" class="inspector-table commands-table">
+                <colgroup>
+                  <col class="c-bp" /><col class="c-idx" /><col class="c-gcode" />
+                  <col /><col /><col />
+                </colgroup>
+                <tbody id="commands-rows"></tbody>
+              </table>
+            </div>
           </div>
           <div class="debug-panel">
             <div id="frame-holder"></div>
@@ -405,6 +471,8 @@
               <button id="debug-step-back" class="inspector-button">&larr; Step</button>
               <button id="debug-step" class="inspector-button">Step &rarr;</button>
               <button id="debug-continue" class="inspector-button">Continue</button>
+              <button id="debug-run-first" class="inspector-button"
+                title="run to the first real command, skipping metadata comments">Run to first</button>
               <button id="debug-run" class="inspector-button">Run to end</button>
               <button id="clear-breakpoints" class="inspector-button" style="display: none"></button>
             </div>
@@ -422,7 +490,8 @@
     <p class="inspector-note">
       The selected version parses the file inside an iframe with its own import map and keeps the
       full command list (and the debug session's job) in memory there; only summaries, 200-row
-      pages, and state snapshots cross to this page. The iframe doubles as the live debug preview.
+      windows of the virtual list, and state snapshots cross to this page. The iframe doubles as
+      the live debug preview.
       Full inspection needs a 3.x build (2.x doesn't export the parser). "local build" uses
       <code>dist/gcode-preview.es.js</code> from this checkout (run <code>npm run build</code> first).
     </p>

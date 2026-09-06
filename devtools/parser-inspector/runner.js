@@ -70,10 +70,15 @@ async function handleLoad({ gcode, settings }) {
   // interpreter instance and clear(). The local/3.x builds have both.
   const debuggable = typeof preview.interpreter?.execute === 'function' && typeof preview.clear === 'function';
 
+  // First command with an actual gcode, past the comment/blank preamble
+  // slicers emit — the "Run to first" seek target (-1 when there is none).
+  const firstCommandIndex = commands.findIndex((command) => Boolean(command.gcode));
+
   const stats = preview.job.stats;
   send({
     type: 'loaded',
     debuggable,
+    firstCommandIndex,
     summary: {
       lines: preview.parser.lineCount,
       commands: commands.length,

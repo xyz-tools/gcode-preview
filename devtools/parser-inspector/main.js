@@ -2,14 +2,17 @@
 // gcode file, and step through it like a debugger. The selected version runs
 // in an iframe (own import map) that stays alive after loading: the full
 // command list and the debug session's job live over there, and this page
-// only ever receives summaries, 200-row pages, and state snapshots. The
-// iframe itself is visible in the right-hand panel as the live debug preview.
+// only ever receives summaries, row windows, and state snapshots. The iframe
+// itself is visible in the right-hand panel as the live debug preview. The
+// commands table is a virtual-scrolled list: a spacer sized total × row
+// height, with only the visible rows (plus overscan) rendered, fetched from
+// the runner in 200-row windows and cached per filter view.
 //
 // lib/runner-frame.js resolves on the first 'result' and stops listening, so
 // it cannot serve follow-up page queries; this page manages its own iframe.
 // Protocol (runner → parent / parent → runner):
 //   'ready'                          → { type: 'load', gcode, settings }
-//   { type: 'loaded', debuggable, summary, histogram }
+//   { type: 'loaded', debuggable, firstCommandIndex, summary, histogram }
 //   { type: 'query', offset, limit, filter } → { type: 'page', rows, total, offset, filter }
 //   { type: 'debug-step' } | { type: 'debug-seek', index }
 //   { type: 'debug-continue', breakpoints, toEnd }
@@ -22,7 +25,13 @@
 import { loadVersions, buildImportMap, populateVersionSelect, LOCAL_VERSION } from '../lib/versions.js';
 import { populatePresetSelect, presetSettings, fetchPresetGcode } from '../lib/demo-presets.js';
 
-const PAGE_SIZE = 200;
+// Nominal row height per the commands-table CSS. Sub-pixel table rendering
+// (e.g. 28.5px at devicePixelRatio 2) would make the spacer math drift over
+// 163k rows, so the first rendered row is measured and the real value adopted
+// (see calibrateRowHeight).
+let rowHeight = 28;
+const WINDOW_SIZE = 200;
+const OVERSCAN_ROWS = 10;
 const LOAD_TIMEOUT_MS = 180_000;
 
 const el = (id) => document.getElementById(id);
@@ -82,17 +91,142 @@ function spawnFrame(importMap, handlers) {
 const post = (message) => frame?.iframe.contentWindow.postMessage(message, '*');
 
 // ---------------------------------------------------------------------------
-// Browser state
+// Virtual-scrolled commands list
 
-let browser = { loaded: false, offset: 0, filter: '', total: 0 };
-// last successfully rendered page, kept so breakpoint toggles can repaint
-// without a round trip to the runner
-let lastPage = null;
+const browser = { loaded: false, filter: '' };
 
-function requestPage() {
-  if (!browser.loaded) return;
-  post({ type: 'query', offset: browser.offset, limit: PAGE_SIZE, filter: browser.filter });
+// Positions are indices into the CURRENT view (filtered or not); each cached
+// row still carries its original command index. The cache is cleared whenever
+// the filter changes or a new file loads.
+const virtual = { total: 0, cache: new Map(), pending: new Set(), start: -1, end: -1 };
+
+function clearVirtualData() {
+  virtual.cache.clear();
+  virtual.pending.clear();
+  virtual.start = -1;
+  virtual.end = -1;
 }
+
+// Changes the active filter view; returns whether it actually changed.
+// Cached positions are meaningless across views, so the cache goes with it.
+function setFilter(next) {
+  if (next === browser.filter) return false;
+  browser.filter = next;
+  clearVirtualData();
+  return true;
+}
+
+function updateSpacer() {
+  el('commands-spacer').style.height = `${virtual.total * rowHeight}px`;
+}
+
+function updateFilterTotal() {
+  el('filter-total').textContent = browser.filter
+    ? `${formatCount(virtual.total)} command(s) match "${browser.filter}"`
+    : `${formatCount(virtual.total)} commands`;
+}
+
+function requestWindow(offset) {
+  if (!browser.loaded || virtual.pending.has(offset)) return;
+  virtual.pending.add(offset);
+  post({ type: 'query', offset, limit: WINDOW_SIZE, filter: browser.filter });
+}
+
+function rowHtml(row) {
+  const isBreakpoint = debug.breakpoints.has(row.index);
+  const classes = [isBreakpoint ? 'bp-row' : '', row.index === debug.index ? 'current-row' : '']
+    .filter(Boolean)
+    .join(' ');
+  return `<tr${classes ? ` class="${classes}"` : ''}>
+    <td class="col-bp${isBreakpoint ? ' bp-on' : ''}" data-index="${row.index}"
+      title="toggle breakpoint on command ${formatCount(row.index)}"></td>
+    <td class="col-index">${formatCount(row.index)}</td>
+    <td>${escapeHtml(row.gcode)}</td>
+    <td title="${escapeHtml(JSON.stringify(row.params))}">${escapeHtml(JSON.stringify(row.params))}</td>
+    <td title="${escapeHtml(row.comment)}">${escapeHtml(row.comment)}</td>
+    <td title="${escapeHtml(row.src)}">${escapeHtml(row.src)}</td>
+  </tr>`;
+}
+
+const placeholderHtml = `<tr class="row-loading">
+    <td class="col-bp"></td><td class="col-index">…</td><td></td><td colspan="3">loading…</td>
+  </tr>`;
+
+// Renders the visible window (plus overscan) of the virtual list, requesting
+// any 200-row windows not yet cached. Cheap enough to run per animation
+// frame while scrolling.
+function renderVirtual(force = false) {
+  if (!browser.loaded) return;
+  const scroller = el('commands');
+  const total = virtual.total;
+
+  const first = Math.max(0, Math.floor(scroller.scrollTop / rowHeight) - OVERSCAN_ROWS);
+  const last = Math.min(total - 1, Math.ceil((scroller.scrollTop + scroller.clientHeight) / rowHeight) + OVERSCAN_ROWS);
+  if (!force && first === virtual.start && last === virtual.end) return;
+  virtual.start = first;
+  virtual.end = last;
+
+  const rows = [];
+  for (let position = first; position <= last; position++) {
+    const windowOffset = Math.floor(position / WINDOW_SIZE) * WINDOW_SIZE;
+    const row = virtual.cache.get(position);
+    if (row) {
+      rows.push(rowHtml(row));
+    } else {
+      requestWindow(windowOffset);
+      rows.push(placeholderHtml);
+    }
+  }
+
+  el('commands-body').style.top = `${first * rowHeight}px`;
+  el('commands-rows').innerHTML = rows.join('');
+  updateFilterTotal();
+  calibrateRowHeight();
+}
+
+// Adopts the browser's actual rendered row height (sub-pixel table layout can
+// differ from the nominal CSS value) so spacer size, window positions, and
+// scroll targets stay exact across 163k rows.
+function calibrateRowHeight() {
+  const firstRow = el('commands-rows').querySelector('tr');
+  if (!firstRow) return;
+  const measured = firstRow.getBoundingClientRect().height;
+  if (!measured || Math.abs(measured - rowHeight) < 0.25) return;
+  rowHeight = measured;
+  updateSpacer();
+  renderVirtual(true);
+}
+
+function onPage({ rows, total, offset, filter }) {
+  // A stale reply (the filter changed while the runner was working) belongs
+  // to a dead view; its positions would corrupt the current cache.
+  if (filter !== browser.filter) return;
+  virtual.pending.delete(offset);
+  if (total !== virtual.total) {
+    virtual.total = total;
+    updateSpacer();
+  }
+  rows.forEach((row, n) => virtual.cache.set(offset + n, row));
+  renderVirtual(true);
+}
+
+// Centers the given view position in the scroll container.
+function scrollToPosition(position) {
+  const scroller = el('commands');
+  const target = (position + 0.5) * rowHeight - scroller.clientHeight / 2;
+  scroller.scrollTop = Math.max(0, target);
+  renderVirtual(true);
+}
+
+let scrollScheduled = false;
+el('commands').addEventListener('scroll', () => {
+  if (scrollScheduled) return;
+  scrollScheduled = true;
+  requestAnimationFrame(() => {
+    scrollScheduled = false;
+    renderVirtual();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Debug state
@@ -102,6 +236,7 @@ const debug = {
   busy: false,
   index: -1,
   total: 0,
+  firstCommand: -1,
   breakpoints: new Set(),
   // previous combined state+derived snapshot, for changed-key highlighting
   snapshot: null
@@ -115,6 +250,7 @@ function updateTransport() {
   el('debug-step-back').disabled = gate || atStart;
   el('debug-step').disabled = gate || atEnd;
   el('debug-continue').disabled = gate || atEnd;
+  el('debug-run-first').disabled = gate || debug.firstCommand < 0;
   el('debug-run').disabled = gate || atEnd;
 }
 
@@ -130,9 +266,9 @@ function resetDebugPanel(message) {
   debug.busy = false;
   debug.index = -1;
   debug.total = 0;
+  debug.firstCommand = -1;
   debug.breakpoints.clear();
   debug.snapshot = null;
-  lastPage = null;
   el('debug-readout').textContent = message;
   el('state-panel').innerHTML = '';
   updateTransport();
@@ -194,9 +330,9 @@ function renderStatePanel({ state, derived }) {
   debug.snapshot = snapshot;
 }
 
-// A completed debug operation: sync the panel, then jump the table to the
-// unfiltered page holding the current command (clearing any filter — noted in
-// the UI — so the highlighted row is actually on the page shown).
+// A completed debug operation: sync the panel, then scroll the unfiltered
+// virtual list so the current command sits centered (clearing any filter —
+// noted in the UI — so the highlighted row is actually in the view shown).
 function onDebugStopped(message) {
   debug.busy = false;
   debug.index = message.index;
@@ -206,13 +342,15 @@ function onDebugStopped(message) {
   updateTransport();
 
   el('command-filter').value = '';
-  browser.filter = '';
-  browser.offset = message.index <= 0 ? 0 : Math.floor(message.index / PAGE_SIZE) * PAGE_SIZE;
-  requestPage();
+  if (setFilter('')) {
+    virtual.total = debug.total;
+    updateSpacer();
+  }
+  scrollToPosition(Math.max(0, message.index));
 }
 
 // ---------------------------------------------------------------------------
-// Rendering
+// Summary + histogram
 
 const SUMMARY_ROWS = [
   { key: 'lines', label: 'Lines' },
@@ -257,45 +395,6 @@ function renderHistogram(histogram) {
   </table>`;
 }
 
-function renderPage({ rows, total, offset, filter }) {
-  // A stale reply (filter or page changed while the runner was working) would
-  // paint the wrong view; drop it, the current query's reply is on its way.
-  if (filter !== browser.filter || offset !== browser.offset) return;
-  browser.total = total;
-  lastPage = { rows, total, offset, filter };
-
-  const bodyRows = rows
-    .map((row) => {
-      const isBreakpoint = debug.breakpoints.has(row.index);
-      const classes = [isBreakpoint ? 'bp-row' : '', row.index === debug.index ? 'current-row' : '']
-        .filter(Boolean)
-        .join(' ');
-      return `<tr${classes ? ` class="${classes}"` : ''}>
-      <td class="col-bp${isBreakpoint ? ' bp-on' : ''}" data-index="${row.index}"
-        title="toggle breakpoint on command ${formatCount(row.index)}"></td>
-      <td class="col-index">${formatCount(row.index)}</td>
-      <td>${escapeHtml(row.gcode)}</td>
-      <td title="${escapeHtml(JSON.stringify(row.params))}">${escapeHtml(JSON.stringify(row.params))}</td>
-      <td title="${escapeHtml(row.comment)}">${escapeHtml(row.comment)}</td>
-      <td title="${escapeHtml(row.src)}">${escapeHtml(row.src)}</td>
-    </tr>`;
-    })
-    .join('');
-  el('commands').innerHTML = `<table class="inspector-table commands-table">
-    <thead><tr><th class="col-bp-head"></th><th class="col-index-head">#</th><th class="col-gcode-head">gcode</th><th>params</th><th>comment</th><th>src</th></tr></thead>
-    <tbody>${bodyRows}</tbody>
-  </table>`;
-
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const page = Math.floor(offset / PAGE_SIZE) + 1;
-  el('page-label').textContent = `page ${page} of ${formatCount(pageCount)}`;
-  el('page-prev').disabled = offset === 0;
-  el('page-next').disabled = offset + PAGE_SIZE >= total;
-  el('filter-total').textContent = filter
-    ? `${formatCount(total)} command(s) match "${filter}"`
-    : `${formatCount(total)} commands`;
-}
-
 // ---------------------------------------------------------------------------
 // Loading
 
@@ -309,7 +408,10 @@ async function loadFile() {
   const pasted = el('gcode-text').value.trim();
   const presetKey = el('preset-select').value;
 
-  browser = { loaded: false, offset: 0, filter: el('command-filter').value.trim(), total: 0 };
+  browser.loaded = false;
+  browser.filter = el('command-filter').value.trim();
+  clearVirtualData();
+  virtual.total = 0;
   el('results').style.display = 'none';
   resetDebugPanel('Loading…');
 
@@ -327,26 +429,33 @@ async function loadFile() {
   setStatus(`Parsing ${source} with ${version}…`);
   spawnFrame(importMap, {
     ready: () => post({ type: 'load', gcode, settings }),
-    loaded: ({ summary, histogram, debuggable }) => {
+    loaded: ({ summary, histogram, debuggable, firstCommandIndex }) => {
       finishLoad();
       browser.loaded = true;
       renderSummary(summary);
       renderHistogram(histogram);
+      // collapsed by default; the content is one click away
+      el('summary-section').open = false;
+      el('histogram-section').open = false;
       el('results').style.display = '';
       setStatus(`Loaded ${source} with ${version} — ${formatCount(summary.commands)} commands.`);
       debug.available = Boolean(debuggable);
       debug.total = summary.commands;
+      debug.firstCommand = firstCommandIndex ?? -1;
       if (!debuggable) {
         el('debug-readout').textContent =
           'This build does not expose the interpreter — debugging needs the local build (or a version that does).';
       }
       updateTransport();
-      requestPage();
+      virtual.total = summary.commands;
+      updateSpacer();
+      el('commands').scrollTop = 0;
+      renderVirtual(true);
       // the iframe was 0×0 while #results was hidden; after layout, tell the
       // renderer its canvas has a real size now
       requestAnimationFrame(() => post({ type: 'resize' }));
     },
-    page: (message) => renderPage(message),
+    page: (message) => onPage(message),
     debug: (message) => onDebugStopped(message),
     progress: ({ index, target }) => {
       el('debug-readout').textContent = `running… ${formatCount(index)} / ${formatCount(target)}`;
@@ -385,24 +494,13 @@ el('load-button').addEventListener('click', async () => {
   }
 });
 
-el('page-prev').addEventListener('click', () => {
-  browser.offset = Math.max(0, browser.offset - PAGE_SIZE);
-  requestPage();
-});
-
-el('page-next').addEventListener('click', () => {
-  if (browser.offset + PAGE_SIZE >= browser.total) return;
-  browser.offset += PAGE_SIZE;
-  requestPage();
-});
-
 let filterDebounce;
 el('command-filter').addEventListener('input', (event) => {
   clearTimeout(filterDebounce);
   filterDebounce = setTimeout(() => {
-    browser.filter = event.target.value.trim();
-    browser.offset = 0;
-    requestPage();
+    if (!setFilter(event.target.value.trim())) return;
+    el('commands').scrollTop = 0;
+    renderVirtual(true);
   }, 250);
 });
 
@@ -415,12 +513,13 @@ el('debug-step').addEventListener('click', () => startDebugOp({ type: 'debug-ste
 el('debug-continue').addEventListener('click', () =>
   startDebugOp({ type: 'debug-continue', breakpoints: [...debug.breakpoints], toEnd: false })
 );
+el('debug-run-first').addEventListener('click', () => startDebugOp({ type: 'debug-seek', index: debug.firstCommand }));
 el('debug-run').addEventListener('click', () => startDebugOp({ type: 'debug-continue', breakpoints: [], toEnd: true }));
 
 el('clear-breakpoints').addEventListener('click', () => {
   debug.breakpoints.clear();
   updateBreakpointButton();
-  if (lastPage) renderPage(lastPage);
+  renderVirtual(true);
 });
 
 el('commands').addEventListener('click', (event) => {
@@ -434,7 +533,7 @@ el('commands').addEventListener('click', (event) => {
     debug.breakpoints.add(index);
   }
   updateBreakpointButton();
-  if (lastPage) renderPage(lastPage);
+  renderVirtual(true);
 });
 
 populatePresetSelect(el('preset-select'), 'mach3');
