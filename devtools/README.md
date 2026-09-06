@@ -35,6 +35,8 @@ fresh by `npm run dev`'s watcher).
 
 ### Benchmark (`benchmark/`)
 
+![Benchmark](screenshots/benchmark.webp)
+
 Compares two versions of the library head-to-head on one of the demo gcode files,
 for the release-gate benchmarks of issue #402: parse time, time to first render,
 FPS while orbiting, and peak JS heap, plus geometry build time, triangles, and
@@ -51,12 +53,16 @@ any browser.
 
 ### Memory-leak tester (`memory-leak/`)
 
+![Memory-leak tester](screenshots/memory-leak.webp)
+
 Release-gate check: runs repeated create → load → render → dispose cycles
 (fresh canvas each cycle, like a framework remount) and charts JS heap plus
 `renderer.info.memory` per cycle. A regression over the tail of the run flags
 "possible leak" vs "looks flat". Heap numbers need Chrome.
 
 ### Streaming equivalence checker (`streaming-equivalence/`)
+
+![Streaming equivalence checker](screenshots/streaming-equivalence.webp)
 
 Loads the same file twice in one version — once as a whole string, once as a
 ReadableStream chunked at a configurable size (small chunks maximize
@@ -65,11 +71,15 @@ rendered-triangles fingerprint. Any mismatch is a parser streaming bug.
 
 ### Parser / interpreter inspector (`parser-inspector/`)
 
+![Parser inspector](screenshots/parser-inspector.webp)
+
 Load a preset or paste gcode and inspect the parse result: summary stats,
 command-type histogram, and a paged, filterable command table (e.g. show only
 `G92`s). Full inspection targets 3.x builds (2.x doesn't export the parser).
 
 ### Visual diff (`visual-diff/`)
+
+![Visual diff](screenshots/visual-diff.webp)
 
 Renders the same file in two versions with a pinned camera/target, captures
 both canvases, and pixel-diffs them (changed pixels highlighted, % reported,
