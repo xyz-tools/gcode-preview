@@ -85,7 +85,8 @@ next breakpoint, or jump straight past the slicer's metadata preamble with
 panel shows the interpreter's State object (position, positionShift, tool,
 units, isHomed) with the keys that changed on the last step highlighted.
 Stepping back re-executes from the start, which stays fast even on benchy
-(163k commands re-execute in tens of milliseconds).
+(163k commands re-execute in tens of milliseconds). The loaded file and
+breakpoints persist across reloads via localStorage.
 
 ### Visual diff (`visual-diff/`)
 
