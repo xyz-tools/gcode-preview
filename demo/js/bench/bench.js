@@ -1,4 +1,20 @@
 import { presets } from '../presets.js';
+import { defaultSettings } from '../default-settings.js';
+
+// Preset keys that affect what geometry gets built and where the camera sits.
+// Sourced from defaultSettings + the selected preset (like the demo does), and
+// sent identically to both versions so the comparison stays fair.
+const RUNNER_SETTING_KEYS = [
+  'buildVolume',
+  'initialCameraPosition',
+  'lineWidth',
+  'lineHeight',
+  'extrusionWidth',
+  'minLayerThreshold',
+  'renderExtrusion',
+  'renderTravel',
+  'travelColor'
+];
 
 const CDN = 'https://cdn.jsdelivr.net/npm';
 const CDN_API = 'https://data.jsdelivr.com/v1/packages/npm';
@@ -66,7 +82,7 @@ function populateGcodeSelect() {
   for (const [key, preset] of Object.entries(presets)) {
     if (!preset.file) continue;
     const option = document.createElement('option');
-    option.value = preset.file;
+    option.value = key;
     option.textContent = preset.title ?? key;
     select.appendChild(option);
   }
@@ -185,44 +201,111 @@ function formatValue(value, metric) {
   return metric.unit ? `${formatted} ${metric.unit}` : formatted;
 }
 
-function renderResults(labelA, labelB, aggregateA, aggregateB, runCount) {
-  const rows = METRICS.map((metric) => {
+function computeRows(aggregateA, aggregateB) {
+  return METRICS.map((metric) => {
     const a = aggregateA[metric.key];
     const b = aggregateB[metric.key];
-    let deltaCell = '<td>n/a</td>';
-    if (a !== undefined && b !== undefined && a !== 0) {
-      const delta = ((b - a) / a) * 100;
-      const improved = metric.better === 'higher' ? delta > 0 : delta < 0;
-      const cls = Math.abs(delta) < 2 ? '' : improved ? 'delta-better' : 'delta-worse';
-      deltaCell = `<td class="${cls}">${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%</td>`;
-    }
-    return `<tr>
+    const delta = a !== undefined && b !== undefined && a !== 0 ? ((b - a) / a) * 100 : undefined;
+    const improved = delta !== undefined && (metric.better === 'higher' ? delta > 0 : delta < 0);
+    return {
+      metric,
+      a,
+      b,
+      aText: formatValue(a, metric),
+      bText: formatValue(b, metric),
+      deltaText: delta === undefined ? 'n/a' : `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%`,
+      deltaClass: delta === undefined || Math.abs(delta) < 2 ? '' : improved ? 'delta-better' : 'delta-worse'
+    };
+  });
+}
+
+function headers(labelA, labelB, runCount) {
+  return [`Metric (median of ${runCount})`, `A: ${labelA}`, `B: ${labelB}`, 'B vs A'];
+}
+
+function toCsv(rows, labelA, labelB, runCount) {
+  const escape = (value) => (/[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
+  const lines = [headers(labelA, labelB, runCount)];
+  for (const { metric, a, b, deltaText } of rows) {
+    const label = metric.unit ? `${metric.label} (${metric.unit})` : metric.label;
+    const raw = (value) => (value === undefined ? 'n/a' : value.toFixed(metric.decimals));
+    lines.push([label, raw(a), raw(b), deltaText]);
+  }
+  return lines.map((cells) => cells.map(escape).join(',')).join('\n');
+}
+
+function toMarkdown(rows, labelA, labelB, runCount) {
+  const lines = [
+    `| ${headers(labelA, labelB, runCount).join(' | ')} |`,
+    '| --- | ---: | ---: | ---: |',
+    ...rows.map(({ metric, aText, bText, deltaText }) => `| ${metric.label} | ${aText} | ${bText} | ${deltaText} |`)
+  ];
+  return lines.join('\n');
+}
+
+async function copyToClipboard(text, button) {
+  try {
+    await navigator.clipboard.writeText(text);
+    const original = button.textContent;
+    button.textContent = 'Copied ✓';
+    setTimeout(() => (button.textContent = original), 1500);
+  } catch (error) {
+    console.error(error);
+    setStatus(`Could not copy to clipboard: ${error.message}`, true);
+  }
+}
+
+function renderResults(labelA, labelB, aggregateA, aggregateB, runCount) {
+  const rows = computeRows(aggregateA, aggregateB);
+  const [metricHeader, headerA, headerB, headerDelta] = headers(labelA, labelB, runCount);
+
+  const bodyRows = rows
+    .map(
+      ({ metric, aText, bText, deltaText, deltaClass }) => `<tr>
       <td>${metric.label}</td>
-      <td>${formatValue(a, metric)}</td>
-      <td>${formatValue(b, metric)}</td>
-      ${deltaCell}
-    </tr>`;
-  }).join('');
+      <td>${aText}</td>
+      <td>${bText}</td>
+      <td class="${deltaClass}">${deltaText}</td>
+    </tr>`
+    )
+    .join('');
 
   el('results').innerHTML = `<table class="bench-results">
     <thead>
       <tr>
-        <th>Metric (median of ${runCount})</th>
-        <th>A: ${labelA}</th>
-        <th>B: ${labelB}</th>
-        <th>B vs A</th>
+        <th>${metricHeader}</th>
+        <th>${headerA}</th>
+        <th>${headerB}</th>
+        <th>${headerDelta}</th>
       </tr>
     </thead>
-    <tbody>${rows}</tbody>
-  </table>`;
+    <tbody>${bodyRows}</tbody>
+  </table>
+  <div class="bench-export">
+    <button id="copy-csv" class="bench-copy">Copy CSV</button>
+    <button id="copy-markdown" class="bench-copy">Copy Markdown</button>
+  </div>`;
+
+  el('copy-csv').addEventListener('click', (event) =>
+    copyToClipboard(toCsv(rows, labelA, labelB, runCount), event.currentTarget)
+  );
+  el('copy-markdown').addEventListener('click', (event) =>
+    copyToClipboard(toMarkdown(rows, labelA, labelB, runCount), event.currentTarget)
+  );
 }
 
 async function runBenchmark() {
   const versionA = el('version-a').value;
   const versionB = el('version-b').value;
-  const file = el('gcode-select').value;
-  const renderTubes = el('render-mode').value === 'tubes';
+  const preset = presets[el('gcode-select').value];
+  const file = preset.file;
   const runCount = parseInt(el('run-count').value, 10);
+
+  const settings = { renderTubes: el('render-mode').value === 'tubes', backgroundColor: '#141414' };
+  for (const key of RUNNER_SETTING_KEYS) {
+    const value = preset[key] ?? defaultSettings[key];
+    if (value !== undefined) settings[key] = value;
+  }
 
   el('label-a').textContent = versionA;
   el('label-b').textContent = versionB;
@@ -246,7 +329,7 @@ async function runBenchmark() {
     for (const side of sides) {
       const progress = `run ${run}/${runCount} — ${side.label}`;
       setStatus(`${progress}: loading…`);
-      const metrics = await runInIframe(side.holder, side.importMap, { gcode, renderTubes }, (phase) => {
+      const metrics = await runInIframe(side.holder, side.importMap, { gcode, settings }, (phase) => {
         setStatus(`${progress}: ${phase}…`);
       });
       side.runs.push(metrics);

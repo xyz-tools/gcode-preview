@@ -55,7 +55,7 @@ function measureFpsWhileOrbiting(camera, target) {
   });
 }
 
-async function run({ gcode, renderTubes }) {
+async function run({ gcode, settings }) {
   const module = await import('gcode-preview');
   const Preview = module.GCodePreview ?? module.WebGLPreview;
   if (!Preview) throw new Error('no GCodePreview/WebGLPreview export found');
@@ -64,12 +64,7 @@ async function run({ gcode, renderTubes }) {
 
   const preview = new Preview({
     canvas: document.getElementById('canvas'),
-    buildVolume: { x: 180, y: 180, z: 180 },
-    renderTubes,
-    backgroundColor: '#141414',
-    initialCameraPosition: [-200, 232, 200],
-    lineHeight: 0.2,
-    extrusionWidth: 0.4
+    ...settings
   });
   // 3.x nests the scene under sceneManager; 2.x keeps everything flat.
   const scene = preview.sceneManager ?? preview;
