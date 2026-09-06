@@ -10,8 +10,12 @@ Join us on <a href="https://discord.gg/w2bsGRE6S4">discord</a>
 - multi-color
 - tube geometry
 - g2/g3 arcs
+- streaming (progressive rendering from a `ReadableStream`)
 - thumbnail preview
 - build volume
+- orthographic camera
+- slicer detection (PrusaSlicer family, Cura, Simplify3D, Slic3r)
+- drag & drop
 - examples for various frameworks
 
 ## Demo 
@@ -28,11 +32,13 @@ Click to see the [full-fledged demo](https://gcode-preview.web.app/):
 
 ## Installation
 
- `npm install gcode-preview`
+`npm install gcode-preview`
+
+GCode Preview depends on [three.js](https://threejs.org/) and supports `three` `>=0.166.0 <0.186.0`.
 
 ### Quick start
 
-```  
+```js
   import { GCodePreview } from 'gcode-preview';
 
   const preview = new GCodePreview({
@@ -44,6 +50,33 @@ Click to see the [full-fledged demo](https://gcode-preview.web.app/):
   const gcode = 'G0 X0 Y0 Z0.2\nG1 X42 Y42 E10';
   preview.processGCode(gcode);
 ```
+
+G-code can also be streamed in and rendered progressively:
+
+```js
+  const response = await fetch('benchy.gcode');
+  await preview.processGCodeStream(response.body);
+```
+
+### Constructor options
+
+The main options accepted by `new GCodePreview({ ... })` (see the
+[API docs](https://gcode-preview.web.app/docs) for the full reference):
+
+- `canvas` — the canvas element to render to
+- `buildVolume` — renders the build volume (see below)
+- colors: `backgroundColor`, `extrusionColor`, `travelColor`, `topLayerColor`, `lastSegmentColor`, `boundingBoxColor`
+- render toggles: `renderExtrusion`, `renderTravel`, `renderTubes`, `disableGradient`
+- geometry: `lineWidth`, `lineHeight`, `extrusionWidth`
+- layer range: `startLayer`, `endLayer`
+- camera: `orthographic`, `initialCameraPosition`
+- streaming: `liveRenderInterval` (throttles progressive rendering)
+- arcs: `arcChordTolerance` (tessellation precision for G2/G3)
+- misc: `droppable` (drag & drop g-code files onto the canvas), `devMode` (debug GUI + stats), `keepLines`, `minLayerThreshold`
+
+After construction, most rendering properties live on the scene manager and can
+be changed at runtime, e.g. `preview.sceneManager.renderTubes = true`, followed
+by a re-render.
 
 ### API Docs
 Check the full API documentation at https://gcode-preview.web.app/docs
@@ -63,12 +96,29 @@ Check the full API documentation at https://gcode-preview.web.app/docs
 
 ## Feature description
 
+### Supported G-code commands
+
+The interpreter currently handles:
+
+| Command | Meaning |
+| --- | --- |
+| `G0` / `G1` | linear move |
+| `G2` / `G3` | clockwise / counter-clockwise arc |
+| `G20` / `G21` | set units to inches / millimeters |
+| `G28` | home |
+| `G31` | straight probe |
+| `G38.2`–`G38.5` | probe family |
+| `G92` | set position |
+| `T0`–`T7` | tool selection |
+
+Commands without a handler are parsed but ignored by the interpreter.
+
 ### Multi-color support
 
-GCode files that were sliced for a multi-tool system can be previewed as such. Assign an array of colors to the `extrusionColor` property, where the index in the array corresponds to the index of the tool: T0..T7. 
+GCode files that were sliced for a multi-tool system can be previewed as such. Pass an array of colors as the `extrusionColor` constructor option (or assign `preview.sceneManager.extrusionColor` at runtime), where the index in the array corresponds to the index of the tool: T0..T7. 
 
 example: 
-```
+```js
 extrusionColor: ['hotpink', 'indigo', 'lime']
 ```
 Here, T0 is hotpink, T1 is indigo and T2 is lime.
@@ -86,8 +136,11 @@ Supported systems include:
  - and possibly more
 
 ### Render extrusion as tubes
-```
-renderTubes : true
+Extrusions are rendered as flat lines by default; pass the `renderTubes`
+constructor option to get true tube geometry (it can also be toggled at runtime
+via `preview.sceneManager.renderTubes`):
+```js
+new GCodePreview({ canvas, renderTubes: true });
 ```
 
 ### G2/G3 arc support
@@ -103,17 +156,19 @@ The thumbnails can be accessed like this:
 
 Thumbnails have a `.src` property that will create a usable data url from the base64 string.
 
-See an [example in the demo source](https://github.com/remcoder/gcode-preview/blob/v2.5.0/demo/demo.js#L190-L204).
+See an [example in the demo source](https://github.com/xyz-tools/gcode-preview/blob/develop/demo/js/app.js#L43-L50).
 
 ### Build volume
 The build volume will be rendered if the `buildVolume` parameter is passed. It has the following type: 
-```
+```ts
 buildVolume: { 
   x: number; 
   y: number; 
-  z: number
+  z: number;
+  smallGrid?: boolean;
 }
 ```
+Negative dimensions are clamped to 0.
 
 example:
 
@@ -134,12 +189,10 @@ Note the dev bundle:
  - has no type defs (.d.ts)
 
 ### Submitting a PR
-Before submitting a PR run:
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guidelines. In short, before submitting a PR run:
+- `npm run check` (test + typeCheck + lint)
 - `npm run build` for a production build
-- `npm run test` for unit tests
-- `npm run typeCheck` for typescript typings
-- `npm run lint` for code style and formatting
-- or all together: `npm run build && npm run test && npm run typeCheck && npm run lint`
+- `npm run test:coverage` — CI requires 100% coverage for every file under `src/`
 
 To auto-fix simple issues:
 - `npm run lint:fix` or `npm run prettier:fix`
@@ -150,7 +203,7 @@ For working on production builds you can use:
 - or just `npm run build` or `npm run build:watch`
 
 ## Feedback
-If you have found a bug or if have an idea for a feature, don't hesitate to [create an issue on GitHub](https://github.com/remcoder/gcode-preview/issues/new) or [talk to us on Discord](https://discord.gg/w2bsGRE6S4).
+If you have found a bug or if have an idea for a feature, don't hesitate to [create an issue on GitHub](https://github.com/xyz-tools/gcode-preview/issues/new) or [talk to us on Discord](https://discord.gg/w2bsGRE6S4).
 
 ## Contributing
 Want to help out? We are open to your ideas and always willing to get you started! [talk to us on Discord](https://discord.gg/w2bsGRE6S4).
