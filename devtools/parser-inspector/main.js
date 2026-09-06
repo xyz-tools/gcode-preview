@@ -1,14 +1,21 @@
 // Parser / interpreter inspector — see exactly what the parser makes of a
-// gcode file. The selected version runs in a hidden iframe (own import map)
-// that stays alive after loading, so the full command list lives over there
-// and this page only ever receives summaries and 200-row pages.
+// gcode file, and step through it like a debugger. The selected version runs
+// in an iframe (own import map) that stays alive after loading: the full
+// command list and the debug session's job live over there, and this page
+// only ever receives summaries, 200-row pages, and state snapshots. The
+// iframe itself is visible in the right-hand panel as the live debug preview.
 //
 // lib/runner-frame.js resolves on the first 'result' and stops listening, so
 // it cannot serve follow-up page queries; this page manages its own iframe.
 // Protocol (runner → parent / parent → runner):
 //   'ready'                          → { type: 'load', gcode, settings }
-//   { type: 'loaded', summary, histogram }
+//   { type: 'loaded', debuggable, summary, histogram }
 //   { type: 'query', offset, limit, filter } → { type: 'page', rows, total, offset, filter }
+//   { type: 'debug-step' } | { type: 'debug-seek', index }
+//   { type: 'debug-continue', breakpoints, toEnd }
+//     → { type: 'progress', index, target } (during) and
+//       { type: 'debug', index, total, command, state, derived, elapsedMs } (on stop)
+//   { type: 'resize' } — nudge the renderer after the iframe gains real size
 //   { type: 'unsupported', message } — version can't be inspected (2.x)
 //   { type: 'error', message }
 
@@ -78,10 +85,130 @@ const post = (message) => frame?.iframe.contentWindow.postMessage(message, '*');
 // Browser state
 
 let browser = { loaded: false, offset: 0, filter: '', total: 0 };
+// last successfully rendered page, kept so breakpoint toggles can repaint
+// without a round trip to the runner
+let lastPage = null;
 
 function requestPage() {
   if (!browser.loaded) return;
   post({ type: 'query', offset: browser.offset, limit: PAGE_SIZE, filter: browser.filter });
+}
+
+// ---------------------------------------------------------------------------
+// Debug state
+
+const debug = {
+  available: false,
+  busy: false,
+  index: -1,
+  total: 0,
+  breakpoints: new Set(),
+  // previous combined state+derived snapshot, for changed-key highlighting
+  snapshot: null
+};
+
+function updateTransport() {
+  const gate = !debug.available || debug.busy;
+  const atStart = debug.index <= -1;
+  const atEnd = debug.index >= debug.total - 1;
+  el('debug-reset').disabled = gate || atStart;
+  el('debug-step-back').disabled = gate || atStart;
+  el('debug-step').disabled = gate || atEnd;
+  el('debug-continue').disabled = gate || atEnd;
+  el('debug-run').disabled = gate || atEnd;
+}
+
+function updateBreakpointButton() {
+  const button = el('clear-breakpoints');
+  const count = debug.breakpoints.size;
+  button.style.display = count > 0 ? '' : 'none';
+  button.textContent = `Clear breakpoints (${count})`;
+}
+
+function resetDebugPanel(message) {
+  debug.available = false;
+  debug.busy = false;
+  debug.index = -1;
+  debug.total = 0;
+  debug.breakpoints.clear();
+  debug.snapshot = null;
+  lastPage = null;
+  el('debug-readout').textContent = message;
+  el('state-panel').innerHTML = '';
+  updateTransport();
+  updateBreakpointButton();
+}
+
+function startDebugOp(message) {
+  if (!debug.available || debug.busy) return;
+  debug.busy = true;
+  updateTransport();
+  post(message);
+}
+
+function renderReadout({ index, total, command, elapsedMs }) {
+  const readout = el('debug-readout');
+  const position =
+    index < 0
+      ? `not started / ${formatCount(total)} commands`
+      : `command ${formatCount(index)} / ${formatCount(total)}`;
+  const elapsed = elapsedMs !== undefined ? ` (${formatCount(elapsedMs)} ms)` : '';
+  const text = command
+    ? command.src?.trim() || `${command.gcode} ${JSON.stringify(command.params)}`
+    : 'initial state — nothing executed';
+  readout.innerHTML = `${escapeHtml(position + elapsed)}<span class="debug-command" title="${escapeHtml(
+    text
+  )}">${escapeHtml(text)}</span>`;
+}
+
+const formatStateValue = (value) => {
+  if (value === null) return 'undefined';
+  if (typeof value === 'boolean') return value ? 'yes' : 'no';
+  if (typeof value === 'number' && !Number.isInteger(value)) return String(Math.round(value * 1000) / 1000);
+  return String(value);
+};
+
+function renderStatePanel({ state, derived }) {
+  const snapshot = { ...state };
+  for (const [key, value] of Object.entries(derived)) snapshot[`job.${key}`] = value;
+
+  const previous = debug.snapshot;
+  const row = (key, value, label = key) => {
+    const changed = previous !== null && previous[key] !== value;
+    return `<tr${changed ? ' class="changed"' : ''}><td>${escapeHtml(label)}</td><td>${escapeHtml(
+      formatStateValue(value)
+    )}</td></tr>`;
+  };
+
+  const stateRows = Object.entries(state).map(([key, value]) => row(key, value));
+  const derivedRows = Object.entries(derived).map(([key, value]) => row(`job.${key}`, value, key));
+  el('state-panel').innerHTML = `<table class="inspector-table state-table">
+    <thead><tr><th>State</th><th>Value</th></tr></thead>
+    <tbody>
+      ${stateRows.join('')}
+      <tr class="state-group"><td colspan="2">job</td></tr>
+      ${derivedRows.join('')}
+    </tbody>
+  </table>`;
+
+  debug.snapshot = snapshot;
+}
+
+// A completed debug operation: sync the panel, then jump the table to the
+// unfiltered page holding the current command (clearing any filter — noted in
+// the UI — so the highlighted row is actually on the page shown).
+function onDebugStopped(message) {
+  debug.busy = false;
+  debug.index = message.index;
+  debug.total = message.total;
+  renderReadout(message);
+  renderStatePanel(message);
+  updateTransport();
+
+  el('command-filter').value = '';
+  browser.filter = '';
+  browser.offset = message.index <= 0 ? 0 : Math.floor(message.index / PAGE_SIZE) * PAGE_SIZE;
+  requestPage();
 }
 
 // ---------------------------------------------------------------------------
@@ -135,20 +262,27 @@ function renderPage({ rows, total, offset, filter }) {
   // paint the wrong view; drop it, the current query's reply is on its way.
   if (filter !== browser.filter || offset !== browser.offset) return;
   browser.total = total;
+  lastPage = { rows, total, offset, filter };
 
   const bodyRows = rows
-    .map(
-      (row) => `<tr>
+    .map((row) => {
+      const isBreakpoint = debug.breakpoints.has(row.index);
+      const classes = [isBreakpoint ? 'bp-row' : '', row.index === debug.index ? 'current-row' : '']
+        .filter(Boolean)
+        .join(' ');
+      return `<tr${classes ? ` class="${classes}"` : ''}>
+      <td class="col-bp${isBreakpoint ? ' bp-on' : ''}" data-index="${row.index}"
+        title="toggle breakpoint on command ${formatCount(row.index)}"></td>
       <td class="col-index">${formatCount(row.index)}</td>
       <td>${escapeHtml(row.gcode)}</td>
       <td title="${escapeHtml(JSON.stringify(row.params))}">${escapeHtml(JSON.stringify(row.params))}</td>
       <td title="${escapeHtml(row.comment)}">${escapeHtml(row.comment)}</td>
       <td title="${escapeHtml(row.src)}">${escapeHtml(row.src)}</td>
-    </tr>`
-    )
+    </tr>`;
+    })
     .join('');
   el('commands').innerHTML = `<table class="inspector-table commands-table">
-    <thead><tr><th>#</th><th>gcode</th><th>params</th><th>comment</th><th>src</th></tr></thead>
+    <thead><tr><th class="col-bp-head"></th><th class="col-index-head">#</th><th class="col-gcode-head">gcode</th><th>params</th><th>comment</th><th>src</th></tr></thead>
     <tbody>${bodyRows}</tbody>
   </table>`;
 
@@ -177,6 +311,7 @@ async function loadFile() {
 
   browser = { loaded: false, offset: 0, filter: el('command-filter').value.trim(), total: 0 };
   el('results').style.display = 'none';
+  resetDebugPanel('Loading…');
 
   setStatus('Fetching gcode…');
   const gcode = pasted !== '' ? pasted : await fetchPresetGcode(presetKey);
@@ -192,30 +327,47 @@ async function loadFile() {
   setStatus(`Parsing ${source} with ${version}…`);
   spawnFrame(importMap, {
     ready: () => post({ type: 'load', gcode, settings }),
-    loaded: ({ summary, histogram }) => {
+    loaded: ({ summary, histogram, debuggable }) => {
       finishLoad();
       browser.loaded = true;
       renderSummary(summary);
       renderHistogram(histogram);
       el('results').style.display = '';
       setStatus(`Loaded ${source} with ${version} — ${formatCount(summary.commands)} commands.`);
+      debug.available = Boolean(debuggable);
+      debug.total = summary.commands;
+      if (!debuggable) {
+        el('debug-readout').textContent =
+          'This build does not expose the interpreter — debugging needs the local build (or a version that does).';
+      }
+      updateTransport();
       requestPage();
+      // the iframe was 0×0 while #results was hidden; after layout, tell the
+      // renderer its canvas has a real size now
+      requestAnimationFrame(() => post({ type: 'resize' }));
     },
     page: (message) => renderPage(message),
+    debug: (message) => onDebugStopped(message),
+    progress: ({ index, target }) => {
+      el('debug-readout').textContent = `running… ${formatCount(index)} / ${formatCount(target)}`;
+    },
     unsupported: ({ message }) => {
       finishLoad();
       teardownFrame();
+      resetDebugPanel('No file loaded.');
       setStatus(message);
     },
     error: ({ message }) => {
       finishLoad();
       teardownFrame();
+      resetDebugPanel('No file loaded.');
       setStatus(`Load failed: ${message}`, true);
     }
   });
   frame.timeout = setTimeout(() => {
     finishLoad();
     teardownFrame();
+    resetDebugPanel('No file loaded.');
     setStatus('Load timed out.', true);
   }, LOAD_TIMEOUT_MS);
 }
@@ -252,6 +404,37 @@ el('command-filter').addEventListener('input', (event) => {
     browser.offset = 0;
     requestPage();
   }, 250);
+});
+
+// ---------------------------------------------------------------------------
+// Debugger wiring
+
+el('debug-reset').addEventListener('click', () => startDebugOp({ type: 'debug-seek', index: -1 }));
+el('debug-step-back').addEventListener('click', () => startDebugOp({ type: 'debug-seek', index: debug.index - 1 }));
+el('debug-step').addEventListener('click', () => startDebugOp({ type: 'debug-step' }));
+el('debug-continue').addEventListener('click', () =>
+  startDebugOp({ type: 'debug-continue', breakpoints: [...debug.breakpoints], toEnd: false })
+);
+el('debug-run').addEventListener('click', () => startDebugOp({ type: 'debug-continue', breakpoints: [], toEnd: true }));
+
+el('clear-breakpoints').addEventListener('click', () => {
+  debug.breakpoints.clear();
+  updateBreakpointButton();
+  if (lastPage) renderPage(lastPage);
+});
+
+el('commands').addEventListener('click', (event) => {
+  const cell = event.target.closest('td.col-bp');
+  if (!cell) return;
+  const index = Number(cell.dataset.index);
+  if (!Number.isInteger(index)) return;
+  if (debug.breakpoints.has(index)) {
+    debug.breakpoints.delete(index);
+  } else {
+    debug.breakpoints.add(index);
+  }
+  updateBreakpointButton();
+  if (lastPage) renderPage(lastPage);
 });
 
 populatePresetSelect(el('preset-select'), 'mach3');

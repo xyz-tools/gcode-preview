@@ -77,6 +77,14 @@ Load a preset or paste gcode and inspect the parse result: summary stats,
 command-type histogram, and a paged, filterable command table (e.g. show only
 `G92`s). Full inspection targets 3.x builds (2.x doesn't export the parser).
 
+The Commands section is also a live debugger: click a row's gutter to set a
+breakpoint, then step forward/back one command at a time or continue to the
+next breakpoint. A live preview renders the toolpath as you step, and a State
+panel shows the interpreter's State object (position, positionShift, tool,
+units, isHomed) with the keys that changed on the last step highlighted.
+Stepping back re-executes from the start, which stays fast even on benchy
+(163k commands re-execute in tens of milliseconds).
+
 ### Visual diff (`visual-diff/`)
 
 ![Visual diff](screenshots/visual-diff.webp)

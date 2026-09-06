@@ -5,12 +5,22 @@
   <title>GCode Preview — Parser Inspector</title>
   <link rel="stylesheet" href="/style.css" />
   <style>
-    /* the demo stylesheet disables page scrolling; devtools pages need it */
+    /* the demo stylesheet disables page scrolling; devtools pages need it.
+       body must stay overflow: visible — any other value makes it a scroll
+       container of its own, which silently disables the debug panel's
+       position: sticky (it would stick to body's never-moving scrollport). */
     html,
     body {
       height: auto;
       min-height: 100%;
+    }
+
+    html {
       overflow: auto;
+    }
+
+    body {
+      overflow: visible;
     }
 
     body {
@@ -116,6 +126,24 @@
       background-color: var(--my-theme-950);
     }
 
+    table.commands-table {
+      /* auto table layout ignores cell max-widths, letting long src/params
+         push the table out of its grid column and under the debug panel */
+      table-layout: fixed;
+    }
+
+    table.commands-table th.col-bp-head {
+      width: 1.5rem;
+    }
+
+    table.commands-table th.col-index-head {
+      width: 5.5rem;
+    }
+
+    table.commands-table th.col-gcode-head {
+      width: 4.5rem;
+    }
+
     table.commands-table td {
       text-align: left;
       font-family: monospace;
@@ -203,17 +231,115 @@
       font-size: 0.8rem;
     }
 
-    /* The runner iframe does no rendering; it only needs to exist. */
+    /* Debugger layout: command table on the left, live preview + transport +
+       state panel stacked in a sticky column on the right. */
+    .debugger-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 26rem;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    @media (max-width: 1100px) {
+      .debugger-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .debug-panel {
+      position: sticky;
+      top: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      background-color: #141414;
+      z-index: 1;
+    }
+
     #frame-holder {
-      width: 0;
-      height: 0;
+      width: 100%;
+      height: 380px;
+      border: 1px solid var(--my-theme-800);
+      border-radius: 4px;
       overflow: hidden;
+      background: #0a0a0a;
     }
 
     #frame-holder iframe {
-      width: 0;
-      height: 0;
+      width: 100%;
+      height: 100%;
       border: 0;
+      display: block;
+    }
+
+    .transport-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .debug-readout {
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: var(--my-theme-100);
+      min-height: 2.4rem;
+      line-height: 1.4;
+    }
+
+    .debug-readout .debug-command {
+      color: var(--my-theme-400);
+      display: block;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    table.state-table td:first-child {
+      color: var(--my-theme-100);
+    }
+
+    table.state-table tr.changed td {
+      background-color: rgba(255, 200, 80, 0.12);
+    }
+
+    table.state-table tr.state-group td {
+      background-color: var(--my-theme-950);
+      color: var(--my-theme-100);
+      font-size: 0.75rem;
+      text-align: left;
+    }
+
+    /* breakpoint gutter */
+    table.commands-table td.col-bp {
+      cursor: pointer;
+      width: 1.2rem;
+      min-width: 1.2rem;
+      text-align: center;
+      padding: 0.35rem 0.3rem;
+      user-select: none;
+    }
+
+    table.commands-table td.col-bp::before {
+      content: '\25CF';
+      color: transparent;
+      font-size: 0.7rem;
+    }
+
+    table.commands-table td.col-bp:hover::before {
+      color: var(--my-theme-600);
+    }
+
+    table.commands-table td.col-bp.bp-on::before {
+      color: #ff5252;
+    }
+
+    table.commands-table tr.bp-row td {
+      background-color: rgba(255, 82, 82, 0.07);
+    }
+
+    table.commands-table tr.current-row td {
+      background-color: rgba(80, 160, 255, 0.18);
     }
   </style>
 </head>
@@ -258,25 +384,45 @@
 
       <div class="inspector-section">
         <h2>Commands</h2>
-        <div class="browser-controls">
-          <input id="command-filter" type="text"
-            placeholder="filter: gcode (g92) or src/comment text" />
-          <div class="browser-pager">
-            <button id="page-prev" class="inspector-button">&larr; Prev</button>
-            <span id="page-label"></span>
-            <button id="page-next" class="inspector-button">Next &rarr;</button>
+        <div class="debugger-grid">
+          <div class="debugger-left">
+            <div class="browser-controls">
+              <input id="command-filter" type="text"
+                placeholder="filter: gcode (g92) or src/comment text" />
+              <div class="browser-pager">
+                <button id="page-prev" class="inspector-button">&larr; Prev</button>
+                <span id="page-label"></span>
+                <button id="page-next" class="inspector-button">Next &rarr;</button>
+              </div>
+              <span id="filter-total"></span>
+            </div>
+            <div id="commands"></div>
           </div>
-          <span id="filter-total"></span>
+          <div class="debug-panel">
+            <div id="frame-holder"></div>
+            <div class="transport-controls">
+              <button id="debug-reset" class="inspector-button">Reset</button>
+              <button id="debug-step-back" class="inspector-button">&larr; Step</button>
+              <button id="debug-step" class="inspector-button">Step &rarr;</button>
+              <button id="debug-continue" class="inspector-button">Continue</button>
+              <button id="debug-run" class="inspector-button">Run to end</button>
+              <button id="clear-breakpoints" class="inspector-button" style="display: none"></button>
+            </div>
+            <div id="debug-readout" class="debug-readout">No file loaded.</div>
+            <div id="state-panel"></div>
+            <p class="inspector-note">
+              Click a row's left gutter to toggle a breakpoint. Stepping clears the filter and
+              shows the (unfiltered) page containing the current command.
+            </p>
+          </div>
         </div>
-        <div id="commands"></div>
       </div>
     </div>
 
-    <div id="frame-holder"></div>
-
     <p class="inspector-note">
-      The selected version parses the file inside a hidden iframe with its own import map and keeps
-      the full command list in memory there; only summaries and 200-row pages cross to this page.
+      The selected version parses the file inside an iframe with its own import map and keeps the
+      full command list (and the debug session's job) in memory there; only summaries, 200-row
+      pages, and state snapshots cross to this page. The iframe doubles as the live debug preview.
       Full inspection needs a 3.x build (2.x doesn't export the parser). "local build" uses
       <code>dist/gcode-preview.es.js</code> from this checkout (run <code>npm run build</code> first).
     </p>
