@@ -1,14 +1,11 @@
-// Runs inside a sandboxed iframe with an import map pointing at one specific
-// gcode-preview version. Loads the library, measures, and posts results back.
-//
-// Works against both major APIs:
-//   3.x: exports GCodePreview, scene bits live on preview.sceneManager
-//   2.x: exports WebGLPreview, scene bits live flat on the preview itself
+// Benchmark runner — measures one gcode-preview version inside its iframe.
+// See ../lib/runner-frame.js for the message protocol.
+
+import { loadPreview, send, onRun } from '../lib/preview-compat.js';
 
 const ORBIT_MS = 5000;
 const HEAP_SAMPLE_MS = 50;
 
-const send = (message) => window.parent.postMessage(message, '*');
 const bytesToMB = (bytes) => bytes / (1024 * 1024);
 
 function startHeapSampler() {
@@ -55,19 +52,12 @@ function measureFpsWhileOrbiting(camera, target) {
   });
 }
 
-async function run({ gcode, settings }) {
-  const module = await import('gcode-preview');
-  const Preview = module.GCodePreview ?? module.WebGLPreview;
-  if (!Preview) throw new Error('no GCodePreview/WebGLPreview export found');
-
+onRun(async ({ gcode, settings }) => {
   const heapSampler = startHeapSampler();
-
-  const preview = new Preview({
+  const { preview, scene } = await loadPreview({
     canvas: document.getElementById('canvas'),
     ...settings
   });
-  // 3.x nests the scene under sceneManager; 2.x keeps everything flat.
-  const scene = preview.sceneManager ?? preview;
 
   send({ type: 'phase', phase: 'parsing' });
   const parseStart = performance.now();
@@ -94,7 +84,7 @@ async function run({ gcode, settings }) {
 
   send({
     type: 'result',
-    metrics: {
+    result: {
       parseMs,
       renderMs,
       firstRenderMs: parseMs + renderMs,
@@ -104,14 +94,4 @@ async function run({ gcode, settings }) {
       drawCalls
     }
   });
-}
-
-window.addEventListener('message', (event) => {
-  if (event.data?.type !== 'run') return;
-  run(event.data).catch((error) => {
-    console.error(error);
-    send({ type: 'error', message: String(error?.message ?? error) });
-  });
 });
-
-send({ type: 'ready' });
