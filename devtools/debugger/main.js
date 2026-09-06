@@ -1,5 +1,5 @@
-// Parser / interpreter inspector — see exactly what the parser makes of a
-// gcode file, and step through it like a debugger. The selected version runs
+// GCode debugger — inspect what the parser makes of a gcode file and step
+// through it command by command with breakpoints. The selected version runs
 // in an iframe (own import map) that stays alive after loading: the full
 // command list and the debug session's job live over there, and this page
 // only ever receives summaries, row windows, and state snapshots. The iframe
@@ -102,7 +102,7 @@ const post = (message) => frame?.iframe.contentWindow.postMessage(message, '*');
 // localStorage-parse crash before), and a failed write never breaks the
 // session (quota errors on big pasted text).
 
-const STORAGE_KEY = 'gcode-preview-devtools:parser-inspector';
+const STORAGE_KEY = 'gcode-preview-devtools:debugger';
 const MAX_PERSIST_TEXT = 1_000_000;
 
 // The source of the currently loaded session (null before the first
