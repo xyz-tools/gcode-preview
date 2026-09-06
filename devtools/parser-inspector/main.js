@@ -91,6 +91,99 @@ function spawnFrame(importMap, handlers) {
 const post = (message) => frame?.iframe.contentWindow.postMessage(message, '*');
 
 // ---------------------------------------------------------------------------
+// Session persistence: the loaded source and the breakpoints survive reloads.
+//
+// One JSON blob under one key:
+//   { version, source: { type:'preset', key } | { type:'text', text } | null,
+//     breakpoints: number[] }
+// source is null when the pasted text was too large to store. The debug
+// position is deliberately not persisted. Storage is treated as hostile: a
+// corrupt value is removed and ignored (this repo has shipped a
+// localStorage-parse crash before), and a failed write never breaks the
+// session (quota errors on big pasted text).
+
+const STORAGE_KEY = 'gcode-preview-devtools:parser-inspector';
+const MAX_PERSIST_TEXT = 1_000_000;
+
+// The source of the currently loaded session (null before the first
+// successful load, or when the pasted text was too large to persist).
+let session = null;
+// Breakpoints read from storage, waiting for the restore-triggered load to
+// succeed. Kept across a failed load so a retry can still apply them.
+let pendingBreakpoints = null;
+
+function readStoredState() {
+  let raw;
+  try {
+    raw = localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+  if (!raw) return null;
+  try {
+    const state = JSON.parse(raw);
+    if (typeof state?.version !== 'string') throw new Error('bad version');
+    const source = state.source;
+    const sourceOk =
+      source === null ||
+      (source?.type === 'preset' && typeof source.key === 'string') ||
+      (source?.type === 'text' && typeof source.text === 'string');
+    if (!sourceOk) throw new Error('bad source');
+    if (!Array.isArray(state.breakpoints) || !state.breakpoints.every((n) => Number.isInteger(n) && n >= 0)) {
+      throw new Error('bad breakpoints');
+    }
+    return { version: state.version, source, breakpoints: state.breakpoints };
+  } catch {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // storage unavailable; nothing to clean
+    }
+    return null;
+  }
+}
+
+function persistState() {
+  if (!session) return;
+  const payload = {
+    version: session.version,
+    source: session.source,
+    breakpoints: [...debug.breakpoints].sort((a, b) => a - b)
+  };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // quota exceeded or storage unavailable — the in-page session must go on
+  }
+}
+
+// Re-selects the stored version and source and triggers a load. Runs once the
+// version list is populated. The stored breakpoints are applied when that
+// load's 'loaded' arrives; on load failure the key is left untouched so a
+// retry (or the next reload) can still use it.
+function restoreSession() {
+  const stored = readStoredState();
+  if (!stored) return;
+
+  const versionSelect = el('version-select');
+  const hasVersion = [...versionSelect.options].some((option) => option.value === stored.version);
+  versionSelect.value = hasVersion ? stored.version : LOCAL_VERSION;
+
+  pendingBreakpoints = stored.breakpoints;
+  if (!stored.source) return; // nothing auto-loadable was stored
+
+  if (stored.source.type === 'preset') {
+    const presetSelect = el('preset-select');
+    if (![...presetSelect.options].some((option) => option.value === stored.source.key)) return;
+    presetSelect.value = stored.source.key;
+    el('gcode-text').value = '';
+  } else {
+    el('gcode-text').value = stored.source.text;
+  }
+  el('load-button').click();
+}
+
+// ---------------------------------------------------------------------------
 // Virtual-scrolled commands list
 
 const browser = { loaded: false, filter: '' };
@@ -418,6 +511,13 @@ async function loadFile() {
   setStatus('Fetching gcode…');
   const gcode = pasted !== '' ? pasted : await fetchPresetGcode(presetKey);
   const source = pasted !== '' ? 'pasted gcode' : `preset "${presetKey}"`;
+  // what (if anything) of this load can be stored for the next visit
+  const persistableSource =
+    pasted === ''
+      ? { type: 'preset', key: presetKey }
+      : pasted.length <= MAX_PERSIST_TEXT
+        ? { type: 'text', text: pasted }
+        : null;
   // SceneManager's constructor reads buildVolume.x, so pasted gcode (which has
   // no preset to supply one) still needs a build volume.
   const settings =
@@ -438,10 +538,22 @@ async function loadFile() {
       el('summary-section').open = false;
       el('histogram-section').open = false;
       el('results').style.display = '';
-      setStatus(`Loaded ${source} with ${version} — ${formatCount(summary.commands)} commands.`);
+      const persistNote = persistableSource === null ? ' Pasted gcode too large to persist across reloads.' : '';
+      setStatus(`Loaded ${source} with ${version} — ${formatCount(summary.commands)} commands.${persistNote}`);
       debug.available = Boolean(debuggable);
       debug.total = summary.commands;
       debug.firstCommand = firstCommandIndex ?? -1;
+      // stored breakpoints from a previous visit apply to the first load that
+      // succeeds after restore; indexes past this file's end are dropped
+      if (pendingBreakpoints !== null) {
+        for (const index of pendingBreakpoints) {
+          if (index < summary.commands) debug.breakpoints.add(index);
+        }
+        pendingBreakpoints = null;
+        updateBreakpointButton();
+      }
+      session = { version, source: persistableSource };
+      persistState();
       if (!debuggable) {
         el('debug-readout').textContent =
           'This build does not expose the interpreter — debugging needs the local build (or a version that does).';
@@ -520,6 +632,7 @@ el('clear-breakpoints').addEventListener('click', () => {
   debug.breakpoints.clear();
   updateBreakpointButton();
   renderVirtual(true);
+  persistState();
 });
 
 el('commands').addEventListener('click', (event) => {
@@ -534,9 +647,11 @@ el('commands').addEventListener('click', (event) => {
   }
   updateBreakpointButton();
   renderVirtual(true);
+  persistState();
 });
 
 populatePresetSelect(el('preset-select'), 'mach3');
 loadVersions().then((versions) => {
   populateVersionSelect(el('version-select'), versions, LOCAL_VERSION);
+  restoreSession();
 });
