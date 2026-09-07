@@ -124,6 +124,32 @@ describe('linearMove (G0/G1)', () => {
     expect(job.inprogressPath?.travelType).toEqual(PathType.Extrusion);
   });
 
+  test('tracks the extruder position of moves and of zero-length retractions', () => {
+    const job = new Job();
+
+    // absolute mode (the default): E parameters are positions
+    linearMove(new GCodeCommand('G1 X10 E2', 'g1', { x: 10, e: 2 }), job);
+    expect(job.state.e).toEqual(2);
+
+    // a zero-length prime still moves the extruder; losing it here would
+    // misattribute the difference to the next extruding move
+    linearMove(new GCodeCommand('G1 E3', 'g1', { e: 3 }), job);
+    expect(job.state.e).toEqual(3);
+
+    linearMove(new GCodeCommand('G1 X20 E4', 'g1', { x: 20, e: 4 }), job);
+    expect(job.state.e).toEqual(4);
+  });
+
+  test('accumulates the extruder position in relative mode', () => {
+    const job = new Job();
+    job.state.relativeExtrusion = true;
+
+    linearMove(new GCodeCommand('G1 X10 E2', 'g1', { x: 10, e: 2 }), job);
+    linearMove(new GCodeCommand('G1 X20 E3', 'g1', { x: 20, e: 3 }), job);
+
+    expect(job.state.e).toEqual(5);
+  });
+
   test('starts a new path if the travel type changes from Extrusion to Travel', () => {
     const command1 = new GCodeCommand('G1 X1 Y2 E3', 'g1', { x: 1, y: 2, e: 3 });
     const command2 = new GCodeCommand('G0 X3 Y4', 'g0', { x: 3, y: 4 });

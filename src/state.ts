@@ -12,8 +12,17 @@ export class State {
   y: number | undefined = undefined;
   /** Current Z position, or `undefined` until the axis is homed (G28) */
   z: number | undefined = undefined;
-  /** Current extrusion amount */
+  /** Current extruder position, tracked by `trackE` and reset by G92 */
   e = 0;
+  /**
+   * Whether E parameters are relative distances (M83) rather than absolute
+   * extruder positions (M82).
+   * @remarks
+   * Defaults to absolute, matching the Marlin firmware default. Only the E
+   * accounting in `trackE` consults this; move classification (`e > 0` means
+   * extrusion) is deliberately unchanged in either mode.
+   */
+  relativeExtrusion = false;
   /**
    * Shift between the logical G-code coordinates and the physical position,
    * created by G92: `physical = logical + positionShift`.
@@ -60,6 +69,27 @@ export class State {
    * the job's decision (see `Job.resolvePosition`), not the state's.
    */
   isHomed = false;
+
+  /**
+   * Applies a move's E parameter to the extruder position
+   * @param e - The move's E parameter, or undefined when the move has none
+   * @returns The filament length this move extrudes (negative for retractions)
+   * @remarks
+   * In relative mode (M83) the parameter is the extruded length itself; in
+   * absolute mode (M82) the length is the difference with the tracked
+   * position. Both modes leave `e` at the move's resulting extruder position,
+   * so G92 E resets (which set `e` directly) compose naturally with either.
+   */
+  trackE(e: number | undefined): number {
+    if (e === undefined) return 0;
+    if (this.relativeExtrusion) {
+      this.e += e;
+      return e;
+    }
+    const delta = e - this.e;
+    this.e = e;
+    return delta;
+  }
 
   /**
    * Gets a new State instance with default initial values

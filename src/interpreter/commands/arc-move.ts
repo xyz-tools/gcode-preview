@@ -28,6 +28,10 @@ export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler
     const from = job.resolvePosition();
 
     const cw = command.gcode === 'g2';
+    // Keep the extruder position in sync for the moves that follow; the arc
+    // itself derives no dimensions (Cura only emits arcs via plugins) and
+    // simply carries the state's current width and height like any move.
+    state.trackE(e);
     // `e > 0`, matching g0/g1: a negative E is a retraction, i.e. a travel move with no
     // material laid down. The looser `e ?` used to misclassify a retracting arc as
     // Extrusion, so it rendered as deposited filament and stretched the bounding box.

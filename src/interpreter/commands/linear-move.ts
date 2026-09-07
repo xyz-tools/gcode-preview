@@ -12,6 +12,7 @@ import type { CommandHandler } from '../../interpreter';
  */
 export const linearMove: CommandHandler = (command, job) => {
   const { x, y, z, e, f } = command.params;
+  const { state } = job;
 
   // discard zero length moves
   if (x === undefined && y === undefined && z === undefined) {
@@ -25,12 +26,25 @@ export const linearMove: CommandHandler = (command, job) => {
       job.stats.others++;
     }
 
+    // still account the E parameter: in absolute mode a retract/prime pair
+    // moves the extruder position, and losing it here would misattribute the
+    // difference to the next extruding move
+    state.trackE(e);
     return;
   }
 
   job.stats.points++;
 
-  const { state } = job;
+  // The move's physical endpoint; an omitted axis keeps its current
+  // (possibly unknown) position. Resolved before touching the state so the
+  // dimension derivation below still sees the segment's starting point.
+  const targetX = x === undefined ? state.x : x + state.positionShift.x;
+  const targetY = y === undefined ? state.y : y + state.positionShift.y;
+  const targetZ = z === undefined ? state.z : z + state.positionShift.z;
+
+  state.trackE(e);
+  // classified from the raw E parameter, in either extrusion mode
+  // see also https://github.com/xyz-tools/gcode-preview/issues/179
   const pathType = e > 0 ? PathType.Extrusion : PathType.Travel;
   const currentPath = job.continuePath(pathType);
 
@@ -38,11 +52,9 @@ export const linearMove: CommandHandler = (command, job) => {
     job.stats.extrusionDistance += e;
   }
 
-  // e is omitted bc currently we're assuming relative extrusion distances
-  // see also https://github.com/xyz-tools/gcode-preview/issues/179
-  state.x = x === undefined ? state.x : x + state.positionShift.x;
-  state.y = y === undefined ? state.y : y + state.positionShift.y;
-  state.z = z === undefined ? state.z : z + state.positionShift.z;
+  state.x = targetX;
+  state.y = targetY;
+  state.z = targetZ;
 
   const pos = job.resolvePosition();
   currentPath.addPoint(pos.x, pos.y, pos.z);
