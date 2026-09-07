@@ -3,7 +3,10 @@ import { AxesHelper, Color, Group, Vector3, Scene } from 'three';
 import { LineBox } from './helpers/line-box';
 import { type Disposable } from './helpers/three-utils';
 
-/** The dimensions a caller supplies to describe a build volume */
+/**
+ * The dimensions a caller supplies to describe a build volume
+ * @interface
+ */
 export type BuildVolumeDef = Pick<BuildVolume, 'x' | 'y' | 'z' | 'smallGrid'>;
 
 /**
@@ -44,6 +47,7 @@ export class BuildVolume {
     this._z = Math.max(0, z);
   }
 
+  /** Width of the build volume in mm */
   get x(): number {
     return this._x;
   }
@@ -54,6 +58,7 @@ export class BuildVolume {
     }
     this.update(); // Update the build volume when x changes
   }
+  /** Depth of the build volume in mm */
   get y(): number {
     return this._y;
   }
@@ -64,6 +69,7 @@ export class BuildVolume {
     }
     this.update(); // Update the build volume when y changes
   }
+  /** Height of the build volume in mm */
   get z(): number {
     return this._z;
   }
@@ -74,6 +80,7 @@ export class BuildVolume {
     }
     this.update(); // Update the build volume when z changes
   }
+  /** Whether the finer secondary grid is drawn on the build plate */
   get smallGrid(): boolean | undefined {
     return this._smallGrid;
   }
