@@ -600,11 +600,93 @@ describe('.breakPath', () => {
     expect(path.tool).toEqual(2);
   });
 
-  test('defaults to 0.6 width and 0.2 height on a fresh state', () => {
+  test('leaves the dimensions unknown on a fresh state', () => {
+    // Unknown dimensions resolve at render time: global setting, then the
+    // built-in defaults.
     const path = new Job().breakPath(PathType.Extrusion);
 
-    expect(path.extrusionWidth).toEqual(0.6);
-    expect(path.lineHeight).toEqual(0.2);
+    expect(path.extrusionWidth).toBeUndefined();
+    expect(path.lineHeight).toBeUndefined();
+  });
+});
+
+describe('.beginCommand', () => {
+  const metadataWith = (extrusionDimensions: { width?: number; height?: number; lineIndex: number }[]) => ({
+    thumbnails: {},
+    extrusionDimensions
+  });
+
+  test('applies a dimension event once its line has been reached', () => {
+    const job = new Job();
+    job.metadata = metadataWith([{ width: 0.45, lineIndex: 0 }]);
+
+    job.beginCommand();
+
+    expect(job.state.extrusionWidth).toEqual(0.45);
+  });
+
+  test('does not apply events for lines not yet executed', () => {
+    const job = new Job();
+    job.metadata = metadataWith([{ height: 0.3, lineIndex: 2 }]);
+
+    job.beginCommand();
+
+    expect(job.state.lineHeight).toBeUndefined();
+
+    job.beginCommand();
+    job.beginCommand();
+
+    expect(job.state.lineHeight).toEqual(0.3);
+  });
+
+  test('applies several pending events in order, last one winning', () => {
+    const job = new Job();
+    job.metadata = metadataWith([
+      { width: 0.4, lineIndex: 0 },
+      { width: 0.5, height: 0.25, lineIndex: 0 }
+    ]);
+
+    job.beginCommand();
+
+    expect(job.state.extrusionWidth).toEqual(0.5);
+    expect(job.state.lineHeight).toEqual(0.25);
+  });
+
+  test('keeps its position when the same growing metadata array is re-set', () => {
+    // A streaming parse re-assigns job.metadata each chunk with the same,
+    // growing array; the cursor must not rewind or events would reapply.
+    const job = new Job();
+    const extrusionDimensions = [{ width: 0.4, lineIndex: 0 }];
+    job.metadata = metadataWith(extrusionDimensions);
+    job.beginCommand();
+    job.state.extrusionWidth = 0.9; // marker: a rewind would overwrite this
+
+    extrusionDimensions.push({ width: 0.5, lineIndex: 2 });
+    job.metadata = metadataWith(extrusionDimensions);
+    job.beginCommand();
+
+    expect(job.state.extrusionWidth).toEqual(0.9);
+  });
+
+  test('rewinds when a different metadata array is swapped in', () => {
+    const job = new Job();
+    job.metadata = metadataWith([{ width: 0.4, lineIndex: 0 }]);
+    job.beginCommand();
+
+    job.metadata = metadataWith([{ width: 0.55, lineIndex: 0 }]);
+    job.beginCommand();
+
+    expect(job.state.extrusionWidth).toEqual(0.55);
+  });
+
+  test('is a no-op without dimension metadata', () => {
+    const job = new Job();
+    job.metadata = { thumbnails: {} };
+
+    job.beginCommand();
+
+    expect(job.state.extrusionWidth).toBeUndefined();
+    expect(job.state.lineHeight).toBeUndefined();
   });
 });
 

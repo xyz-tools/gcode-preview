@@ -9,8 +9,7 @@ import {
   home,
   setPosition,
   probe,
-  selectTool,
-  comment
+  selectTool
 } from './interpreter/commands';
 
 /** Options for the {@link Interpreter} */
@@ -43,8 +42,6 @@ export type CommandHandler = (command: GCodeCommand, job: Job) => void;
  * in this map.
  */
 export const handlers: ReadonlyMap<string, CommandHandler> = new Map<string, CommandHandler>([
-  // a line holding only a comment (or nothing at all) parses to an empty gcode
-  ['', comment],
   ['g0', linearMove],
   ['g1', linearMove],
   ['g2', arcMove],
@@ -106,6 +103,10 @@ export class Interpreter {
   execute(commands: GCodeCommand[], job = new Job()): Job {
     job.resumeLastPath();
     commands.forEach((command) => {
+      // one command per parsed line: this keeps the job's line counter in
+      // step with the parser, which is what maps line-indexed slicer
+      // metadata (e.g. extrusion dimension changes) onto the command stream
+      job.beginCommand();
       const handler = this.handlers.get(command.gcode);
       handler?.(command, job);
     });

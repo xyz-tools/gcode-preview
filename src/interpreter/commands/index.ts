@@ -5,4 +5,3 @@ export { home } from './home';
 export { setPosition } from './set-position';
 export { probe } from './probe';
 export { selectTool } from './select-tool';
-export { comment } from './comment';

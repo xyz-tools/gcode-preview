@@ -19,14 +19,20 @@ export enum PathType {
  * extrusion parameters, and tool information
  */
 export class Path {
+  /** Default extrusion width, used when neither the path nor the renderer supplies one */
+  static readonly DEFAULT_EXTRUSION_WIDTH = 0.6;
+
+  /** Default line height, used when neither the path nor the renderer supplies one */
+  static readonly DEFAULT_LINE_HEIGHT = 0.2;
+
   /** Type of path movement */
   public travelType: PathType;
 
-  /** Width of extruded material */
-  public extrusionWidth: number;
+  /** Width of extruded material, or `undefined` when slicer metadata provided none */
+  public extrusionWidth?: number;
 
-  /** Height of extruded line */
-  public lineHeight: number;
+  /** Height of extruded line, or `undefined` when slicer metadata provided none */
+  public lineHeight?: number;
 
   /** Tool number used for this path */
   public tool: number;
@@ -40,11 +46,15 @@ export class Path {
   /**
    * Creates a new Path instance
    * @param travelType - Type of path movement
-   * @param extrusionWidth - Width of extruded material (default: 0.6)
-   * @param lineHeight - Height of extruded line (default: 0.2)
+   * @param extrusionWidth - Width of extruded material, when known
+   * @param lineHeight - Height of extruded line, when known
    * @param tool - Tool number (default: 0)
+   * @remarks
+   * A path's own dimensions come from slicer metadata and take precedence at
+   * render time; a path without them falls back to the renderer's global
+   * setting, then to the built-in defaults.
    */
-  constructor(travelType: PathType, extrusionWidth = 0.6, lineHeight = 0.2, tool = 0) {
+  constructor(travelType: PathType, extrusionWidth?: number, lineHeight?: number, tool = 0) {
     this.travelType = travelType;
     this._vertices = [];
     this.extrusionWidth = extrusionWidth;
@@ -129,11 +139,15 @@ export class Path {
   /**
    * Creates a 3D geometry from the path
    * @param opts - Geometry options
-   * @param opts.extrusionWidthOverride - Optional override for extrusion width
-   * @param opts.lineHeightOverride - Optional override for line height
+   * @param opts.extrusionWidthFallback - Width for a path that carries none of its own
+   * @param opts.lineHeightFallback - Height for a path that carries none of its own
    * @returns BufferGeometry representing the path
+   * @remarks
+   * Dimensions resolve per path: the path's own value (from slicer metadata)
+   * wins, then the caller's fallback (the renderer's global setting), then
+   * the built-in defaults.
    */
-  geometry(opts: { extrusionWidthOverride?: number; lineHeightOverride?: number } = {}): BufferGeometry {
+  geometry(opts: { extrusionWidthFallback?: number; lineHeightFallback?: number } = {}): BufferGeometry {
     if (this._vertices.length < 6) {
       // a path needs at least 2 points to be valid
       console.warn('Path has less than 6 points, returning empty geometry');
@@ -142,8 +156,8 @@ export class Path {
 
     return new ExtrusionGeometry(
       this.path(),
-      opts.extrusionWidthOverride ?? this.extrusionWidth,
-      opts.lineHeightOverride ?? this.lineHeight,
+      this.extrusionWidth ?? opts.extrusionWidthFallback ?? Path.DEFAULT_EXTRUSION_WIDTH,
+      this.lineHeight ?? opts.lineHeightFallback ?? Path.DEFAULT_LINE_HEIGHT,
       4
     );
   }

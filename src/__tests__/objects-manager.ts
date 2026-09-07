@@ -172,7 +172,7 @@ describe('ObjectsManager', () => {
         expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9]));
       });
 
-      test('offsets each path by its own line height when no global height is set', () => {
+      test('offsets each path by its own line height', () => {
         const manager = new ObjectsManager(new Scene(), 0.4);
         const thin = new Path(PathType.Extrusion, 0.6, 0.2, 0);
         thin.addPoint(1, 2, 3);
@@ -188,7 +188,7 @@ describe('ObjectsManager', () => {
         expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9, 1, 1.9, 2.8, 4, 4.9, 5.8]));
       });
 
-      test('an explicitly set global line height overrides the paths', () => {
+      test("a path's own height wins over the global line height", () => {
         const manager = new ObjectsManager(new Scene(), 0.4, 0.4);
         const path = new Path(PathType.Extrusion, 0.6, 0.2, 0);
         path.addPoint(1, 2, 3);
@@ -196,9 +196,35 @@ describe('ObjectsManager', () => {
 
         manager.renderExtrusionLines([path], new Color(0x00ff00));
 
-        // z drops by half the global height, not the path's own 0.2
+        // z drops by half the path's own 0.2, not the global 0.4
+        const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
+        expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9]));
+      });
+
+      test('the global line height fills in for a path without its own', () => {
+        const manager = new ObjectsManager(new Scene(), 0.4, 0.4);
+        const path = new Path(PathType.Extrusion, undefined, undefined, 0);
+        path.addPoint(1, 2, 3);
+        path.addPoint(4, 5, 6);
+
+        manager.renderExtrusionLines([path], new Color(0x00ff00));
+
+        // z drops by half the global 0.4
         const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
         expect(positions).toEqual(new Float32Array([1, 1.9, 2.8, 4, 4.9, 5.8]));
+      });
+
+      test('the built-in default height applies when neither the path nor a global is set', () => {
+        const manager = new ObjectsManager(new Scene(), 0.4);
+        const path = new Path(PathType.Extrusion, undefined, undefined, 0);
+        path.addPoint(1, 2, 3);
+        path.addPoint(4, 5, 6);
+
+        manager.renderExtrusionLines([path], new Color(0x00ff00));
+
+        // z drops by half the built-in 0.2
+        const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
+        expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9]));
       });
 
       test('produces an empty buffer for a path too short to make a segment', () => {
