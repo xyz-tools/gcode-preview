@@ -102,7 +102,10 @@ export class GCodeCommand {
   ) {}
 }
 
+/** What a parse call returns: the commands that were read, plus everything learned about the file along the way */
 export type ParseResult = { metadata: Metadata; commands: GCodeCommand[] };
+
+/** Everything the parser picked up about the file itself, as opposed to its movements */
 export type Metadata = {
   thumbnails: Record<string, Thumbnail>;
   layerMetadata?: LayerMetadata[];

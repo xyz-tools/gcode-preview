@@ -33,6 +33,7 @@ export function detectSlicer(commands: GCodeCommand[]): SlicerMetadataParser | n
 /**
  * Parses layer metadata from gcode comments using automatic slicer detection
  * @param commands - Array of gcode commands
+ * @param parser - Parser to use, or null to detect one from the commands
  * @returns Parsed metadata result with layers and detected slicer name
  */
 export function parseSlicerMetadata(

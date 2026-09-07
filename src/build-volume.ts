@@ -31,7 +31,7 @@ export class BuildVolume {
    * @param x - Width in mm
    * @param y - Depth in mm
    * @param z - Height in mm
-   * @param smallGrid - Whether to show a small grid
+   * @param _smallGrid - Whether to show a small grid
    * @param scene - The Three.js scene to add the build volume to
    */
   constructor(
