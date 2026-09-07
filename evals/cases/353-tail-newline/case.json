@@ -1,0 +1,19 @@
+{
+  "id": "353-tail-newline",
+  "skill": "lessons-learned-review",
+  "source": "PR #353 off-by-one, reintroduced into current code",
+  "expected_classes": [
+    "streaming-chunks",
+    "loop-index"
+  ],
+  "must_find": [
+    {
+      "file": "src/helpers/split-chunk.ts",
+      "defect": "tail slice keeps the newline, so every chunk boundary fabricates a blank line and inflates lineCount",
+      "min_severity": "major"
+    }
+  ],
+  "must_not_find": [],
+  "runs": 3,
+  "grading_note": "Must identify the off-by-one on the separator, not just \"slice changed\"."
+}

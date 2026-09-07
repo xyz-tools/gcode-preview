@@ -16,3 +16,4 @@ coverage
 .context
 
 *.bench.ts
+evals/results

@@ -1,0 +1,12 @@
+{
+  "id": "clean-docs-only",
+  "skill": "lessons-learned-review",
+  "source": "Synthetic: a grammar typo fix in README, chosen to assert nothing checkable",
+  "expected_classes": [],
+  "must_find": [],
+  "must_not_find": [
+    "Any finding at all. Fixing a grammatical typo touches no code path and makes no technical claim, so the correct output is zero findings."
+  ],
+  "runs": 3,
+  "grading_note": "Guards the invention failure mode. Any severity-tagged finding — including [process] — fails. The fixture must stay free of technical assertions: an earlier version claimed \"no extra loader configuration is required\", which the skill correctly disputed because package.json has no \"type\":\"module\" or exports map. That was a bad fixture, not a false positive."
+}

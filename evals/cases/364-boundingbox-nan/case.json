@@ -1,0 +1,18 @@
+{
+  "id": "364-boundingbox-nan",
+  "skill": "lessons-learned-review",
+  "source": "PR #364, guard removed from current code",
+  "expected_classes": [
+    "nan-guards"
+  ],
+  "must_find": [
+    {
+      "file": "src/bounding-box.ts",
+      "defect": "update() no longer rejects non-finite coordinates, so a single NaN makes min/max stick at NaN permanently and poisons camera framing",
+      "min_severity": "major"
+    }
+  ],
+  "must_not_find": [],
+  "runs": 3,
+  "grading_note": "Must describe NaN propagation/persistence, not merely \"a guard was removed\"."
+}
