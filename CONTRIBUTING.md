@@ -54,6 +54,12 @@ newest supported version; after merge, a matrix job re-runs the suite against
 every supported three.js release. Avoid APIs that aren't available across that
 whole range.
 
+## AI usage
+
+AI-assisted contributions are welcome, but usage of AI tools (Copilot, Claude,
+ChatGPT, etc.) must be disclosed in the PR description. You remain responsible
+for understanding and verifying everything you submit.
+
 ## Review standards
 
 Every change, **intended or not**, must be:
