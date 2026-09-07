@@ -153,7 +153,10 @@
                   </div>
 
                 <div class="controls" v-show="settings.renderTubes">
-                  <label>Extrusion width <output>{{settings.extrusionWidth}}</output></label>&nbsp;
+                  <label
+                    title="Used only for paths whose width the slicer did not announce with a ;WIDTH: comment. Files that carry those comments render at their own per-path widths."
+                    >Extrusion width (fallback) <output>{{settings.extrusionWidth}}</output></label
+                  >&nbsp;
                   <input
                     type="number"
                     min="0.05"

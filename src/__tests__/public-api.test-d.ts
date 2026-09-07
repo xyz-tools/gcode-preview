@@ -225,7 +225,9 @@ describe('public API types', () => {
     it('keeps its public fields and method signatures', () => {
       expectTypeOf<Parser['lines']>().toEqualTypeOf<string[]>();
       expectTypeOf<Parser['lineCount']>().toEqualTypeOf<number>();
-      expectTypeOf<keyof Parser['metadata']>().toEqualTypeOf<'thumbnails' | 'layerMetadata' | 'slicerName'>();
+      expectTypeOf<keyof Parser['metadata']>().toEqualTypeOf<
+        'thumbnails' | 'layerMetadata' | 'extrusionDimensions' | 'slicerName'
+      >();
       expectTypeOf<Parameters<Parser['parseGCode']>>().toEqualTypeOf<[string | string[]]>();
       expectTypeOf<keyof ReturnType<Parser['parseGCode']>>().toEqualTypeOf<'metadata' | 'commands'>();
       expectTypeOf<ReturnType<Parser['parseGCode']>['commands']>().toEqualTypeOf<GCodeCommand[]>();

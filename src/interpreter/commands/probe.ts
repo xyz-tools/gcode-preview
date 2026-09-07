@@ -44,10 +44,7 @@ export const probe: CommandHandler = (command, job) => {
 
   job.stats.points++;
 
-  let currentPath = job.inprogressPath;
-  if (currentPath === undefined || currentPath.travelType !== PathType.Travel) {
-    currentPath = job.breakPath(PathType.Travel);
-  }
+  const currentPath = job.continuePath(PathType.Travel);
 
   state.x = x ?? state.x;
   state.y = y ?? state.y;

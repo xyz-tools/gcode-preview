@@ -1,5 +1,5 @@
 import { Thumbnail } from '../thumbnail';
-import { LayerMetadata, SlicerMetadataParser } from './metadata-parser-base';
+import { ExtrusionDimensionMetadata, LayerMetadata, SlicerMetadataParser } from './metadata-parser-base';
 import { detectSlicer, parseSlicerMetadata } from './slicer-detector';
 
 /**
@@ -109,6 +109,8 @@ export type ParseResult = { metadata: Metadata; commands: GCodeCommand[] };
 export type Metadata = {
   thumbnails: Record<string, Thumbnail>;
   layerMetadata?: LayerMetadata[];
+  /** Extrusion dimension changes from `;WIDTH:` / `;HEIGHT:` comments, in line order */
+  extrusionDimensions?: ExtrusionDimensionMetadata[];
   slicerName?: string;
 };
 
@@ -243,6 +245,17 @@ export class Parser {
       }
     }
     const slicerMetadata = parseSlicerMetadata(commands, this.metadataParser);
+
+    if (slicerMetadata.extrusionDimensions.length > 0) {
+      // Accumulate across chunks like the layers below, shifting the parsers'
+      // chunk-local line indices into whole-file coordinates.
+      const dimensions = (this.metadata.extrusionDimensions ??= []);
+      const lineOffset = this.lineCount - lines.length;
+      for (const dimension of slicerMetadata.extrusionDimensions) {
+        dimensions.push({ ...dimension, lineIndex: dimension.lineIndex + lineOffset });
+      }
+    }
+
     if (slicerMetadata.layers.length > 0) {
       // Accumulate across chunks (like thumbnails above): a streaming parse
       // hands each chunk to parseGCode separately, and the parsers report

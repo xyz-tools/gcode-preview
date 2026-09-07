@@ -39,8 +39,20 @@ describe('PrusaFamilyMetadataParser', () => {
       expect(parser.canParse(commands)).toBe(true);
     });
 
+    it('does not claim a file on dimension comments alone', () => {
+      // Slic3r shares this comment dialect, so WIDTH/HEIGHT identify no single
+      // slicer -- claiming them here stole detection from the Slic3r parser.
+      const commands: GCodeCommand[] = [{ comment: 'WIDTH:0.45' }, { comment: 'HEIGHT:0.16' }];
+      expect(parser.canParse(commands)).toBe(false);
+    });
+
     it('should not identify non-Prusa-family gcode', () => {
       const commands: GCodeCommand[] = [{ comment: '; Cura_SteamEngine 4.8.0' }, { comment: '; LAYER:0' }];
+      expect(parser.canParse(commands)).toBe(false);
+    });
+
+    it('should not mistake Cura layer-height settings for dimension comments', () => {
+      const commands: GCodeCommand[] = [{ comment: 'Layer height: 0.2' }];
       expect(parser.canParse(commands)).toBe(false);
     });
 
@@ -227,6 +239,63 @@ describe('PrusaFamilyMetadataParser', () => {
       expect(result).toHaveLength(1);
       expect(result[0].z).toBe(12.345);
       expect(result[0].height).toBe(0.199);
+    });
+  });
+
+  describe('parseExtrusionDimensions', () => {
+    it('should report WIDTH and HEIGHT comments as line-indexed events', () => {
+      const commands: GCodeCommand[] = [
+        { comment: 'WIDTH:0.45' },
+        { gcode: 'G1 X10 Y20' },
+        { comment: 'HEIGHT:0.16' },
+        { gcode: 'G1 X20 Y20' }
+      ];
+
+      const result = parser.parseExtrusionDimensions(commands);
+      expect(result).toEqual([
+        { width: 0.45, lineIndex: 0 },
+        { height: 0.16, lineIndex: 2 }
+      ]);
+    });
+
+    it('should tolerate whitespace around the colon and value', () => {
+      const commands: GCodeCommand[] = [{ comment: 'WIDTH : 0.33' }, { comment: 'HEIGHT:  0.11 ' }];
+
+      const result = parser.parseExtrusionDimensions(commands);
+      expect(result).toEqual([
+        { width: 0.33, lineIndex: 0 },
+        { height: 0.11, lineIndex: 1 }
+      ]);
+    });
+
+    it('should report a HEIGHT inside a LAYER_CHANGE block too', () => {
+      // There it doubles as the layer's height and as the line height of the
+      // paths that follow — which is how adaptive layer height reaches paths.
+      const commands: GCodeCommand[] = [{ comment: 'LAYER_CHANGE' }, { comment: 'Z:0.36' }, { comment: 'HEIGHT:0.16' }];
+
+      expect(parser.parseExtrusionDimensions(commands)).toEqual([{ height: 0.16, lineIndex: 2 }]);
+      expect(parser.parseLayerMetadata(commands)[0].height).toBe(0.16);
+    });
+
+    it.each([
+      ['a non-numeric value', 'WIDTH:abc'],
+      ['an empty value', 'WIDTH:'],
+      ['zero', 'WIDTH:0'],
+      ['a negative value', 'WIDTH:-0.4'],
+      ['exponent notation, which the dialect does not use', 'WIDTH:1e3'],
+      ['a value overflowing to Infinity', 'WIDTH:' + '9'.repeat(400)],
+      ['trailing junk after the number', 'WIDTH:0.45mm'],
+      ['a lowercase key, which is not the dialect', 'width:0.5'],
+      ['a prefixed key', 'LAYER_HEIGHT:0.15'],
+      ['an unrelated comment', 'TYPE:External perimeter']
+    ])('should ignore %s', (_name, comment) => {
+      expect(parser.parseExtrusionDimensions([{ comment }])).toEqual([]);
+    });
+
+    it('should skip commands without comments', () => {
+      const commands: GCodeCommand[] = [{ gcode: 'G1 X10 Y20' }, { comment: 'WIDTH:0.45' }];
+
+      expect(parser.parseExtrusionDimensions(commands)).toEqual([{ width: 0.45, lineIndex: 1 }]);
     });
   });
 

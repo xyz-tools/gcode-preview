@@ -9,6 +9,8 @@ import {
   home,
   setPosition,
   resetPositionShift,
+  setAbsoluteExtrusion,
+  setRelativeExtrusion,
   probe,
   selectTool
 } from './interpreter/commands';
@@ -57,6 +59,8 @@ export const handlers: ReadonlyMap<string, CommandHandler> = new Map<string, Com
   ['g38.5', probe],
   ['g92', setPosition],
   ['g92.1', resetPositionShift],
+  ['m82', setAbsoluteExtrusion],
+  ['m83', setRelativeExtrusion],
   ['t0', selectTool],
   ['t1', selectTool],
   ['t2', selectTool],
@@ -103,6 +107,10 @@ export class Interpreter {
   execute(commands: GCodeCommand[], job = new Job()): Job {
     job.resumeLastPath();
     commands.forEach((command) => {
+      // one command per parsed line: this keeps the job's line counter in
+      // step with the parser, which is what maps line-indexed slicer
+      // metadata (e.g. extrusion dimension changes) onto the command stream
+      job.beginCommand();
       const handler = this.handlers.get(command.gcode);
       handler?.(command, job);
     });
