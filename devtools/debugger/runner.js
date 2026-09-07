@@ -1,19 +1,16 @@
-// Parser-inspector runner — parses one gcode file inside its iframe and keeps
-// the full command list here. Commands can number in the millions on big
-// files, so only summaries and small row pages ever cross to the parent.
+// Debugger runner — parses one gcode file inside its iframe and keeps the
+// full command list here. Commands can number in the millions on big files,
+// so only summaries and small row pages ever cross to the parent.
 //
 // The runner also hosts the debug session: a live GCodePreview renders into
 // this iframe's canvas (the parent makes the iframe visible), and debug
-// messages execute command slices into the preview's job via the library's
-// own Interpreter (reached through preview.interpreter — not a public export,
-// but the dist build keeps property names).
+// messages execute command slices into the preview's job via the public
+// executeCommands API (falling back to the internal interpreter on published
+// builds that predate it — see execute()).
 // See ./main.js for the message protocol.
 
 const send = (message) => window.parent.postMessage(message, '*');
 
-// Per-step full rebuilds are instant on small files; above this many commands
-// stepping switches to renderProgressive (only not-yet-drawn paths).
-const RENDER_FULL_LIMIT = 20_000;
 // During continue/run/seek, a progress message goes out every this many
 // executed commands.
 const PROGRESS_CHUNK = 10_000;
@@ -43,6 +40,22 @@ function freshCanvas() {
 // fallback story.
 function instantiate(settings) {
   return new libModule.GCodePreview({ canvas: freshCanvas(), ...settings });
+}
+
+// Whether this build exposes a way to execute parsed commands into the job.
+const canExecute = () =>
+  typeof preview?.executeCommands === 'function' || typeof preview?.interpreter?.execute === 'function';
+
+// Executes commands into the current job, re-entrantly: the public API when
+// the build has it, else the internal interpreter that published 3.x builds
+// still carry as a property. Every execution site (load/step/seek/continue/
+// apply-settings) goes through here.
+function execute(commandSlice) {
+  if (typeof preview.executeCommands === 'function') {
+    preview.executeCommands(commandSlice);
+  } else {
+    preview.interpreter.execute(commandSlice, preview.job);
+  }
 }
 
 // What the scene manager actually ended up with, so the parent can confirm
@@ -95,17 +108,28 @@ async function handleLoad({ gcode, settings, fallbackSettings }) {
     preview = instantiate(fallbackSettings);
   }
   lastGoodSettings = activeSettings;
-  await preview.processGCodeStream(gcode, { render: false });
 
-  // Parser-level view: a standalone Parser gives the raw command list without
-  // running the interpreter's side effects twice on the preview's job. Its
-  // metadata is kept for re-seeding debug jobs (the layer indexer wants it
-  // before any command executes).
+  // ONE parse for everything: the standalone Parser's command list is the
+  // copy the debugger keeps (browser rows + execution), its metadata re-seeds
+  // debug jobs (the layer indexer wants it before any command executes), and
+  // the summary job is populated by executing that same array — no second
+  // parse through processGCodeStream.
   const parser = new module.Parser();
   const parsed = parser.parseGCode(gcode);
   commands = parsed.commands;
   metadata = parsed.metadata;
   filterCache = { filter: null, indices: null };
+
+  let lineCount = parser.lineCount;
+  if (canExecute()) {
+    preview.job.metadata = metadata;
+    execute(commands);
+  } else {
+    // no execution API on this build: let the library parse+execute for the
+    // summary (this fallback pays the old second parse)
+    await preview.processGCodeStream(gcode, { render: false });
+    lineCount = preview.parser.lineCount;
+  }
 
   const counts = new Map();
   for (const command of commands) {
@@ -114,9 +138,8 @@ async function handleLoad({ gcode, settings, fallbackSettings }) {
   }
   const histogram = [...counts.entries()].sort((a, b) => b[1] - a[1]);
 
-  // Debugging needs internals the public API does not promise: the preview's
-  // interpreter instance and clear(). The local/3.x builds have both.
-  const debuggable = typeof preview.interpreter?.execute === 'function' && typeof preview.clear === 'function';
+  // Debugging needs an execution path and clear(); local/3.x builds have both.
+  const debuggable = canExecute() && typeof preview.clear === 'function';
 
   // First command with an actual gcode, past the comment/blank preamble
   // slicers emit — the "Run to first" seek target (-1 when there is none).
@@ -130,7 +153,7 @@ async function handleLoad({ gcode, settings, fallbackSettings }) {
     settingsError: settingsLoadError,
     settingsEcho: settingsEcho(),
     summary: {
-      lines: preview.parser.lineCount,
+      lines: lineCount,
       commands: commands.length,
       layers: preview.countLayers,
       paths: preview.job.paths.length,
@@ -211,13 +234,13 @@ function handleDebugStep() {
   if (!preview) return;
   const start = performance.now();
   if (debugIndex < lastIndex()) {
-    preview.interpreter.execute([commands[debugIndex + 1]], preview.job);
+    execute([commands[debugIndex + 1]]);
     debugIndex += 1;
-    if (commands.length <= RENDER_FULL_LIMIT) {
-      preview.sceneManager.render();
-    } else {
-      preview.sceneManager.renderProgressive();
-    }
+    // Always a full rebuild: renderProgressive never redraws a path an
+    // earlier full render (Continue/seek) already drew, so a step extending
+    // that path would grow the model invisibly. Steps are user-paced and a
+    // full render is ~100 ms even on benchy, so exactness wins.
+    preview.sceneManager.render();
   }
   sendDebug(performance.now() - start);
 }
@@ -231,7 +254,7 @@ function handleDebugSeek({ index }) {
   const start = performance.now();
   startSession();
   if (target >= 0) {
-    preview.interpreter.execute(commands.slice(0, target + 1), preview.job);
+    execute(commands.slice(0, target + 1));
     debugIndex = target;
     preview.sceneManager.render();
   }
@@ -261,7 +284,7 @@ async function handleDebugContinue({ breakpoints = [], toEnd = false }) {
     let next = debugIndex + 1;
     while (next <= target) {
       const chunkEnd = Math.min(next + PROGRESS_CHUNK, target + 1);
-      preview.interpreter.execute(commands.slice(next, chunkEnd), preview.job);
+      execute(commands.slice(next, chunkEnd));
       next = chunkEnd;
       debugIndex = next - 1;
       if (next <= target) {
@@ -302,7 +325,7 @@ function handleApplySettings({ settings }) {
 
   startSession();
   if (target >= 0) {
-    preview.interpreter.execute(commands.slice(0, target + 1), preview.job);
+    execute(commands.slice(0, target + 1));
     debugIndex = target;
     preview.sceneManager.render();
   }

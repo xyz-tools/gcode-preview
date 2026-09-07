@@ -40,8 +40,8 @@ localStorage.setItem('gcode-preview-devtools:theme', 'dark'); // either theme wo
 Element ids you will script against: `version-select`, `preset-select`,
 `gcode-text` (paste area — **wins over the preset when non-empty**),
 `load-button`, `status`, `debug-readout`, `debug-step`, `debug-continue`,
-`debug-run` (run to end), the "Run to first" button, and `commands` (the
-virtual list).
+`debug-run` (run to end), `debug-run-first` ("Run to first"), and `commands`
+(the virtual list).
 
 - Wait for `version-select` to have >1 option before loading (the version
   list is fetched from jsDelivr).

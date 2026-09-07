@@ -7,56 +7,31 @@
   <link rel="stylesheet" href="../lib/theme.css" />
   <script src="../lib/theme.js"></script>
   <style>
-    /* the demo stylesheet disables page scrolling; devtools pages need it.
-       body must stay overflow: visible — any other value makes it a scroll
-       container of its own, which silently disables the debug panel's
-       position: sticky (it would stick to body's never-moving scrollport). */
-    html,
-    body {
-      height: auto;
-      min-height: 100%;
-    }
+    /* Page shell comes from ../lib/theme.css (bench-* classes); below are the
+       debugger's own overrides and tool-specific rules. */
 
-    html {
-      overflow: auto;
-    }
-
+    /* theme.css sets overflow: auto on html AND body; body must stay
+       overflow: visible here — any other value makes it a scroll container of
+       its own, which silently disables the debug panel's position: sticky
+       (it would stick to body's never-moving scrollport). */
     body {
       overflow: visible;
     }
 
-    body {
-      margin: 0;
-      background-color: var(--dt-bg);
-      font-family: var(--bulma-family-primary, sans-serif);
-      color: var(--dt-text);
-    }
-
     /* Full-width page: the command table absorbs the extra room while the
        debug panel keeps a fixed-ish width (see .debugger-grid). */
-    .inspector-page {
+    .bench-page {
       max-width: none;
-      margin: 0 auto;
-      padding: 1.5rem;
     }
 
-    .inspector-controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-      align-items: flex-end;
-      margin-bottom: 1rem;
+    /* the debugger's tables run slightly denser than the shared shell */
+    table.bench-results {
+      font-size: 0.85rem;
     }
 
-    .inspector-controls .control-group {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
-    .inspector-controls label {
-      font-size: 0.75rem;
-      color: var(--dt-text-strong);
+    table.bench-results th,
+    table.bench-results td {
+      padding: 0.35rem 0.75rem;
     }
 
     textarea#gcode-text {
@@ -71,17 +46,6 @@
       max-width: 100%;
       height: 4.5rem;
       resize: vertical;
-    }
-
-    .inspector-status {
-      min-height: 1.5rem;
-      font-size: 0.85rem;
-      margin-bottom: 1rem;
-      color: var(--dt-text-strong);
-    }
-
-    .inspector-status.error {
-      color: var(--dt-bad);
     }
 
     .inspector-section {
@@ -115,29 +79,6 @@
       .inspector-grid {
         grid-template-columns: 1fr;
       }
-    }
-
-    table.inspector-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.85rem;
-    }
-
-    table.inspector-table th,
-    table.inspector-table td {
-      border: 1px solid var(--dt-border);
-      padding: 0.35rem 0.75rem;
-      text-align: right;
-    }
-
-    table.inspector-table th:first-child,
-    table.inspector-table td:first-child {
-      text-align: left;
-    }
-
-    table.inspector-table thead th {
-      color: var(--dt-text-strong);
-      background-color: var(--dt-table-head-bg);
     }
 
     /* Virtualized commands list: a header table above a scroll container
@@ -260,31 +201,6 @@
     button.inspector-button:disabled {
       opacity: 0.4;
       cursor: default;
-    }
-
-    button.inspector-load {
-      background-color: var(--dt-accent);
-      color: var(--dt-accent-contrast);
-      border: 0;
-      border-radius: 4px;
-      padding: 0.5rem 1.5rem;
-      font-size: 0.9rem;
-      cursor: pointer;
-    }
-
-    button.inspector-load:disabled {
-      opacity: 0.5;
-      cursor: wait;
-    }
-
-    .inspector-note {
-      font-size: 0.75rem;
-      color: var(--dt-text-muted);
-      margin-top: 0.75rem;
-    }
-
-    a.back-link {
-      font-size: 0.8rem;
     }
 
     /* Instantiation-settings editor */
@@ -473,7 +389,7 @@
 </head>
 
 <body>
-  <div class="inspector-page">
+  <div class="bench-page">
     <div class="page-head">
       <h1 class="m-3 mb-2">GCode Debugger</h1>
       <button id="theme-toggle" class="theme-toggle" type="button">Light</button>
@@ -483,7 +399,7 @@
       <a class="back-link" href="/index.html">demo</a>
     </p>
 
-    <div class="inspector-controls">
+    <div class="bench-controls">
       <div class="control-group">
         <label for="version-select">Version</label>
         <div class="bulma-select"><select id="version-select"></select></div>
@@ -496,10 +412,10 @@
         <label for="gcode-text">&hellip;or paste gcode (wins when non-empty)</label>
         <textarea id="gcode-text" spellcheck="false" placeholder="G28&#10;G1 X10 Y10 E1"></textarea>
       </div>
-      <button id="load-button" class="inspector-load">Load</button>
+      <button id="load-button" class="bench-run">Load</button>
     </div>
 
-    <div id="status" class="inspector-status">Pick a version and a file, then hit load.</div>
+    <div id="status" class="bench-status">Pick a version and a file, then hit load.</div>
 
     <div id="results" style="display: none">
       <details class="inspector-section" id="settings-section">
@@ -512,7 +428,7 @@
             <button id="settings-reset" class="inspector-button">Reset to default</button>
             <div class="bulma-select"><select id="settings-preset"></select></div>
           </div>
-          <p class="inspector-note">
+          <p class="bench-note">
             The full options object passed to the GCodePreview constructor (minus canvas). Apply
             rebuilds the debug session with the edited settings, keeping breakpoints and the
             current command. Edits persist across reloads until "Reset to default".
@@ -541,7 +457,7 @@
               <span id="filter-total"></span>
             </div>
             <div class="commands-head">
-              <table class="inspector-table commands-table">
+              <table class="bench-results commands-table">
                 <colgroup>
                   <col class="c-bp" /><col class="c-idx" /><col class="c-gcode" />
                   <col /><col /><col />
@@ -553,7 +469,7 @@
             </div>
             <div id="commands">
               <div id="commands-spacer"></div>
-              <table id="commands-body" class="inspector-table commands-table">
+              <table id="commands-body" class="bench-results commands-table">
                 <colgroup>
                   <col class="c-bp" /><col class="c-idx" /><col class="c-gcode" />
                   <col /><col /><col />
@@ -577,7 +493,7 @@
             </div>
             <div id="debug-readout" class="debug-readout">No file loaded.</div>
             <div id="state-panel"></div>
-            <p class="inspector-note">
+            <p class="bench-note">
               Click a row's left gutter to toggle a breakpoint. Stepping clears the filter and
               shows the (unfiltered) page containing the current command.
             </p>
@@ -586,7 +502,7 @@
       </div>
     </div>
 
-    <p class="inspector-note">
+    <p class="bench-note">
       The selected version parses the file inside an iframe with its own import map and keeps the
       full command list (and the debug session's job) in memory there; only summaries, 200-row
       windows of the virtual list, and state snapshots cross to this page. The iframe doubles as

@@ -25,25 +25,18 @@
 
 import { loadVersions, buildImportMap, populateVersionSelect, LOCAL_VERSION } from '../lib/versions.js';
 import { populatePresetSelect, presetSettings, fetchPresetGcode } from '../lib/demo-presets.js';
+import { el, setStatus, escapeHtml } from '../lib/page.js';
+import { frameSrcdoc } from '../lib/runner-frame.js';
 
 // Nominal row height per the commands-table CSS. Sub-pixel table rendering
 // (e.g. 28.5px at devicePixelRatio 2) would make the spacer math drift over
-// 163k rows, so the first rendered row is measured and the real value adopted
-// (see calibrateRowHeight).
+// 163k rows, so the first render with rows measures one and adopts the real
+// value (see calibrateRowHeight; once per load).
 let rowHeight = 28;
+let rowHeightCalibrated = false;
 const WINDOW_SIZE = 200;
 const OVERSCAN_ROWS = 10;
 const LOAD_TIMEOUT_MS = 180_000;
-
-const el = (id) => document.getElementById(id);
-const statusEl = el('status');
-
-function setStatus(message, isError = false) {
-  statusEl.textContent = message;
-  statusEl.classList.toggle('error', isError);
-}
-
-const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 const formatCount = (value) => value.toLocaleString('en-US');
 
@@ -74,19 +67,7 @@ function spawnFrame(importMap, handlers) {
   };
   window.addEventListener('message', onMessage);
 
-  const runnerUrl = new URL('runner.js', import.meta.url).href;
-  iframe.srcdoc = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <script type="importmap">${JSON.stringify(importMap)}</script>
-  <style>html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0a0a; } canvas { width: 100%; height: 100%; display: block; }</style>
-</head>
-<body>
-  <canvas id="canvas"></canvas>
-  <script type="module" src="${runnerUrl}"></script>
-</body>
-</html>`;
+  iframe.srcdoc = frameSrcdoc(importMap, new URL('runner.js', import.meta.url).href);
   el('frame-holder').replaceChildren(iframe);
   frame = { iframe, onMessage, timeout: undefined };
   return frame;
@@ -95,30 +76,35 @@ function spawnFrame(importMap, handlers) {
 const post = (message) => frame?.iframe.contentWindow.postMessage(message, '*');
 
 // ---------------------------------------------------------------------------
-// Session persistence: the loaded source and the breakpoints survive reloads.
+// Session persistence, two keys:
 //
-// One JSON blob under one key:
-//   { version, source: { type:'preset', key } | { type:'text', text } | null,
-//     breakpoints: number[], settingsOverride: string | null }
-// settingsOverride is the raw settings-editor text (saved verbatim on every
-// edit); a non-string or unparsable value is silently ignored at use time.
-// source is null when the pasted text was too large to store. The debug
-// position is deliberately not persisted. Storage is treated as hostile: a
-// corrupt value is removed and ignored (this repo has shipped a
-// localStorage-parse crash before), and a failed write never breaks the
-// session (quota errors on big pasted text).
+//   HOT (gcode-preview-devtools:debugger):
+//     { version, breakpoints: number[], settingsOverride: string|null,
+//       splitPx: number|null }
+//     Small; rewritten on every breakpoint toggle, settings-editor keystroke,
+//     and split drag — including before the first load. settingsOverride is
+//     the raw editor text, saved verbatim.
+//   SOURCE (gcode-preview-devtools:debugger:source):
+//     { type:'preset', key } | { type:'text', text } — up to ~1 MB of pasted
+//     gcode, written only on a successful load (removed when the pasted text
+//     is too large to store), so the hot writes never re-serialize it.
+//
+// Restore requires the hot key; a source key alone is inert. The pre-split
+// single-blob format (source inline under the hot key) migrates on first
+// read. Storage is hostile: corrupt values in either key are removed and
+// ignored (this repo has shipped a localStorage-parse crash before), and a
+// failed setItem never breaks the session. The debug position is
+// deliberately not persisted, and a failed load writes nothing.
 
 const STORAGE_KEY = 'gcode-preview-devtools:debugger';
+const SOURCE_KEY = 'gcode-preview-devtools:debugger:source';
 const MAX_PERSIST_TEXT = 1_000_000;
 
-// The source of the currently loaded session (null before the first
-// successful load, or when the pasted text was too large to persist).
+// Version of the last successful load; before that, persistState falls back
+// to whatever the version select currently shows.
 let session = null;
-// Breakpoints read from storage, waiting for the restore-triggered load to
-// succeed. Kept across a failed load so a retry can still apply them.
-let pendingBreakpoints = null;
 
-function readStoredState() {
+function readHotState() {
   let raw;
   try {
     raw = localStorage.getItem(STORAGE_KEY);
@@ -126,44 +112,78 @@ function readStoredState() {
     return null;
   }
   if (!raw) return null;
+  let state = null;
   try {
-    const state = JSON.parse(raw);
-    if (typeof state?.version !== 'string') throw new Error('bad version');
-    const source = state.source;
-    const sourceOk =
-      source === null ||
-      (source?.type === 'preset' && typeof source.key === 'string') ||
-      (source?.type === 'text' && typeof source.text === 'string');
-    if (!sourceOk) throw new Error('bad source');
-    if (!Array.isArray(state.breakpoints) || !state.breakpoints.every((n) => Number.isInteger(n) && n >= 0)) {
-      throw new Error('bad breakpoints');
-    }
-    // a bad override is dropped on its own rather than condemning the blob
-    const settingsOverride = typeof state.settingsOverride === 'string' ? state.settingsOverride : null;
-    // likewise for the column split: wrong type or out of range → default
-    const splitPx =
-      typeof state.splitPx === 'number' &&
-      Number.isFinite(state.splitPx) &&
-      state.splitPx >= 320 &&
-      state.splitPx <= 4000
-        ? state.splitPx
-        : null;
-    return { version: state.version, source, breakpoints: state.breakpoints, settingsOverride, splitPx };
+    state = JSON.parse(raw);
   } catch {
+    // fall through to discard
+  }
+  const discard = () => {
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {
       // storage unavailable; nothing to clean
     }
     return null;
+  };
+  if (!state || typeof state !== 'object' || typeof state.version !== 'string') return discard();
+  if (!Array.isArray(state.breakpoints) || !state.breakpoints.every((n) => Number.isInteger(n) && n >= 0)) {
+    return discard();
   }
+  // bad optional fields are dropped on their own rather than condemning the key
+  const settingsOverride = typeof state.settingsOverride === 'string' ? state.settingsOverride : null;
+  const splitPx =
+    typeof state.splitPx === 'number' && Number.isFinite(state.splitPx) && state.splitPx >= 320 && state.splitPx <= 4000
+      ? state.splitPx
+      : null;
+  const hot = { version: state.version, breakpoints: state.breakpoints, settingsOverride, splitPx };
+
+  // migration from the single-blob format: the source moves to its own key
+  if (Object.hasOwn(state, 'source')) {
+    const source = state.source;
+    const sourceOk =
+      (source?.type === 'preset' && typeof source.key === 'string') ||
+      (source?.type === 'text' && typeof source.text === 'string');
+    try {
+      if (sourceOk) localStorage.setItem(SOURCE_KEY, JSON.stringify(source));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(hot));
+    } catch {
+      // best-effort; the old blob keeps working until a write succeeds
+    }
+  }
+  return hot;
 }
 
+function readSourceState() {
+  let raw;
+  try {
+    raw = localStorage.getItem(SOURCE_KEY);
+  } catch {
+    return null;
+  }
+  if (!raw) return null;
+  let source = null;
+  try {
+    source = JSON.parse(raw);
+  } catch {
+    // fall through to discard
+  }
+  const sourceOk =
+    (source?.type === 'preset' && typeof source.key === 'string') ||
+    (source?.type === 'text' && typeof source.text === 'string');
+  if (sourceOk) return source;
+  try {
+    localStorage.removeItem(SOURCE_KEY);
+  } catch {
+    // storage unavailable; nothing to clean
+  }
+  return null;
+}
+
+// The hot key: cheap enough for keystroke/drag frequency, works pre-session.
 function persistState() {
-  if (!session) return;
   const payload = {
-    version: session.version,
-    source: session.source,
+    version: session?.version ?? el('version-select').value,
     breakpoints: [...debug.breakpoints].sort((a, b) => a - b),
     settingsOverride: overrideText,
     splitPx
@@ -175,29 +195,49 @@ function persistState() {
   }
 }
 
+// The source key: only successful loads land here.
+function persistSource(source) {
+  try {
+    if (source) {
+      localStorage.setItem(SOURCE_KEY, JSON.stringify(source));
+    } else {
+      localStorage.removeItem(SOURCE_KEY);
+    }
+  } catch {
+    // quota exceeded (big pasted text) — the in-page session must go on
+  }
+}
+
+// Each key is read exactly once, at startup; everything downstream works off
+// these and module state.
+const storedHot = readHotState();
+const storedSource = readSourceState();
+
+// Breakpoints waiting for the next successful load to apply them: from
+// storage at startup, or carried across a re-Load. Kept across a failed load
+// so a retry can still apply them.
+let pendingBreakpoints = storedHot?.breakpoints ?? null;
+
 // Re-selects the stored version and source and triggers a load. Runs once the
 // version list is populated. The stored breakpoints are applied when that
-// load's 'loaded' arrives; on load failure the key is left untouched so a
-// retry (or the next reload) can still use it.
+// load's 'loaded' arrives; on load failure the keys are left untouched so a
+// retry (or the next reload) can still use them.
 function restoreSession() {
-  const stored = readStoredState();
-  if (!stored) return;
+  if (!storedHot) return;
 
   const versionSelect = el('version-select');
-  const hasVersion = [...versionSelect.options].some((option) => option.value === stored.version);
-  versionSelect.value = hasVersion ? stored.version : LOCAL_VERSION;
+  const hasVersion = [...versionSelect.options].some((option) => option.value === storedHot.version);
+  versionSelect.value = hasVersion ? storedHot.version : LOCAL_VERSION;
 
-  pendingBreakpoints = stored.breakpoints;
-  overrideText = stored.settingsOverride;
-  if (!stored.source) return; // nothing auto-loadable was stored
+  if (!storedSource) return; // nothing auto-loadable was stored
 
-  if (stored.source.type === 'preset') {
+  if (storedSource.type === 'preset') {
     const presetSelect = el('preset-select');
-    if (![...presetSelect.options].some((option) => option.value === stored.source.key)) return;
-    presetSelect.value = stored.source.key;
+    if (![...presetSelect.options].some((option) => option.value === storedSource.key)) return;
+    presetSelect.value = storedSource.key;
     el('gcode-text').value = '';
   } else {
-    el('gcode-text').value = stored.source.text;
+    el('gcode-text').value = storedSource.text;
   }
   el('load-button').click();
 }
@@ -213,7 +253,7 @@ function restoreSession() {
 const PANEL_MIN_PX = 320;
 const COMMANDS_MIN_PX = 360;
 
-let splitPx = readStoredState()?.splitPx ?? null;
+let splitPx = storedHot?.splitPx ?? null;
 
 function applySplit() {
   const grid = document.querySelector('.debugger-grid');
@@ -292,7 +332,7 @@ function maxPanelWidth() {
 let computedDefaults = null;
 // Raw editor text override, or null when running on defaults. Initialized
 // from storage so a manual load before restoreSession still honors it.
-let overrideText = readStoredState()?.settingsOverride ?? null;
+let overrideText = storedHot?.settingsOverride ?? null;
 
 // Curated variants; each is the current file's defaults plus a small delta,
 // so buildVolume/camera stay appropriate for the loaded gcode.
@@ -518,17 +558,21 @@ function renderVirtual(force = false) {
   el('commands-body').style.top = `${first * rowHeight}px`;
   el('commands-rows').innerHTML = rows.join('');
   updateFilterTotal();
-  calibrateRowHeight();
+  if (!rowHeightCalibrated) calibrateRowHeight();
 }
 
 // Adopts the browser's actual rendered row height (sub-pixel table layout can
 // differ from the nominal CSS value) so spacer size, window positions, and
-// scroll targets stay exact across 163k rows.
+// scroll targets stay exact across 163k rows. Runs once per load: reading
+// getBoundingClientRect after every innerHTML write would force a reflow on
+// each scroll frame.
 function calibrateRowHeight() {
   const firstRow = el('commands-rows').querySelector('tr');
   if (!firstRow) return;
   const measured = firstRow.getBoundingClientRect().height;
-  if (!measured || Math.abs(measured - rowHeight) < 0.25) return;
+  if (!measured) return;
+  rowHeightCalibrated = true;
+  if (Math.abs(measured - rowHeight) < 0.25) return;
   rowHeight = measured;
   updateSpacer();
   renderVirtual(true);
@@ -659,7 +703,7 @@ function renderStatePanel({ state, derived }) {
 
   const stateRows = Object.entries(state).map(([key, value]) => row(key, value));
   const derivedRows = Object.entries(derived).map(([key, value]) => row(`job.${key}`, value, key));
-  el('state-panel').innerHTML = `<table class="inspector-table state-table">
+  el('state-panel').innerHTML = `<table class="bench-results state-table">
     <thead><tr><th>State</th><th>Value</th></tr></thead>
     <tbody>
       ${stateRows.join('')}
@@ -720,7 +764,7 @@ function renderSummary(summary) {
     const value = stat ? summary.stats?.[key] : summary[key];
     return `<tr><td>${label}</td><td>${escapeHtml(formatSummaryValue(value))}</td></tr>`;
   }).join('');
-  el('summary').innerHTML = `<table class="inspector-table">
+  el('summary').innerHTML = `<table class="bench-results">
     <thead><tr><th>Metric</th><th>Value</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
@@ -730,7 +774,7 @@ function renderHistogram(histogram) {
   const rows = histogram
     .map(([gcode, count]) => `<tr><td>${escapeHtml(gcode)}</td><td>${formatCount(count)}</td></tr>`)
     .join('');
-  el('histogram').innerHTML = `<table class="inspector-table">
+  el('histogram').innerHTML = `<table class="bench-results">
     <thead><tr><th>gcode</th><th>count</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
@@ -744,16 +788,29 @@ function finishLoad() {
   el('load-button').disabled = false;
 }
 
+// A dead or resetting frame can serve nothing: hide the stale results and
+// stop the virtual list from posting queries (or rendering permanent
+// placeholders) into the void.
+function resetResults() {
+  browser.loaded = false;
+  clearVirtualData();
+  virtual.total = 0;
+  el('commands-rows').innerHTML = '';
+  el('results').style.display = 'none';
+}
+
 async function loadFile() {
   const version = el('version-select').value;
   const pasted = el('gcode-text').value.trim();
   const presetKey = el('preset-select').value;
 
-  browser.loaded = false;
   browser.filter = el('command-filter').value.trim();
-  clearVirtualData();
-  virtual.total = 0;
-  el('results').style.display = 'none';
+  resetResults();
+  rowHeightCalibrated = false;
+  // breakpoints survive re-Loads: carry the live set into the pending slot
+  // the loaded handler re-applies (dropping indexes past the new file's end).
+  // An empty set must not clobber breakpoints already pending from storage.
+  if (debug.breakpoints.size > 0) pendingBreakpoints = [...debug.breakpoints];
   resetDebugPanel('Loading…');
 
   setStatus('Fetching gcode…');
@@ -806,7 +863,8 @@ async function loadFile() {
         pendingBreakpoints = null;
         updateBreakpointButton();
       }
-      session = { version, source: persistableSource };
+      session = { version };
+      persistSource(persistableSource);
       persistState();
       if (!debuggable) {
         el('debug-readout').textContent =
@@ -835,19 +893,23 @@ async function loadFile() {
     unsupported: ({ message }) => {
       finishLoad();
       teardownFrame();
+      resetResults();
       resetDebugPanel('No file loaded.');
       setStatus(message);
     },
+    // also fires for post-load runner failures, when results are showing
     error: ({ message }) => {
       finishLoad();
       teardownFrame();
+      resetResults();
       resetDebugPanel('No file loaded.');
-      setStatus(`Load failed: ${message}`, true);
+      setStatus(`Runner failed: ${message} — hit Load to start over.`, true);
     }
   });
   frame.timeout = setTimeout(() => {
     finishLoad();
     teardownFrame();
+    resetResults();
     resetDebugPanel('No file loaded.');
     setStatus('Load timed out.', true);
   }, LOAD_TIMEOUT_MS);
@@ -861,6 +923,7 @@ el('load-button').addEventListener('click', async () => {
   } catch (error) {
     console.error(error);
     teardownFrame();
+    resetResults();
     setStatus(`Load failed: ${error.message}`, true);
     button.disabled = false;
   }
