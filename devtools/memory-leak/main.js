@@ -71,9 +71,11 @@ function drawChart() {
   const dpr = window.devicePixelRatio || 1;
   const width = canvas.clientWidth;
   const height = CHART.height;
-  canvas.width = Math.round(width * dpr);
-  canvas.height = Math.round(height * dpr);
-
+  // reassigning width/height clears the bitmap, so only resize when needed
+  const bitmapWidth = Math.round(width * dpr);
+  const bitmapHeight = Math.round(height * dpr);
+  if (canvas.width !== bitmapWidth) canvas.width = bitmapWidth;
+  if (canvas.height !== bitmapHeight) canvas.height = bitmapHeight;
   const ctx = canvas.getContext('2d');
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = CHART.surface;
@@ -349,9 +351,13 @@ async function runTest() {
     }
   });
 
-  chart.samples = samples;
-  chart.baselineHeapMB = baselineHeapMB;
-  drawChart();
+  // the chart accumulated these via progress messages; the result payload is
+  // the single source of truth for the verdict but must match what was drawn
+  if (samples.length !== chart.samples.length) {
+    chart.samples = samples;
+    chart.baselineHeapMB = baselineHeapMB;
+    drawChart();
+  }
   renderVerdict(samples);
   setStatus(`Done — ${samples.length} cycles on ${version}.`);
 }

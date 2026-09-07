@@ -83,9 +83,11 @@ any browser.
 ![Memory-leak tester](screenshots/memory-leak.webp)
 
 Release-gate check: runs repeated create → load → render → dispose cycles
-(fresh canvas each cycle, like a framework remount) and charts JS heap plus
-`renderer.info.memory` per cycle. A regression over the tail of the run flags
-"possible leak" vs "looks flat". Heap numbers need Chrome.
+(fresh canvas each cycle, like a framework remount) and charts JS heap per
+cycle plus the `renderer.info.memory` geometry/texture counts read *after*
+`dispose()` — any nonzero residual means dispose leaked GPU resources. The
+heap verdict compares median steady-state heap between window halves. Heap
+numbers need Chrome.
 
 ### Streaming equivalence checker (`streaming-equivalence/`)
 
