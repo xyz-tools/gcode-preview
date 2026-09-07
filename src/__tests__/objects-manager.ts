@@ -5,6 +5,7 @@ import { BoundingBox } from '../bounding-box';
 import { Scene, Color, Group, BatchedMesh, LineBasicMaterial } from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { createColorMaterial } from '../helpers/colorMaterial';
 
 describe('ObjectsManager', () => {
   let scene: Scene;
@@ -318,6 +319,47 @@ describe('ObjectsManager', () => {
 
       expect(second.materials[0]).not.toBe(firstMaterial);
       second.dispose();
+    });
+
+    // The per-tool isolation above only holds because createColorMaterial builds a new
+    // material every call. Callers write straight into the uniforms (recoloring, clipping),
+    // so a cached/shared instance would make one write show up on every mesh that started
+    // from the same color.
+    test('createColorMaterial returns a fresh material per call, so uniform writes do not bleed', () => {
+      const first = createColorMaterial(0x0000ff, 0.3, 0.6, 1.1);
+      const second = createColorMaterial(0x0000ff, 0.3, 0.6, 1.1);
+
+      expect(second).not.toBe(first);
+      expect(second.uniforms).not.toBe(first.uniforms);
+
+      first.uniforms.uColor.value.setHex(0x00ff00);
+      first.uniforms.clipMinY.value = 5;
+
+      expect(second.uniforms.uColor.value.getHex()).toBe(0x0000ff);
+      expect(second.uniforms.clipMinY.value).toBe(-Infinity);
+
+      first.dispose();
+      second.dispose();
+    });
+
+    // three.js only grew BatchedMesh.addInstance after the oldest version we support, so
+    // createBatchMesh calls it optionally — that `?.` is what lets webgl1 browsers still
+    // get a batched mesh. Simulate the older build by removing the method: nothing may
+    // throw, and the geometry must still land in the mesh.
+    test('batches geometry on a three.js build with no BatchedMesh.addInstance', () => {
+      const addInstance = BatchedMesh.prototype.addInstance;
+      Reflect.deleteProperty(BatchedMesh.prototype, 'addInstance');
+
+      try {
+        expect(BatchedMesh.prototype.addInstance).toBeUndefined();
+        expect(() => objectsManager.renderExtrusionTubes([createTestPath()], new Color(0x0000ff))).not.toThrow();
+
+        const mesh = objectsManager.extrusionsGroup.children[0] as BatchedMesh;
+        expect(mesh).toBeInstanceOf(BatchedMesh);
+        expect(mesh.geometry.attributes.position.count).toBeGreaterThan(0);
+      } finally {
+        BatchedMesh.prototype.addInstance = addInstance;
+      }
     });
   });
 

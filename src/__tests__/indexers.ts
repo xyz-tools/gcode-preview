@@ -429,3 +429,38 @@ test('LayersMetadataIndexer.setLayerMetadata tolerates null/undefined', () => {
   indexer.setLayerMetadata(undefined as unknown as LayerMetadata[]);
   expect(indexer.hasMetadata).toBe(false);
 });
+
+// A streaming parse re-sets the *same* (growing) metadata array on every chunk, and the
+// pointer that findLayerIndexForZ scans from must survive that. Setting a different array
+// has to rewind it instead, so positions from the previous metadata cannot leak. Only the
+// same-instance vs swapped-instance contrast catches this: both run the same lines.
+test('LayersMetadataIndexer.setLayerMetadata keeps the layer pointer for the same array, rewinds for a new one', () => {
+  const metadata: LayerMetadata[] = [
+    { layerIndex: 0, z: 0.3, height: 0.3, lineIndex: 0 },
+    { layerIndex: 1, z: 0.6, height: 0.3, lineIndex: 5 },
+    { layerIndex: 2, z: 0.9, height: 0.3, lineIndex: 10 }
+  ];
+  // Walks the pointer up to metadata layer 2.
+  const advancePointer = (indexer: LayersMetadataIndexer): void => {
+    [0.3, 0.6, 0.9].forEach((z) => indexer.sortIn(createPath(z)));
+  };
+
+  // Same instance: the pointer stays at layer 2, so a path low in the stack is filed
+  // into the current layer rather than rediscovering layer 0.
+  const kept = new LayersMetadataIndexer([], metadata);
+  advancePointer(kept);
+  kept.setLayerMetadata(metadata);
+  const afterRestate = createPath(0.3);
+  kept.sortIn(afterRestate);
+
+  expect(afterRestate.layerIndex).toBe(2);
+
+  // Same history, different instance: the pointer rewinds and the scan starts over.
+  const swapped = new LayersMetadataIndexer([], metadata);
+  advancePointer(swapped);
+  swapped.setLayerMetadata([...metadata]);
+  const afterSwap = createPath(0.3);
+  swapped.sortIn(afterSwap);
+
+  expect(afterSwap.layerIndex).toBe(0);
+});
