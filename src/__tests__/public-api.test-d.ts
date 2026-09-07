@@ -267,9 +267,10 @@ describe('public API types', () => {
       >();
     });
 
-    it('exposes the print state, whose dimensions separate announced from derived', () => {
+    it('exposes the print state, carrying only the dimensions the slicer announced', () => {
       // Reachable as job.state, so these are public whether or not State is
-      // exported: renaming one of them breaks a consumer.
+      // exported. The derived dimensions are deliberately absent: they are the
+      // Job's own working values, not part of the surface.
       expectTypeOf<keyof Job['state']>().toEqualTypeOf<
         | 'x'
         | 'y'
@@ -280,16 +281,12 @@ describe('public API types', () => {
         | 'tool'
         | 'extrusionWidth'
         | 'lineHeight'
-        | 'derivedExtrusionWidth'
-        | 'derivedLineHeight'
-        | 'resolvedExtrusionWidth'
-        | 'resolvedLineHeight'
         | 'units'
         | 'isHomed'
         | 'applyExtrusion'
       >();
-      expectTypeOf<Job['state']['resolvedExtrusionWidth']>().toEqualTypeOf<number | undefined>();
-      expectTypeOf<Job['state']['resolvedLineHeight']>().toEqualTypeOf<number | undefined>();
+      expectTypeOf<Job['state']['extrusionWidth']>().toEqualTypeOf<number | undefined>();
+      expectTypeOf<Job['state']['lineHeight']>().toEqualTypeOf<number | undefined>();
     });
 
     it('keeps its public fields, getters and method signatures', () => {

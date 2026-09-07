@@ -83,6 +83,10 @@ export class Job {
   private readonly suppliedExtrusionWidth: number | undefined;
   /** Line height the caller supplied through the public API; suppresses deriving one */
   private readonly suppliedLineHeight: number | undefined;
+  /** Width derived from the moves, used where nothing announced or supplied one */
+  private derivedExtrusionWidth: number | undefined;
+  /** Line height derived from the Z steps, used on the same terms */
+  private derivedLineHeight: number | undefined;
   /** How many commands have been executed on this job — one per parsed line */
   private executedCommandCount = 0;
 
@@ -206,6 +210,24 @@ export class Job {
    * discarded entirely when implausible (outside 0.1–2.0 mm, or over a
    * segment too short to measure).
    */
+  /**
+   * The width a path started now carries of its own: what the slicer
+   * announced, else what the moves imply, else `undefined`.
+   * @remarks
+   * A width the caller supplied is deliberately absent here. It suppresses
+   * the derivation, but baking it into the path would freeze it: the renderer
+   * applies it as a fallback, so leaving the path without one is what lets
+   * `SceneManager.extrusionWidth` still take effect after the file is loaded.
+   */
+  private get resolvedExtrusionWidth(): number | undefined {
+    return this.state.extrusionWidth ?? this.derivedExtrusionWidth;
+  }
+
+  /** The line height a path started now carries of its own, resolved likewise */
+  private get resolvedLineHeight(): number | undefined {
+    return this.state.lineHeight ?? this.derivedLineHeight;
+  }
+
   deriveMoveDimensions(
     target: { x: number | undefined; y: number | undefined; z: number | undefined },
     extruded: number
@@ -218,7 +240,7 @@ export class Job {
         if (step >= MIN_DERIVED_HEIGHT && step <= MAX_DERIVED_HEIGHT) {
           // rounded so consecutive layers with equal heights compare equal
           // despite floating-point Z subtraction noise
-          this.state.derivedLineHeight = Math.round(step * 10000) / 10000;
+          this.derivedLineHeight = Math.round(step * 10000) / 10000;
         }
       }
       // Advanced even when the height is not being derived, so the anchor is
@@ -235,7 +257,7 @@ export class Job {
 
     // Whichever height the material was actually laid at, in the same order
     // the paths resolve it: announced, then the caller's, then derived.
-    const height = this.state.lineHeight ?? this.suppliedLineHeight ?? this.state.derivedLineHeight;
+    const height = this.state.lineHeight ?? this.suppliedLineHeight ?? this.derivedLineHeight;
     if (height === undefined) return;
 
     // Resolved exactly like the rendered geometry: an unknown axis is assumed
@@ -252,9 +274,9 @@ export class Job {
     if (!(width >= MIN_DERIVED_WIDTH && width <= MAX_DERIVED_WIDTH)) return;
 
     const quantized = Math.round(width * 100) / 100;
-    const current = this.state.derivedExtrusionWidth;
+    const current = this.derivedExtrusionWidth;
     if (current !== undefined && Math.abs(quantized - current) <= current * DERIVED_WIDTH_TOLERANCE) return;
-    this.state.derivedExtrusionWidth = quantized;
+    this.derivedExtrusionWidth = quantized;
   }
 
   /**
@@ -338,12 +360,7 @@ export class Job {
    */
   breakPath(newType: PathType): Path {
     this.finishPath();
-    const currentPath = new Path(
-      newType,
-      this.state.resolvedExtrusionWidth,
-      this.state.resolvedLineHeight,
-      this.state.tool
-    );
+    const currentPath = new Path(newType, this.resolvedExtrusionWidth, this.resolvedLineHeight, this.state.tool);
     const pos = this.resolvePosition();
     currentPath.addPoint(pos.x, pos.y, pos.z);
     this.inprogressPath = currentPath;
@@ -368,8 +385,8 @@ export class Job {
     if (
       currentPath !== undefined &&
       currentPath.travelType === pathType &&
-      currentPath.extrusionWidth === this.state.resolvedExtrusionWidth &&
-      currentPath.lineHeight === this.state.resolvedLineHeight
+      currentPath.extrusionWidth === this.resolvedExtrusionWidth &&
+      currentPath.lineHeight === this.resolvedLineHeight
     ) {
       return currentPath;
     }

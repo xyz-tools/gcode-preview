@@ -110,7 +110,7 @@ export abstract class SlicerMetadataParser {
    * @remarks
    * Deriving is the default, for every dialect and for gcode no parser
    * recognised: a file that announces its dimensions simply outranks the
-   * derived values path by path (see `State.resolvedExtrusionWidth`), so
+   * derived values path by path (the Job resolves that order), so
    * there is nothing to gate on. A dialect only opts out when the arithmetic
    * itself does not hold -- Cura's UltiGCode flavor, whose E is cubic
    * millimetres of material rather than millimetres of filament, would

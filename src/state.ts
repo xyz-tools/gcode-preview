@@ -45,9 +45,10 @@ export class State {
    * or `undefined` while no comment has announced one.
    * @remarks
    * Fed by `;WIDTH:` comments (PrusaSlicer family) via the slicer metadata
-   * pipeline (see `Job.beginCommand`). An announced width outranks the one
-   * derived from the moves: the slicer states what it asked the printer for,
-   * while the derivation infers it. See `State.resolvedExtrusionWidth`.
+   * pipeline (see `Job.beginCommand`). An announced width outranks both the
+   * one the caller supplied and the one derived from the moves: the slicer
+   * states what it asked the printer for, while the derivation infers it.
+   * The Job resolves that order when it starts a path.
    */
   extrusionWidth: number | undefined = undefined;
   /**
@@ -55,38 +56,10 @@ export class State {
    * or `undefined` while no comment has announced one.
    * @remarks
    * Fed by `;HEIGHT:` comments (PrusaSlicer family), which vary throughout a
-   * print when adaptive layer height is enabled. Outranks the derived height
-   * for the same reason as `extrusionWidth`.
+   * print when adaptive layer height is enabled. Outranks the supplied and
+   * derived heights for the same reason as `extrusionWidth`.
    */
   lineHeight: number | undefined = undefined;
-  /**
-   * Width of extruded material derived from the moves themselves, used where
-   * the slicer announced none (see `Job.deriveMoveDimensions`).
-   */
-  derivedExtrusionWidth: number | undefined = undefined;
-  /**
-   * Height of the extruded line derived from the Z steps between extrusion
-   * moves, used where the slicer announced none.
-   */
-  derivedLineHeight: number | undefined = undefined;
-
-  /**
-   * The width paths take right now: announced by the slicer if it said, else
-   * derived from the moves, else `undefined` so the renderer's own fallback
-   * applies.
-   */
-  get resolvedExtrusionWidth(): number | undefined {
-    return this.extrusionWidth ?? this.derivedExtrusionWidth;
-  }
-
-  /**
-   * The line height paths take right now, resolved like
-   * `resolvedExtrusionWidth`.
-   */
-  get resolvedLineHeight(): number | undefined {
-    return this.lineHeight ?? this.derivedLineHeight;
-  }
-
   /** Current units (millimeters or inches) */
   units: Units = 'mm';
   /**
