@@ -14,8 +14,6 @@ Other things that are always helpful:
 
 ## Development setup
 
-Use Node 22 (`.nvmrc` pins `v22.12.0`, so `nvm use` picks it up). CI builds and tests on Node 22.
-
 Run the dev setup:
 
 ```sh
