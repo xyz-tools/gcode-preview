@@ -210,10 +210,14 @@ export class Job {
     // at the origin (see resolvePosition).
     const from = this.resolvePosition();
     const length = Math.hypot((target.x ?? 0) - from.x, (target.y ?? 0) - from.y, (target.z ?? 0) - from.z);
-    if (length < MIN_DERIVED_SEGMENT_LENGTH) return;
+    // Number.isFinite: overflowing (yet individually finite) coordinates can
+    // make hypot Infinity — or NaN via Inf - Inf — and both pass a plain `<`
+    if (!Number.isFinite(length) || length < MIN_DERIVED_SEGMENT_LENGTH) return;
 
     const width = (deltaE * this.filamentCrossSection) / (length * height);
-    if (width < MIN_DERIVED_WIDTH || width > MAX_DERIVED_WIDTH) return;
+    // inclusive form so NaN (e.g. from an Infinity/Infinity overflow) is
+    // rejected rather than latched into the state and every path after it
+    if (!(width >= MIN_DERIVED_WIDTH && width <= MAX_DERIVED_WIDTH)) return;
 
     const quantized = Math.round(width * 100) / 100;
     const current = this.state.extrusionWidth;
