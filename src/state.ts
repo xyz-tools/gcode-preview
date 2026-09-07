@@ -12,15 +12,17 @@ export class State {
   y: number | undefined = undefined;
   /** Current Z position, or `undefined` until the axis is homed (G28) */
   z: number | undefined = undefined;
-  /** Current extruder position, tracked by `trackE` and reset by G92 */
+  /** Current extruder position, tracked by `applyExtrusion` and reset by G92 */
   e = 0;
   /**
    * Whether E parameters are relative distances (M83) rather than absolute
    * extruder positions (M82).
    * @remarks
-   * Defaults to absolute, matching the Marlin firmware default. Only the E
-   * accounting in `trackE` consults this; move classification (`e > 0` means
-   * extrusion) is deliberately unchanged in either mode.
+   * Defaults to absolute, matching every major firmware (Marlin, Klipper,
+   * RepRapFirmware, Smoothieware). A file that uses relative E without saying so reads as one long
+   * retraction and renders as travel moves only. Slicers always emit M82 or
+   * M83, so that only affects hand-written gcode -- and guessing the other
+   * way would misread the declared-absolute files this exists to get right.
    */
   relativeExtrusion = false;
   /**
@@ -80,7 +82,7 @@ export class State {
    * position. Both modes leave `e` at the move's resulting extruder position,
    * so G92 E resets (which set `e` directly) compose naturally with either.
    */
-  trackE(e: number | undefined): number {
+  applyExtrusion(e: number | undefined): number {
     if (e === undefined) return 0;
     if (this.relativeExtrusion) {
       this.e += e;

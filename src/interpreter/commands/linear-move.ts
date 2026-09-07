@@ -29,7 +29,7 @@ export const linearMove: CommandHandler = (command, job) => {
     // still account the E parameter: in absolute mode a retract/prime pair
     // moves the extruder position, and losing it here would misattribute the
     // difference to the next extruding move
-    state.trackE(e);
+    state.applyExtrusion(e);
     return;
   }
 
@@ -42,14 +42,16 @@ export const linearMove: CommandHandler = (command, job) => {
   const targetY = y === undefined ? state.y : y + state.positionShift.y;
   const targetZ = z === undefined ? state.z : z + state.positionShift.z;
 
-  state.trackE(e);
-  // classified from the raw E parameter, in either extrusion mode
+  // Classified from the length actually extruded, not the raw E parameter: in
+  // absolute mode a wipe or retract can move in X/Y while E decreases, which
+  // still reads as a positive parameter but lays down no material.
   // see also https://github.com/xyz-tools/gcode-preview/issues/179
-  const pathType = e > 0 ? PathType.Extrusion : PathType.Travel;
+  const extruded = state.applyExtrusion(e);
+  const pathType = extruded > 0 ? PathType.Extrusion : PathType.Travel;
   const currentPath = job.continuePath(pathType);
 
-  if (e > 0) {
-    job.stats.extrusionDistance += e;
+  if (extruded > 0) {
+    job.stats.extrusionDistance += extruded;
   }
 
   state.x = targetX;

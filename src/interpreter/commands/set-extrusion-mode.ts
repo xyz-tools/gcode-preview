@@ -5,7 +5,7 @@ import type { CommandHandler } from '../../interpreter';
  * @param _command - GCodeCommand (no parameters used)
  * @param job - Job instance to update
  * @remarks
- * Only the E accounting (`State.trackE`) consults the mode; whether a move
+ * Only the E accounting (`State.applyExtrusion`) consults the mode; whether a move
  * extrudes is still classified from the raw E parameter. Cura emits M82 or
  * M83 right after its start gcode, which is what keeps the volumetric
  * dimension derivation's extruded lengths correct in either mode.

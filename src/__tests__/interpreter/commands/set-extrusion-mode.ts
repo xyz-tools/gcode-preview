@@ -24,7 +24,7 @@ test('M82 switches E parameters back to absolute positions', () => {
   expect(job.state.relativeExtrusion).toBe(false);
 });
 
-test('the mode defaults to absolute, matching the Marlin firmware default', () => {
+test('the mode defaults to absolute, matching every major firmware', () => {
   expect(new Job().state.relativeExtrusion).toBe(false);
 });
 
