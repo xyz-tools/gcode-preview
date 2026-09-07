@@ -59,6 +59,7 @@ vi.mock('three', async (importOriginal) => {
 });
 
 import { SceneManager, type SceneManagerOptions } from '../scene-manager';
+import { GCodePreview } from '../gcode-preview';
 import { ObjectsManager } from '../objects-manager';
 import { Job } from '../job';
 import { Path, PathType } from '../path';
@@ -1284,13 +1285,34 @@ describe('SceneManager properties', () => {
       );
     });
 
-    test('throws without a build volume while centering the controls', () => {
-      // Current behavior: the constructor dereferences this._buildVolume
-      // unconditionally when aiming the controls, so a missing buildVolume
-      // option fails construction. If this starts passing, the constructor
-      // learned to handle it and this test should assert the new behavior.
+    test('constructs without a build volume, aiming the controls at a fallback center', () => {
+      // buildVolume is optional (#446): without one, no plate is drawn and the
+      // controls aim at where a print on a typical ~200x200 plate lands, as v2.8 did
+      const fresh = createSceneManager({ buildVolume: undefined });
+
+      expect(fresh.buildVolume).toBeUndefined();
+      expect(fresh.controls.target.toArray()).toEqual([100, 0, -100]);
+
+      fresh.dispose();
+    });
+
+    test('README quick start constructs without an optional build volume', async () => {
+      // Regression test for #446, contributed by @remcoder on the
+      // codex/p1-quick-start-repro branch: the quick-start preview must
+      // construct and process G-code with only a canvas and extrusionColor.
       const canvas = document.createElement('canvas');
-      expect(() => new SceneManager({ canvas }, createJob())).toThrow(TypeError);
+      Object.defineProperties(canvas, {
+        offsetWidth: { value: 640 },
+        offsetHeight: { value: 480 }
+      });
+
+      const preview = new GCodePreview({ canvas, extrusionColor: 'hotpink' });
+      await preview.processGCode('G0 X0 Y0 Z0.2\nG1 X42 Y42 E10');
+
+      expect(preview.job.extrusions).toHaveLength(1);
+      expect(preview.job.state).toMatchObject({ x: 42, y: 42, z: 0.2 });
+
+      preview.dispose();
     });
 
     test('applies every optional setting', () => {

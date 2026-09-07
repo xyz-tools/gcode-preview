@@ -212,7 +212,13 @@ export class SceneManager {
     this.resize();
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.target.set(this.buildVolume.x / 2, 0, -this.buildVolume.y / 2);
+    if (this.buildVolume) {
+      this.controls.target.set(this.buildVolume.x / 2, 0, -this.buildVolume.y / 2);
+    } else {
+      // without a build volume there is no plate to center on, so aim at where
+      // a print on a typical ~200x200 plate lands, as v2.8 did
+      this.controls.target.set(100, 0, -100);
+    }
     this.disposables.push(this.controls);
     this.loadCamera();
 
