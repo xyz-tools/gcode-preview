@@ -1,5 +1,6 @@
 import { test, expect, describe, vi, afterEach } from 'vitest';
 import { Job } from '../job';
+import { Metadata } from '../parser/gcode-parser';
 import { PathType, Path } from '../path';
 import { State } from '../state';
 import { LayersIndexer, NonApplicableIndexer, TravelTypeIndexer } from '../indexers';
@@ -687,6 +688,178 @@ describe('.beginCommand', () => {
 
     expect(job.state.extrusionWidth).toBeUndefined();
     expect(job.state.lineHeight).toBeUndefined();
+  });
+});
+
+describe('.deriveMoveDimensions', () => {
+  const FILAMENT_AREA = Math.PI * (1.75 / 2) ** 2;
+  /** Extruded filament length depositing a w×h×len box (the derivation's model, inverted) */
+  const eFor = (width: number, height: number, length: number, area = FILAMENT_AREA) =>
+    (width * height * length) / area;
+
+  /** A job with derivation enabled, positioned at (0, 0, z) */
+  const derivingJob = (metadata: Partial<Metadata> = {}, z = 0.2) => {
+    const job = new Job();
+    job.metadata = { thumbnails: {}, deriveExtrusionDimensions: true, ...metadata };
+    job.state.x = 0;
+    job.state.y = 0;
+    job.state.z = z;
+    return job;
+  };
+
+  test('does nothing unless the metadata asked for derivation', () => {
+    const job = new Job();
+    job.metadata = { thumbnails: {} };
+
+    job.deriveMoveDimensions({ x: 10, y: 0, z: 0.2 }, eFor(0.4, 0.2, 10));
+
+    expect(job.state.extrusionWidth).toBeUndefined();
+    expect(job.state.lineHeight).toBeUndefined();
+  });
+
+  test('does nothing for a move that extrudes nothing', () => {
+    const job = derivingJob();
+
+    job.deriveMoveDimensions({ x: 10, y: 0, z: 0.2 }, 0);
+    job.deriveMoveDimensions({ x: 10, y: 0, z: 0.2 }, -1);
+
+    expect(job.state.extrusionWidth).toBeUndefined();
+    expect(job.state.lineHeight).toBeUndefined();
+  });
+
+  test('the first extrusion derives its height from Z itself and its width from the volume', () => {
+    const job = derivingJob();
+
+    job.deriveMoveDimensions({ x: 10, y: 0, z: 0.2 }, eFor(0.4, 0.2, 10));
+
+    expect(job.state.lineHeight).toEqual(0.2);
+    expect(job.state.extrusionWidth).toEqual(0.4);
+  });
+
+  test('a later extrusion derives its height from the Z step since the previous one', () => {
+    const job = derivingJob();
+    job.deriveMoveDimensions({ x: 10, y: 0, z: 0.2 }, eFor(0.4, 0.2, 10));
+
+    job.state.z = 0.36;
+    job.deriveMoveDimensions({ x: 0, y: 0, z: 0.36 }, eFor(0.4, 0.16, 10));
+
+    expect(job.state.lineHeight).toEqual(0.16);
+  });
+
+  test('extruding again at the same Z (ironing) keeps the current height', () => {
+    const job = derivingJob();
+    job.deriveMoveDimensions({ x: 10, y: 0, z: 0.2 }, eFor(0.4, 0.2, 10));
+
+    job.deriveMoveDimensions({ x: 0, y: 0, z: 0.2 }, eFor(0.4, 0.2, 10));
+
+    expect(job.state.lineHeight).toEqual(0.2);
+  });
+
+  test('an implausible Z step keeps the height but re-anchors the next step', () => {
+    const job = derivingJob();
+    job.deriveMoveDimensions({ x: 10, y: 0, z: 0.2 }, eFor(0.4, 0.2, 10));
+
+    // jumping to a second sequential object: the 2.8mm step is no layer height
+    job.deriveMoveDimensions({ x: 0, y: 0, z: 3 }, eFor(0.4, 0.2, 10));
+    expect(job.state.lineHeight).toEqual(0.2);
+
+    // ...but the next layer measures from the new Z, not the stale one
+    job.deriveMoveDimensions({ x: 10, y: 0, z: 3.25 }, eFor(0.4, 0.25, 10));
+    expect(job.state.lineHeight).toEqual(0.25);
+  });
+
+  test('moving down keeps the current height', () => {
+    const job = derivingJob();
+    job.deriveMoveDimensions({ x: 10, y: 0, z: 0.4 }, eFor(0.4, 0.4, 10));
+
+    job.deriveMoveDimensions({ x: 0, y: 0, z: 0.3 }, eFor(0.4, 0.4, 10));
+
+    expect(job.state.lineHeight).toEqual(0.4);
+  });
+
+  test('an unknown Z derives no height, and without a height no width either', () => {
+    const job = derivingJob();
+    job.state.z = undefined;
+
+    job.deriveMoveDimensions({ x: 10, y: 0, z: undefined }, eFor(0.4, 0.2, 10));
+
+    expect(job.state.lineHeight).toBeUndefined();
+    expect(job.state.extrusionWidth).toBeUndefined();
+  });
+
+  test('a segment too short to measure derives no width', () => {
+    const job = derivingJob();
+
+    job.deriveMoveDimensions({ x: 0.01, y: 0, z: 0.2 }, eFor(0.4, 0.2, 0.01));
+
+    expect(job.state.lineHeight).toEqual(0.2);
+    expect(job.state.extrusionWidth).toBeUndefined();
+  });
+
+  test('implausible widths are discarded instead of stamped on paths', () => {
+    const job = derivingJob();
+
+    // far too much material for the segment: a prime blob, not a 3mm line
+    job.deriveMoveDimensions({ x: 10, y: 0, z: 0.2 }, eFor(3, 0.2, 10));
+    expect(job.state.extrusionWidth).toBeUndefined();
+
+    // far too little: a near-dry wipe
+    job.state.x = 10;
+    job.deriveMoveDimensions({ x: 0, y: 0, z: 0.2 }, eFor(0.05, 0.2, 10));
+    expect(job.state.extrusionWidth).toBeUndefined();
+  });
+
+  test('the derived width is quantized to 0.01mm', () => {
+    const job = derivingJob();
+
+    job.deriveMoveDimensions({ x: 10, y: 0, z: 0.2 }, eFor(0.3985, 0.2, 10));
+
+    expect(job.state.extrusionWidth).toEqual(0.4);
+  });
+
+  test('a width within 2% of the current one keeps the current value', () => {
+    // E-value rounding noise must not shatter the model into micro-paths.
+    const job = derivingJob();
+    job.deriveMoveDimensions({ x: 10, y: 0, z: 0.2 }, eFor(0.6, 0.2, 10));
+
+    job.state.x = 10;
+    job.deriveMoveDimensions({ x: 0, y: 0, z: 0.2 }, eFor(0.61, 0.2, 10));
+
+    expect(job.state.extrusionWidth).toEqual(0.6);
+  });
+
+  test('a real width change beyond the tolerance is applied', () => {
+    const job = derivingJob();
+    job.deriveMoveDimensions({ x: 10, y: 0, z: 0.2 }, eFor(0.4, 0.2, 10));
+
+    job.state.x = 10;
+    job.deriveMoveDimensions({ x: 0, y: 0, z: 0.2 }, eFor(0.42, 0.2, 10));
+
+    expect(job.state.extrusionWidth).toEqual(0.42);
+  });
+
+  test('the metadata filament diameter scales the derived width', () => {
+    const area285 = Math.PI * (2.85 / 2) ** 2;
+    const job = derivingJob({ filamentDiameter: 2.85 });
+
+    job.deriveMoveDimensions({ x: 10, y: 0, z: 0.2 }, eFor(0.4, 0.2, 10, area285));
+
+    expect(job.state.extrusionWidth).toEqual(0.4);
+  });
+
+  test('unknown axes are assumed at the origin, like the rendered geometry', () => {
+    const job = derivingJob();
+    job.state.x = undefined;
+
+    // X never homed: the segment runs from the assumed origin to (0,10)
+    job.deriveMoveDimensions({ x: undefined, y: 10, z: 0.2 }, eFor(0.4, 0.2, 10));
+    expect(job.state.extrusionWidth).toEqual(0.4);
+
+    // Y and Z unknown too; the height derived above still measures the width
+    job.state.y = undefined;
+    job.state.z = undefined;
+    job.deriveMoveDimensions({ x: 10, y: undefined, z: undefined }, eFor(0.42, 0.2, 10));
+    expect(job.state.extrusionWidth).toEqual(0.42);
   });
 });
 

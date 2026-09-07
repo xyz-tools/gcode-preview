@@ -14,6 +14,27 @@ import { Metadata } from './parser/gcode-parser';
 import { ExtrusionDimensionMetadata } from './parser/metadata-parser-base';
 import { JobStats } from './job-stats';
 
+/** Filament diameter assumed when the metadata announces none, in millimeters */
+const DEFAULT_FILAMENT_DIAMETER = 1.75;
+/** Derived layer heights outside this range are considered implausible */
+const MIN_DERIVED_HEIGHT = 0.01;
+const MAX_DERIVED_HEIGHT = 1.0;
+/** Derived extrusion widths outside this range are considered implausible */
+const MIN_DERIVED_WIDTH = 0.1;
+const MAX_DERIVED_WIDTH = 2.0;
+/**
+ * Segments shorter than this derive no width, in millimeters: the slicer
+ * rounds E to a few decimals, and over a near-zero length that quantization
+ * noise dominates the derived value.
+ */
+const MIN_DERIVED_SEGMENT_LENGTH = 0.05;
+/**
+ * A derived width within this relative tolerance of the current one keeps the
+ * current value, so residual noise cannot shatter the model into micro-paths.
+ * 2% separates real Cura width steps (0.4 vs 0.42 infill is 5%) from noise.
+ */
+const DERIVED_WIDTH_TOLERANCE = 0.02;
+
 /**
  * Represents a complete print job containing paths, layers, and state
  * @remarks
@@ -45,6 +66,12 @@ export class Job {
   private extrusionDimensions: ExtrusionDimensionMetadata[] = [];
   /** Position in extrusionDimensions up to which events have been applied */
   private dimensionCursor = 0;
+  /** Whether per-path dimensions are derived from the moves (see metadata) */
+  private deriveDimensions = false;
+  /** Filament cross-section area feeding the width derivation, in mm² */
+  private filamentCrossSection = Math.PI * (DEFAULT_FILAMENT_DIAMETER / 2) ** 2;
+  /** Z of the last extrusion move, from which derived layer heights are measured */
+  private lastExtrusionZ: number | undefined;
   /** How many commands have been executed on this job — one per parsed line */
   private executedCommandCount = 0;
 
@@ -87,6 +114,9 @@ export class Job {
     this._metadata = metadata;
     this.layersIndexer.setLayerMetadata(metadata?.layerMetadata ?? []);
     this.setExtrusionDimensions(metadata?.extrusionDimensions ?? []);
+    this.deriveDimensions = metadata?.deriveExtrusionDimensions === true;
+    const filamentDiameter = metadata?.filamentDiameter ?? DEFAULT_FILAMENT_DIAMETER;
+    this.filamentCrossSection = Math.PI * (filamentDiameter / 2) ** 2;
   }
 
   /**
@@ -126,6 +156,69 @@ export class Job {
       if (dimension.width !== undefined) this.state.extrusionWidth = dimension.width;
       if (dimension.height !== undefined) this.state.lineHeight = dimension.height;
     }
+  }
+
+  /**
+   * Derives the extrusion dimensions of the move about to be executed and
+   * folds them into the state, best-effort
+   * @param target - The move's physical endpoint; an axis the move leaves
+   * unchanged carries the current (possibly unknown) state value
+   * @param deltaE - The filament length the move extrudes (see `State.trackE`)
+   * @remarks
+   * Active only when the slicer metadata asked for it (Cura, whose files
+   * announce no dimension comments); paths then carry these derived values as
+   * their own, taking the same render-time precedence over the global
+   * fallback as comment-announced dimensions do. Move handlers call this for
+   * extruding moves before `continuePath`, so a change breaks the path
+   * exactly like a `;WIDTH:` / `;HEIGHT:` comment would.
+   *
+   * Layer height is the Z step between consecutive extrusion moves (the
+   * first one's Z stands in for the first layer). Only extrusion Zs are
+   * compared, so z-hop travels are invisible; a zero step (ironing, or
+   * printing on within the layer) and steps outside 0.01–1.0 mm (spiralize's
+   * continuous micro-climb, a probe artifact, moving down to a second
+   * sequential object) keep the current height.
+   *
+   * Width comes from conservation of volume with a rectangular deposit
+   * cross-section — width = (ΔE × filament cross-section) / (length ×
+   * height) — matching the box profile ExtrusionGeometry extrudes. The
+   * result is quantized to 0.01 mm and kept within 2% of the current width,
+   * so E-value rounding noise cannot break the model into micro-paths, and
+   * discarded entirely when implausible (outside 0.1–2.0 mm, or over a
+   * segment too short to measure).
+   */
+  deriveMoveDimensions(
+    target: { x: number | undefined; y: number | undefined; z: number | undefined },
+    deltaE: number
+  ): void {
+    if (!this.deriveDimensions || deltaE <= 0) return;
+
+    if (target.z !== undefined) {
+      const step = this.lastExtrusionZ === undefined ? target.z : target.z - this.lastExtrusionZ;
+      if (step >= MIN_DERIVED_HEIGHT && step <= MAX_DERIVED_HEIGHT) {
+        // rounded so consecutive layers with equal heights compare equal
+        // despite floating-point Z subtraction noise
+        this.state.lineHeight = Math.round(step * 10000) / 10000;
+      }
+      this.lastExtrusionZ = target.z;
+    }
+
+    const height = this.state.lineHeight;
+    if (height === undefined) return;
+
+    // Resolved exactly like the rendered geometry: an unknown axis is assumed
+    // at the origin (see resolvePosition).
+    const from = this.resolvePosition();
+    const length = Math.hypot((target.x ?? 0) - from.x, (target.y ?? 0) - from.y, (target.z ?? 0) - from.z);
+    if (length < MIN_DERIVED_SEGMENT_LENGTH) return;
+
+    const width = (deltaE * this.filamentCrossSection) / (length * height);
+    if (width < MIN_DERIVED_WIDTH || width > MAX_DERIVED_WIDTH) return;
+
+    const quantized = Math.round(width * 100) / 100;
+    const current = this.state.extrusionWidth;
+    if (current !== undefined && Math.abs(quantized - current) <= current * DERIVED_WIDTH_TOLERANCE) return;
+    this.state.extrusionWidth = quantized;
   }
 
   /**
