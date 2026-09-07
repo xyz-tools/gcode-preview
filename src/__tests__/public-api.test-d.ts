@@ -169,6 +169,7 @@ describe('public API types', () => {
       expectTypeOf<GCodePreview['readStream']>().toEqualTypeOf<
         (stream: ReadableStream, options?: { render?: boolean }) => Promise<void>
       >();
+      expectTypeOf<GCodePreview['executeCommands']>().toEqualTypeOf<(commands: GCodeCommand[]) => void>();
     });
   });
 

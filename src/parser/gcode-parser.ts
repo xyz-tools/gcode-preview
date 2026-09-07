@@ -156,9 +156,9 @@ export class Parser {
    * parses append to this, so it spans the whole input rather than just the
    * most recent chunk.
    *
-   * String input is split on `'\n'`, so input ending in a newline yields one
-   * final empty line here. That is the split's honest answer and is
-   * deliberately not filtered out.
+   * String input is split on `'\n'`, where a newline terminates a line: input
+   * ending in a newline does not yield a final empty line here, matching what
+   * a streamed parse of the same bytes records. Mid-file blank lines are kept.
    */
   lines: string[] = [];
 
@@ -177,8 +177,9 @@ export class Parser {
    * How many lines have been parsed, counting every call.
    * @remarks
    * Tracked whether or not the lines themselves are kept. Counts exactly what
-   * `lines` would hold, so a trailing newline contributes one final empty
-   * line.
+   * `lines` would hold: a trailing newline terminates the last line rather
+   * than contributing an empty one, so whole-string and streamed parses of
+   * the same bytes agree.
    */
   lineCount = 0;
 
@@ -211,7 +212,19 @@ export class Parser {
    * ```
    */
   parseGCode(input: string | string[]): ParseResult {
-    const lines = Array.isArray(input) ? input : input.split('\n');
+    let lines: string[];
+    if (Array.isArray(input)) {
+      lines = input;
+    } else {
+      lines = input.split('\n');
+      // A newline terminates a line rather than starting a new one, so a
+      // newline-terminated input must not fabricate an empty final line. This
+      // matches the streaming path, which never delivers that phantom line,
+      // keeping lineCount identical between whole-string and streamed parses
+      // of the same bytes. Mid-file blank lines still count: only the empty
+      // element after the final newline is dropped.
+      if (lines[lines.length - 1] === '') lines.pop();
+    }
     this.lineCount += lines.length;
 
     if (this.keepLines) {

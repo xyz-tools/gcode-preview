@@ -238,6 +238,34 @@ describe('GCodePreview', () => {
       });
     });
 
+    describe('executeCommands', () => {
+      it('is publicly callable and executes the commands into the current job', () => {
+        const commands = ['G0 X0 Y0', 'G1 X10 Y10'] as unknown as Parameters<GCodePreview['executeCommands']>[0];
+
+        preview.executeCommands(commands);
+
+        expect(mockInterpreter.execute).toHaveBeenCalledWith(commands, mockJob);
+        expect(mockSceneManager.render).not.toHaveBeenCalled();
+        expect(mockSceneManager.renderAnimated).not.toHaveBeenCalled();
+      });
+
+      it('feeds the same job on every call and announces each update', () => {
+        // the accumulation itself (resume/finish around each batch) is pinned
+        // with real objects in ingestion-equivalence.ts; here we pin that the
+        // preview always hands the interpreter its one current job
+        const onJobUpdated = vi.fn();
+        preview.onJobUpdated = onJobUpdated;
+
+        preview.executeCommands([]);
+        preview.executeCommands([]);
+
+        expect(mockInterpreter.execute).toHaveBeenNthCalledWith(1, [], mockJob);
+        expect(mockInterpreter.execute).toHaveBeenNthCalledWith(2, [], mockJob);
+        expect(onJobUpdated).toHaveBeenCalledTimes(2);
+        expect(onJobUpdated).toHaveBeenCalledWith(mockJob);
+      });
+    });
+
     describe('processGCodeStream', () => {
       it('should parse and execute gcode with default render option', async () => {
         const gcode = 'G0 X0 Y0';
@@ -523,8 +551,10 @@ describe('GCodePreview', () => {
       await preview.readStream(stream);
 
       expect(preview.parser.parseGCode).toHaveBeenCalledTimes(2);
-      expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(1, 'G1 X0 Y0');
-      expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(2, 'G1 X10 Y10');
+      // complete chunks keep their terminating newline; the parser reads a
+      // newline as ending a line, never as starting an empty one
+      expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(1, 'G1 X0 Y0\n');
+      expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(2, 'G1 X10 Y10\n');
       expect(mockInterpreter.execute).toHaveBeenCalledTimes(2);
       expect(onStreamEnd).toHaveBeenCalledTimes(1);
     });
@@ -564,7 +594,7 @@ describe('GCodePreview', () => {
       // chunk 1 completes 'G0 X0 Y0', chunk 2 has no newline so it completes
       // nothing (''), and the leftover tail is flushed after the stream ends
       expect(preview.parser.parseGCode).toHaveBeenCalledTimes(3);
-      expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(1, 'G0 X0 Y0');
+      expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(1, 'G0 X0 Y0\n');
       expect(preview.parser.parseGCode).toHaveBeenLastCalledWith('G1 X10 Y10');
       expect(mockInterpreter.execute).toHaveBeenCalledTimes(3);
     });

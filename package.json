@@ -41,7 +41,7 @@
     "build": "rollup -c",
     "build:watch": "rollup -c -w",
     "demo": "npm run build && npm run live-server",
-    "live-server": "live-server demo --watch=.,js,../dist --mount=/lib:node_modules --mount=/dist:dist",
+    "live-server": "live-server demo --watch=.,js,../dist,../devtools --mount=/lib:node_modules --mount=/dist:dist --mount=/devtools:devtools",
     "typeCheck": "tsc --noEmit",
     "lint": "prettier --check . && eslint -c .eslintrc.js .",
     "lint:fix": "npm run prettier:fix && npm run eslint:fix",

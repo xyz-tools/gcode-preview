@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>GCode Preview — Benchmark</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="../lib/theme.css" />
+  <script src="../lib/theme.js"></script>
+  <style>
+    /* page shell comes from ../lib/theme.css; below is benchmark-specific */
+    .bench-viewports {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .bench-viewport .frame-holder {
+      height: 340px;
+    }
+
+    td.delta-better { color: var(--dt-good); }
+    td.delta-worse { color: var(--dt-bad); }
+  </style>
+</head>
+
+<body>
+  <div class="bench-page">
+    <div class="page-head">
+      <h1 class="m-3 mb-2">GCode Preview Benchmark</h1>
+      <button id="theme-toggle" class="theme-toggle" type="button">Light</button>
+    </div>
+    <p class="mb-4">
+      <a class="back-link" href="../">&larr; dev tools</a> &middot;
+      <a class="back-link" href="/index.html">demo</a>
+    </p>
+
+    <div class="bench-controls">
+      <div class="control-group">
+        <label for="version-a">Version A</label>
+        <div class="bulma-select"><select id="version-a"></select></div>
+      </div>
+      <div class="control-group">
+        <label for="version-b">Version B</label>
+        <div class="bulma-select"><select id="version-b"></select></div>
+      </div>
+      <div class="control-group">
+        <label for="gcode-select">GCode file</label>
+        <div class="bulma-select"><select id="gcode-select"></select></div>
+      </div>
+      <div class="control-group">
+        <label for="render-mode">Geometry</label>
+        <div class="bulma-select">
+          <select id="render-mode">
+            <option value="tubes">Tubes</option>
+            <option value="lines">Lines</option>
+          </select>
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="run-count">Runs (median)</label>
+        <div class="bulma-select">
+          <select id="run-count">
+            <option value="1">1</option>
+            <option value="3" selected>3</option>
+            <option value="5">5</option>
+          </select>
+        </div>
+      </div>
+      <button id="run-benchmark" class="bench-run">Run benchmark</button>
+    </div>
+
+    <div id="status" class="bench-status">Pick two versions and a file, then hit run.</div>
+
+    <div class="bench-viewports">
+      <div class="bench-viewport">
+        <header><span>Version A</span><span id="label-a"></span></header>
+        <div class="frame-holder" id="frame-a"></div>
+      </div>
+      <div class="bench-viewport">
+        <header><span>Version B</span><span id="label-b"></span></header>
+        <div class="frame-holder" id="frame-b"></div>
+      </div>
+    </div>
+
+    <div id="results"></div>
+
+    <p class="bench-note">
+      Versions run one at a time, each in a fresh iframe with its own copy of the library and three.js,
+      so runs don't contaminate each other. Peak heap needs Chrome (<code>performance.memory</code>);
+      other numbers work in any browser. Published versions load from jsDelivr; "local build" uses
+      <code>dist/gcode-preview.es.js</code> from this checkout (run <code>npm run build</code> first).
+    </p>
+  </div>
+
+  <script type="module" src="./bench.js"></script>
+</body>
+</html>

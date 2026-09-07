@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>GCode Preview — Dev Tools</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="lib/theme.css" />
+  <script src="lib/theme.js"></script>
+  <style>
+    /* the demo stylesheet disables page scrolling; devtools pages need it */
+    html,
+    body {
+      height: auto;
+      min-height: 100%;
+      overflow: auto;
+    }
+
+    body {
+      margin: 0;
+      background-color: var(--dt-bg);
+      font-family: var(--bulma-family-primary, sans-serif);
+      color: var(--dt-text);
+    }
+
+    .tools-page {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+
+    .tool-card {
+      display: block;
+      border: 1px solid var(--dt-border-strong);
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+      text-decoration: none;
+    }
+
+    .tool-card:hover {
+      border-color: var(--dt-border-hover);
+    }
+
+    .tool-card h2 {
+      margin: 0 0 0.25rem;
+      font-size: 1.1rem;
+      color: var(--dt-text-strong);
+    }
+
+    .tool-card p {
+      margin: 0;
+      font-size: 0.85rem;
+      color: var(--dt-text);
+    }
+
+    a.back-link {
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="tools-page">
+    <div class="page-head">
+      <h1 class="m-3 mb-2">GCode Preview Dev Tools</h1>
+      <button id="theme-toggle" class="theme-toggle" type="button">Light</button>
+    </div>
+    <p class="mb-4"><a class="back-link" href="/index.html">&larr; back to demo</a></p>
+
+    <a class="tool-card" href="debugger/">
+      <h2>Debugger</h2>
+      <p>Step through a gcode file command by command: breakpoints, a live preview that draws as you step, and the interpreter's State object with changes highlighted. Includes parser inspection: summary stats, a command-type histogram, and a filterable virtual-scrolled command list.</p>
+    </a>
+
+    <a class="tool-card" href="benchmark/">
+      <h2>Benchmark</h2>
+      <p>Compare two library versions (npm or the local build) on a demo gcode file: parse time, time to first render, FPS while orbiting, peak heap.</p>
+    </a>
+
+    <a class="tool-card" href="memory-leak/">
+      <h2>Memory-leak tester</h2>
+      <p>Repeated create &rarr; load &rarr; dispose cycles with a live heap chart and renderer.info counters; flags upward trends.</p>
+    </a>
+
+    <a class="tool-card" href="streaming-equivalence/">
+      <h2>Streaming equivalence checker</h2>
+      <p>Parses the same file as one string and as a chunked stream, then diffs job stats to catch chunk-boundary parser bugs.</p>
+    </a>
+
+    <a class="tool-card" href="visual-diff/">
+      <h2>Visual diff</h2>
+      <p>Renders the same file in two versions with an identical camera and pixel-diffs the captures to catch silent rendering regressions.</p>
+    </a>
+  </div>
+</body>
+</html>

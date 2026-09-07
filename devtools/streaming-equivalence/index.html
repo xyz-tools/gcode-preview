@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>GCode Preview — Streaming Equivalence Checker</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="../lib/theme.css" />
+  <script src="../lib/theme.js"></script>
+  <style>
+    /* page shell comes from ../lib/theme.css; below is checker-specific */
+    .bench-viewport {
+      margin-bottom: 1rem;
+    }
+
+    .bench-viewport .frame-holder {
+      height: 340px;
+    }
+
+    td.match-yes { color: var(--dt-good); }
+    td.match-no { color: var(--dt-bad); }
+  </style>
+</head>
+
+<body>
+  <div class="bench-page">
+    <div class="page-head">
+      <h1 class="m-3 mb-2">Streaming Equivalence Checker</h1>
+      <button id="theme-toggle" class="theme-toggle" type="button">Light</button>
+    </div>
+    <p class="mb-4">
+      <a class="back-link" href="../">&larr; dev tools</a> &middot;
+      <a class="back-link" href="/index.html">demo</a>
+    </p>
+
+    <div class="bench-controls">
+      <div class="control-group">
+        <label for="version-select">Version</label>
+        <div class="bulma-select"><select id="version-select"></select></div>
+      </div>
+      <div class="control-group">
+        <label for="gcode-select">GCode file</label>
+        <div class="bulma-select"><select id="gcode-select"></select></div>
+      </div>
+      <div class="control-group">
+        <label for="chunk-size">Chunk size</label>
+        <div class="bulma-select">
+          <select id="chunk-size">
+            <option value="256">256 B</option>
+            <option value="8192" selected>8 KB</option>
+            <option value="65536">64 KB</option>
+            <option value="1048576">1 MB</option>
+          </select>
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="render-mode">Geometry</label>
+        <div class="bulma-select">
+          <select id="render-mode">
+            <option value="tubes">Tubes</option>
+            <option value="lines">Lines</option>
+          </select>
+        </div>
+      </div>
+      <button id="run-check" class="bench-run">Run check</button>
+    </div>
+
+    <div id="status" class="bench-status">Pick a version and a file, then hit run.</div>
+
+    <div class="bench-viewport">
+      <header><span>Runner</span><span id="frame-label"></span></header>
+      <div class="frame-holder" id="frame-holder"></div>
+    </div>
+
+    <div id="results"></div>
+
+    <p class="bench-note">
+      Parses the same file twice in one version — once as a whole string, once as a stream of
+      fixed-size chunks (chunk boundaries can split lines mid-command) — then diffs the resulting
+      stats and a triangles-rendered fingerprint. Small chunks maximize boundary-split coverage.
+      Floats are compared rounded to 4 decimals, so legitimate float-accumulation noise in
+      extrusion distance is not flagged. Published versions load from jsDelivr; "local build" uses
+      <code>dist/gcode-preview.es.js</code> from this checkout (run <code>npm run build</code> first).
+    </p>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

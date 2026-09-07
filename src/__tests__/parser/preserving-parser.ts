@@ -41,6 +41,23 @@ describe('with keepLines', () => {
     expect(parser.lines).toEqual(['G1 X0 Y0', 'G1 X1 Y1', 'G1 X2 Y2', 'G1 X3 Y3']);
   });
 
+  test('a trailing newline does not preserve a phantom empty line', () => {
+    // A newline terminates a line; it does not begin an empty one. The
+    // streaming path never records that phantom line, so the whole-string
+    // path must not either.
+    const parser = new Parser({ keepLines: true });
+    parser.parseGCode('G1 X0 Y0\nG1 X1 Y1\n');
+
+    expect(parser.lines).toEqual(['G1 X0 Y0', 'G1 X1 Y1']);
+  });
+
+  test('mid-file blank lines are preserved', () => {
+    const parser = new Parser({ keepLines: true });
+    parser.parseGCode('G1 X0 Y0\n\nG1 X1 Y1\n');
+
+    expect(parser.lines).toEqual(['G1 X0 Y0', '', 'G1 X1 Y1']);
+  });
+
   test('a chunk is only turned into commands once', () => {
     const parser = new Parser({ keepLines: true });
     const first = parser.parseGCode('G1 X0 Y0\nG1 X1 Y1');
@@ -89,6 +106,42 @@ describe('lineCount', () => {
     parser.parseGCode('G1 X0 Y0\nG1 X1 Y1');
 
     expect(parser.lines).toEqual([]);
+    expect(parser.lineCount).toEqual(2);
+  });
+
+  test('a newline-terminated file counts no phantom final line', () => {
+    // Real slicer output ends in '\n'. Splitting on it used to leave a final
+    // '' element, making whole-string parses one line longer than streamed
+    // parses of the exact same bytes.
+    const parser = new Parser();
+    parser.parseGCode('G1 X0 Y0\nG1 X1 Y1\nG1 X2 Y2\n');
+
+    expect(parser.lineCount).toEqual(3);
+  });
+
+  test('mid-file blank lines each count as one line', () => {
+    const parser = new Parser();
+    parser.parseGCode('G1 X0 Y0\n\nG1 X1 Y1\n');
+
+    expect(parser.lineCount).toEqual(3);
+  });
+
+  test('an empty string parses to zero lines and zero commands', () => {
+    // readStream hands parseGCode an empty `complete` when a chunk holds no
+    // newline; it must be a no-op, not a phantom line per chunk.
+    const parser = new Parser();
+    const { commands } = parser.parseGCode('');
+
+    expect(commands).toEqual([]);
+    expect(parser.lineCount).toEqual(0);
+  });
+
+  test('an explicit array of lines is counted as given', () => {
+    // Array input is already line-separated: nothing is dropped, even a
+    // trailing empty element the caller chose to include.
+    const parser = new Parser();
+    parser.parseGCode(['G1 X0 Y0', '']);
+
     expect(parser.lineCount).toEqual(2);
   });
 });

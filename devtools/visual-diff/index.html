@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>GCode Preview — Visual diff</title>
+  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="../lib/theme.css" />
+  <script src="../lib/theme.js"></script>
+  <style>
+    /* page shell comes from ../lib/theme.css; below is visual-diff-specific */
+    .bench-page {
+      max-width: 1400px;
+    }
+
+    input#threshold {
+      width: 5rem;
+      background-color: var(--dt-surface);
+      color: var(--dt-text-strong);
+      border: 1px solid var(--dt-border-strong);
+      border-radius: 4px;
+      padding: 0.35rem 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    .bench-viewports {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1rem;
+      overflow-x: auto;
+    }
+
+    .bench-viewport {
+      flex: none;
+    }
+
+    /* Fixed pixel size so both iframes get identical canvas buffers. */
+    .bench-viewport .frame-holder {
+      width: 640px;
+      height: 480px;
+    }
+
+    .diff-results {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+      overflow-x: auto;
+    }
+
+    .diff-panel {
+      border: 1px solid var(--dt-border-strong);
+      border-radius: 6px;
+      overflow: hidden;
+      flex: none;
+    }
+
+    .diff-panel header {
+      padding: 0.35rem 0.75rem;
+      font-size: 0.8rem;
+      color: var(--dt-text-strong);
+      background-color: var(--dt-table-head-bg);
+    }
+
+    .diff-panel .panel-holder {
+      width: 440px;
+      height: 330px;
+      background-color: var(--dt-canvas-well);
+    }
+
+    .diff-panel canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: contain;
+    }
+
+    .diff-stat {
+      min-height: 1.5rem;
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+      color: var(--dt-text-strong);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="bench-page">
+    <div class="page-head">
+      <h1 class="m-3 mb-2">GCode Preview Visual Diff</h1>
+      <button id="theme-toggle" class="theme-toggle" type="button">Light</button>
+    </div>
+    <p class="mb-4">
+      <a class="back-link" href="../">&larr; dev tools</a> &middot;
+      <a class="back-link" href="/index.html">demo</a>
+    </p>
+
+    <div class="bench-controls">
+      <div class="control-group">
+        <label for="version-a">Version A</label>
+        <div class="bulma-select"><select id="version-a"></select></div>
+      </div>
+      <div class="control-group">
+        <label for="version-b">Version B</label>
+        <div class="bulma-select"><select id="version-b"></select></div>
+      </div>
+      <div class="control-group">
+        <label for="gcode-select">GCode file</label>
+        <div class="bulma-select"><select id="gcode-select"></select></div>
+      </div>
+      <div class="control-group">
+        <label for="render-mode">Geometry</label>
+        <div class="bulma-select">
+          <select id="render-mode">
+            <option value="tubes">Tubes</option>
+            <option value="lines">Lines</option>
+          </select>
+        </div>
+      </div>
+      <div class="control-group">
+        <label for="threshold">Threshold</label>
+        <input id="threshold" type="number" min="0" max="255" step="1" value="12" />
+      </div>
+      <button id="run-diff" class="bench-run">Run</button>
+    </div>
+
+    <div id="status" class="bench-status">Pick two versions and a file, then hit run.</div>
+
+    <div class="bench-viewports">
+      <div class="bench-viewport">
+        <header><span>Version A</span><span id="frame-label-a"></span></header>
+        <div class="frame-holder" id="frame-a"></div>
+      </div>
+      <div class="bench-viewport">
+        <header><span>Version B</span><span id="frame-label-b"></span></header>
+        <div class="frame-holder" id="frame-b"></div>
+      </div>
+    </div>
+
+    <div class="diff-results">
+      <div class="diff-panel">
+        <header><span id="panel-label-a">A</span></header>
+        <div class="panel-holder"><canvas id="canvas-a"></canvas></div>
+      </div>
+      <div class="diff-panel">
+        <header><span id="panel-label-b">B</span></header>
+        <div class="panel-holder"><canvas id="canvas-b"></canvas></div>
+      </div>
+      <div class="diff-panel">
+        <header><span>Diff</span></header>
+        <div class="panel-holder"><canvas id="canvas-diff"></canvas></div>
+      </div>
+    </div>
+
+    <div id="diff-stat" class="diff-stat"></div>
+
+    <p class="bench-note">
+      Each version renders once in a fresh iframe, the camera is pinned to the preset's initial
+      position with the orbit target at the origin, and the WebGL canvas is captured to a PNG
+      immediately after the synchronous render. The diff paints unchanged pixels as dimmed grayscale
+      of image A and changed pixels (any RGB channel off by more than the threshold) in magenta.
+      Published versions load from jsDelivr; "local build" uses
+      <code>dist/gcode-preview.es.js</code> from this checkout (run <code>npm run build</code> first).
+    </p>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
