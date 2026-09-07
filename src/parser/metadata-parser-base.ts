@@ -40,7 +40,8 @@ export abstract class SlicerMetadataParser {
 
   /**
    * Checks if this parser can handle the given gcode based on comments
-   * @param commands - Array of gcode commands with comments
+   * @param commentCommands - Array of gcode commands with comments
+   * @param maxLines - How many of those commands to sample before giving up
    * @returns True if this parser can handle the gcode
    */
   canParse(commentCommands: GCodeCommand[], maxLines = 200): boolean {
