@@ -12,9 +12,6 @@ import type { CommandHandler } from '../../interpreter';
  */
 export const linearMove: CommandHandler = (command, job) => {
   const { x, y, z, e, f } = command.params;
-  const { state } = job;
-  // E is currently relative, so coordinate offsets do not affect its delta.
-  state.e += e ?? 0;
 
   // discard zero length moves
   if (x === undefined && y === undefined && z === undefined) {
@@ -33,6 +30,7 @@ export const linearMove: CommandHandler = (command, job) => {
 
   job.stats.points++;
 
+  const { state } = job;
   let currentPath = job.inprogressPath;
   const pathType = e > 0 ? PathType.Extrusion : PathType.Travel;
 
@@ -44,6 +42,8 @@ export const linearMove: CommandHandler = (command, job) => {
     job.stats.extrusionDistance += e;
   }
 
+  // e is omitted bc currently we're assuming relative extrusion distances
+  // see also https://github.com/xyz-tools/gcode-preview/issues/179
   state.x = x === undefined ? state.x : x + state.positionShift.x;
   state.y = y === undefined ? state.y : y + state.positionShift.y;
   state.z = z === undefined ? state.z : z + state.positionShift.z;

@@ -64,7 +64,6 @@ export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler
     state.x = x ?? state.x;
     state.y = y ?? state.y;
     state.z = z ?? state.z;
-    state.e += e ?? 0;
   };
 };
 

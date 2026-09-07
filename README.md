@@ -114,9 +114,7 @@ The interpreter currently handles:
 
 Commands without a handler are parsed but ignored by the interpreter.
 
-`G92` stores offsets for X, Y, Z, and extrusion (E); `G92.1` clears them without moving.
-`state.e` tracks cumulative physical extrusion, with logical position `state.e - state.positionShift.e`.
-Extrusion moves still use relative E values; `M82`/`M83` mode switching is not yet implemented.
+`G92.2` and `G92.3` are not supported.
 
 ### Multi-color support
 
