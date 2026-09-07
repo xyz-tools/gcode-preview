@@ -106,7 +106,12 @@ export class GCodePreview {
     return this._sceneManager;
   }
 
-  /** Builds a SceneManager wired to feed the stats display. */
+  /**
+   * Builds a SceneManager wired to feed the stats display.
+   * @remarks
+   * Frames are rendered on demand, so the stats FPS panel counts renders per
+   * second: it reads 0 while the scene is idle, not the display's refresh rate.
+   */
   private createSceneManager(): SceneManager {
     const sceneManager = new SceneManager(this.opts, this.job);
     sceneManager.onFrameRendered = () => this.stats?.update();
