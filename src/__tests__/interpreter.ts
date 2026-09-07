@@ -140,7 +140,10 @@ describe('extrusion dimension metadata (;WIDTH: / ;HEIGHT:)', () => {
   });
 
   test('a HEIGHT change mid-path breaks the path, continuing from the same point', () => {
-    const job = run([';HEIGHT:0.2', 'G1 X10 Y10 E1', 'G1 X20 Y10 E1', ';HEIGHT:0.3', 'G1 X30 Y10 E1']);
+    // The announced WIDTH keeps the derivation out of it: these moves extrude
+    // the same E over different lengths, so a derived width would change and
+    // break the path on its own.
+    const job = run([';WIDTH:0.45', ';HEIGHT:0.2', 'G1 X10 Y10 E1', 'G1 X20 Y10 E1', ';HEIGHT:0.3', 'G1 X30 Y10 E1']);
 
     expect(job.paths.length).toEqual(2);
     expect(job.paths[0].lineHeight).toEqual(0.2);
@@ -188,6 +191,202 @@ describe('extrusion dimension metadata (;WIDTH: / ;HEIGHT:)', () => {
     expect(job.paths.length).toEqual(1);
     expect(job.paths[0].extrusionWidth).toBeUndefined();
     expect(job.paths[0].lineHeight).toBeUndefined();
+  });
+
+  test('an announced width outranks the width derived from the same move', () => {
+    // The move's volume implies ~1.2mm; the slicer says 0.45, and the slicer
+    // is stating what it asked for rather than inferring it.
+    const job = run([';WIDTH:0.45', ';HEIGHT:0.2', 'G0 X0 Y0 Z0.2', 'G1 X10 Y0 E1']);
+
+    expect(job.extrusions[0].extrusionWidth).toEqual(0.45);
+  });
+
+  test('a file no slicer parser recognises still derives its dimensions', () => {
+    // The point of deriving: it is the default for any gcode, not a Cura
+    // feature. This has no slicer fingerprint at all.
+    const { commands, metadata } = new Parser().parseGCode(
+      ['M83', 'G28', 'G0 X0 Y0 Z0.2', 'G1 X10 Y0 E0.48'].join('\n')
+    );
+    const job = new Job();
+    job.metadata = metadata;
+    new Interpreter().execute(commands, job);
+
+    expect(metadata.slicerName).toBeUndefined();
+    expect(job.extrusions[0].lineHeight).toEqual(0.2);
+    expect(job.extrusions[0].extrusionWidth).toBeGreaterThan(0);
+  });
+
+  test('a derived width change breaks the path, like an announced one', () => {
+    // Same E over half the distance means twice the bead width (0.6 -> 1.2),
+    // so the second move cannot share a path with the first.
+    const job = run(['M83', 'G0 X0 Y0 Z0.2', 'G1 X20 Y0 E1', 'G1 X30 Y0 E1']);
+
+    expect(job.extrusions.length).toEqual(2);
+    expect(job.extrusions[1].extrusionWidth).toBeGreaterThan(job.extrusions[0].extrusionWidth!);
+  });
+});
+
+describe('extrusion dimensions derived from the moves', () => {
+  const FILAMENT_AREA = Math.PI * (1.75 / 2) ** 2;
+
+  /** The E increment depositing a width×height×length box of 1.75mm filament */
+  const eFor = (width: number, height: number, length: number) => (width * height * length) / FILAMENT_AREA;
+
+  /** Accumulates absolute E positions the way a slicer emits them (5 decimals) */
+  const absoluteE = () => {
+    let e = 0;
+    return (width: number, height: number, length: number) => {
+      e += eFor(width, height, length);
+      return e.toFixed(5);
+    };
+  };
+
+  /**
+   * Parses and executes a file that announces no dimensions: a Cura header
+   * stands in for one, since Cura is the slicer that never announces them,
+   * but nothing here depends on the dialect — deriving is the default.
+   */
+  const run = (lines: string[]) => {
+    const { commands, metadata } = new Parser().parseGCode(
+      [';FLAVOR:Marlin', ';Generated with Cura_SteamEngine 5.7.0', 'M82', 'G28', ...lines].join('\n')
+    );
+    const job = new Job();
+    job.metadata = metadata;
+    return new Interpreter().execute(commands, job);
+  };
+
+  const dimensions = (job: Job) => job.extrusions.map((path) => [path.extrusionWidth, path.lineHeight]);
+
+  test('round-trips programmed widths and heights through the volumetric model', () => {
+    // The E values are computed from the exact widths and heights the
+    // derivation should recover; a width change mid-layer must break the path.
+    const E = absoluteE();
+    const job = run([
+      ';LAYER:0',
+      'G0 X10 Y10 Z0.2',
+      `G1 X20 Y10 E${E(0.4, 0.2, 10)}`,
+      `G1 X20 Y20 E${E(0.4, 0.2, 10)}`,
+      ';TYPE:FILL',
+      `G1 X10 Y20 E${E(0.6, 0.2, 10)}`,
+      ';LAYER:1',
+      'G0 Z0.4',
+      `G1 X10 Y10 E${E(0.4, 0.2, 10)}`
+    ]);
+
+    expect(dimensions(job)).toEqual([
+      [0.4, 0.2],
+      [0.6, 0.2],
+      [0.4, 0.2]
+    ]);
+    // the width change broke the path exactly at the FILL move
+    expect(job.extrusions[0].vertices).toEqual([10, 10, 0.2, 20, 10, 0.2, 20, 20, 0.2]);
+    expect(job.extrusions[1].vertices).toEqual([20, 20, 0.2, 10, 20, 0.2]);
+  });
+
+  test('recovers an adaptive layer height sequence from the Z steps', () => {
+    const E = absoluteE();
+    const job = run([
+      'G0 X0 Y0 Z0.2',
+      `G1 X10 Y0 E${E(0.4, 0.2, 10)}`,
+      'G0 Z0.36',
+      `G1 X0 Y0 E${E(0.4, 0.16, 10)}`,
+      'G0 Z0.66',
+      `G1 X10 Y0 E${E(0.4, 0.3, 10)}`
+    ]);
+
+    expect(dimensions(job)).toEqual([
+      [0.4, 0.2],
+      [0.4, 0.16],
+      [0.4, 0.3]
+    ]);
+  });
+
+  test('a z-hop travel between layers does not corrupt the derived height', () => {
+    // The hop raises Z to 0.7 mid-travel; the height must come from the
+    // extrusion Zs (0.2 then 0.4), not from the last-seen Z.
+    const E = absoluteE();
+    const job = run([
+      'G0 X0 Y0 Z0.2',
+      `G1 X10 Y0 E${E(0.4, 0.2, 10)}`,
+      'G0 Z0.7',
+      'G0 X20 Y0',
+      'G0 Z0.4',
+      `G1 X30 Y0 E${E(0.4, 0.2, 10)}`
+    ]);
+
+    expect(dimensions(job)).toEqual([
+      [0.4, 0.2],
+      [0.4, 0.2]
+    ]);
+  });
+
+  test('a G92 E reset between layers keeps the extruded lengths right', () => {
+    const job = run([
+      'G0 X0 Y0 Z0.2',
+      `G1 X10 Y0 E${eFor(0.4, 0.2, 10).toFixed(5)}`,
+      'G92 E0',
+      'G0 Z0.4',
+      `G1 X0 Y0 E${eFor(0.4, 0.2, 10).toFixed(5)}`
+    ]);
+
+    expect(dimensions(job)).toEqual([
+      [0.4, 0.2],
+      [0.4, 0.2]
+    ]);
+  });
+
+  test('relative extrusion mode (M83) derives the same dimensions', () => {
+    const job = run([
+      'M83',
+      'G0 X0 Y0 Z0.2',
+      `G1 X10 Y0 E${eFor(0.4, 0.2, 10).toFixed(5)}`,
+      `G1 X10 Y10 E${eFor(0.6, 0.2, 10).toFixed(5)}`
+    ]);
+
+    expect(dimensions(job)).toEqual([
+      [0.4, 0.2],
+      [0.6, 0.2]
+    ]);
+  });
+
+  test('ironing re-extrudes at the same Z without disturbing the dimensions', () => {
+    // The ironing pass deposits far too little material to be a real line
+    // (derived width 0.04); both its width and its zero Z step are discarded,
+    // so it continues the finished surface's path untouched.
+    const E = absoluteE();
+    const job = run(['G0 X0 Y0 Z0.2', `G1 X10 Y0 E${E(0.4, 0.2, 10)}`, `G1 X0 Y0 E${E(0.04, 0.2, 10)}`]);
+
+    expect(job.extrusions.length).toEqual(1);
+    expect(job.extrusions[0].vertices).toEqual([0, 0, 0.2, 10, 0, 0.2, 0, 0, 0.2]);
+    expect(dimensions(job)).toEqual([[0.4, 0.2]]);
+  });
+
+  test("spiralize's continuous micro-climb keeps the layer height it entered with", () => {
+    const E = absoluteE();
+    const job = run([
+      'G0 X0 Y0 Z0.2',
+      `G1 X10 Y0 E${E(0.4, 0.2, 10)}`,
+      `G1 X10 Y10 Z0.205 E${E(0.4, 0.2, 10)}`,
+      `G1 X0 Y10 Z0.21 E${E(0.4, 0.2, 10)}`
+    ]);
+
+    // each 0.005 step is below the plausible layer range and is skipped
+    expect(job.extrusions.length).toEqual(1);
+    expect(dimensions(job)).toEqual([[0.4, 0.2]]);
+  });
+
+  test('an UltiGCode-flavored file derives nothing', () => {
+    // UltiGCode E values are mm³, which the filament-length model would turn
+    // into confidently wrong widths; the parser leaves derivation off.
+    const { commands, metadata } = new Parser().parseGCode(
+      [';FLAVOR:UltiGCode', ';LAYER:0', 'G0 X0 Y0 Z0.2', 'G1 X10 Y0 E1.6'].join('\n')
+    );
+    const job = new Job();
+    job.metadata = metadata;
+    new Interpreter().execute(commands, job);
+
+    expect(job.extrusions[0].extrusionWidth).toBeUndefined();
+    expect(job.extrusions[0].lineHeight).toBeUndefined();
   });
 });
 

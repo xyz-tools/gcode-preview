@@ -226,7 +226,12 @@ describe('public API types', () => {
       expectTypeOf<Parser['lines']>().toEqualTypeOf<string[]>();
       expectTypeOf<Parser['lineCount']>().toEqualTypeOf<number>();
       expectTypeOf<keyof Parser['metadata']>().toEqualTypeOf<
-        'thumbnails' | 'layerMetadata' | 'extrusionDimensions' | 'slicerName'
+        | 'thumbnails'
+        | 'layerMetadata'
+        | 'extrusionDimensions'
+        | 'slicerName'
+        | 'deriveExtrusionDimensions'
+        | 'filamentDiameter'
       >();
       expectTypeOf<Parameters<Parser['parseGCode']>>().toEqualTypeOf<[string | string[]]>();
       expectTypeOf<keyof ReturnType<Parser['parseGCode']>>().toEqualTypeOf<'metadata' | 'commands'>();
@@ -256,10 +261,32 @@ describe('public API types', () => {
   });
 
   describe('Job', () => {
-    it('is constructed from optional state and layer threshold', () => {
+    it('is constructed from optional state, layer threshold and supplied dimensions', () => {
       expectTypeOf<ConstructorParameters<typeof JobClass>>().toEqualTypeOf<
-        [{ state?: Job['state']; minLayerThreshold?: number }?]
+        [{ state?: Job['state']; minLayerThreshold?: number; extrusionWidth?: number; lineHeight?: number }?]
       >();
+    });
+
+    it('exposes the print state, carrying only the dimensions the slicer announced', () => {
+      // Reachable as job.state, so these are public whether or not State is
+      // exported. The derived dimensions are deliberately absent: they are the
+      // Job's own working values, not part of the surface.
+      expectTypeOf<keyof Job['state']>().toEqualTypeOf<
+        | 'x'
+        | 'y'
+        | 'z'
+        | 'e'
+        | 'relativeExtrusion'
+        | 'positionShift'
+        | 'tool'
+        | 'extrusionWidth'
+        | 'lineHeight'
+        | 'units'
+        | 'isHomed'
+        | 'applyExtrusion'
+      >();
+      expectTypeOf<Job['state']['extrusionWidth']>().toEqualTypeOf<number | undefined>();
+      expectTypeOf<Job['state']['lineHeight']>().toEqualTypeOf<number | undefined>();
     });
 
     it('keeps its public fields, getters and method signatures', () => {
