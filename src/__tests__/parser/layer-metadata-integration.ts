@@ -33,6 +33,45 @@ test('parser extracts slicer metadata and detects the slicer', () => {
   expect(metadata.layerMetadata?.[1].z).toBeCloseTo(0.4);
 });
 
+test('parser extracts extrusion dimension events at their line indices', () => {
+  const { metadata } = new Parser().parseGCode(PRUSA_GCODE);
+
+  // The ;HEIGHT: lines double as layer metadata and as dimension events.
+  expect(metadata.extrusionDimensions).toEqual([
+    { height: 0.2, lineIndex: 3 },
+    { height: 0.2, lineIndex: 9 }
+  ]);
+});
+
+test('extrusion dimension metadata reaches the paths end-to-end', () => {
+  const { commands, metadata } = new Parser().parseGCode(PRUSA_GCODE);
+
+  const job = new Job();
+  job.metadata = metadata;
+  new Interpreter().execute(commands, job);
+
+  // every extrusion follows a ;HEIGHT:0.2 comment; no ;WIDTH: was announced
+  for (const path of job.extrusions) {
+    expect(path.lineHeight).toBe(0.2);
+    expect(path.extrusionWidth).toBeUndefined();
+  }
+});
+
+test('accumulates dimension events with whole-file line indices when parsing in chunks', () => {
+  const splitAt = PRUSA_LINES.indexOf(';LAYER_CHANGE', PRUSA_LINES.indexOf(';LAYER_CHANGE') + 1);
+  const chunks = [PRUSA_LINES.slice(0, splitAt).join('\n'), PRUSA_LINES.slice(splitAt).join('\n')];
+
+  const parser = new Parser();
+  for (const chunk of chunks) parser.parseGCode(chunk);
+
+  // The second event sits in the second chunk; its chunk-local index must be
+  // shifted by the lines parsed before it, matching the one-shot result.
+  expect(parser.metadata.extrusionDimensions).toEqual([
+    { height: 0.2, lineIndex: 3 },
+    { height: 0.2, lineIndex: 9 }
+  ]);
+});
+
 test('slicer metadata drives job layer indexing end-to-end', () => {
   const { commands, metadata } = new Parser().parseGCode(PRUSA_GCODE);
 
