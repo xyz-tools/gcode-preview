@@ -73,6 +73,42 @@ test('accumulates dimension events with whole-file line indices when parsing in 
   ]);
 });
 
+test('parser flags a Cura file for derived extrusion dimensions', () => {
+  const { metadata } = new Parser().parseGCode(
+    [';FLAVOR:Marlin', ';Generated with Cura_SteamEngine 5.7.0', ';LAYER:0', 'G1 X10 Y10 Z0.2 E1'].join('\n')
+  );
+
+  expect(metadata.slicerName).toBe('Cura');
+  expect(metadata.deriveExtrusionDimensions).toBe(true);
+  // Marlin flavor implies no particular machine, so no diameter is announced
+  expect(metadata.filamentDiameter).toBeUndefined();
+});
+
+test('parser reads the filament diameter from a Griffin-flavored Cura file', () => {
+  const { metadata } = new Parser().parseGCode(
+    [';FLAVOR:Griffin', ';GENERATOR.NAME:Cura_SteamEngine', ';LAYER:0', 'G1 X10 Y10 Z0.2 E1'].join('\n')
+  );
+
+  expect(metadata.deriveExtrusionDimensions).toBe(true);
+  expect(metadata.filamentDiameter).toEqual(2.85);
+});
+
+test('parser does not flag a Prusa-family file for derivation', () => {
+  // PrusaSlicer announces exact dimensions in comments; deriving would
+  // override them with approximations.
+  const { metadata } = new Parser().parseGCode(PRUSA_GCODE);
+
+  expect(metadata.deriveExtrusionDimensions).toBeUndefined();
+  expect(metadata.filamentDiameter).toBeUndefined();
+});
+
+test('parser does not flag an UltiGCode-flavored Cura file for derivation', () => {
+  const { metadata } = new Parser().parseGCode([';FLAVOR:UltiGCode', ';LAYER:0', 'G1 X10 Y10 Z0.2 E1'].join('\n'));
+
+  expect(metadata.slicerName).toBe('Cura');
+  expect(metadata.deriveExtrusionDimensions).toBeUndefined();
+});
+
 test('slicer metadata drives job layer indexing end-to-end', () => {
   const { commands, metadata } = new Parser().parseGCode(PRUSA_GCODE);
 

@@ -226,7 +226,12 @@ describe('public API types', () => {
       expectTypeOf<Parser['lines']>().toEqualTypeOf<string[]>();
       expectTypeOf<Parser['lineCount']>().toEqualTypeOf<number>();
       expectTypeOf<keyof Parser['metadata']>().toEqualTypeOf<
-        'thumbnails' | 'layerMetadata' | 'extrusionDimensions' | 'slicerName'
+        | 'thumbnails'
+        | 'layerMetadata'
+        | 'extrusionDimensions'
+        | 'slicerName'
+        | 'deriveExtrusionDimensions'
+        | 'filamentDiameter'
       >();
       expectTypeOf<Parameters<Parser['parseGCode']>>().toEqualTypeOf<[string | string[]]>();
       expectTypeOf<keyof ReturnType<Parser['parseGCode']>>().toEqualTypeOf<'metadata' | 'commands'>();

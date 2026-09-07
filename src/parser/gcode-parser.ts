@@ -112,6 +112,14 @@ export type Metadata = {
   /** Extrusion dimension changes from `;WIDTH:` / `;HEIGHT:` comments, in line order */
   extrusionDimensions?: ExtrusionDimensionMetadata[];
   slicerName?: string;
+  /**
+   * Set when the detected slicer announces no dimension comments (Cura), so
+   * per-path width and height should be derived from the moves instead
+   * (see `Job.deriveMoveDimensions`)
+   */
+  deriveExtrusionDimensions?: boolean;
+  /** Filament diameter in millimeters announced by header comments, when known */
+  filamentDiameter?: number;
 };
 
 /**
@@ -239,9 +247,18 @@ export class Parser {
     if (!this.metadataParser) {
       this.metadataParser = detectSlicer(commands);
       // The slicer name comes from the chunk that identified the slicer -- a
-      // later chunk may contain layer comments but not the header.
+      // later chunk may contain layer comments but not the header. The same
+      // goes for the dimension derivation flag and the filament diameter:
+      // both read header comments, which sit in the identifying chunk.
       if (this.metadataParser) {
         this.metadata.slicerName = this.metadataParser.detectSlicerName(comments);
+        if (this.metadataParser.derivesExtrusionDimensions(comments)) {
+          this.metadata.deriveExtrusionDimensions = true;
+        }
+        const filamentDiameter = this.metadataParser.parseFilamentDiameter(comments);
+        if (filamentDiameter !== undefined) {
+          this.metadata.filamentDiameter = filamentDiameter;
+        }
       }
     }
     const slicerMetadata = parseSlicerMetadata(commands, this.metadataParser);
