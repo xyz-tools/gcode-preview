@@ -39,14 +39,11 @@ describe('PrusaFamilyMetadataParser', () => {
       expect(parser.canParse(commands)).toBe(true);
     });
 
-    it('should identify by a standalone WIDTH comment', () => {
-      const commands: GCodeCommand[] = [{ comment: 'WIDTH:0.45' }];
-      expect(parser.canParse(commands)).toBe(true);
-    });
-
-    it('should identify by a standalone HEIGHT comment', () => {
-      const commands: GCodeCommand[] = [{ comment: 'HEIGHT:0.16' }];
-      expect(parser.canParse(commands)).toBe(true);
+    it('does not claim a file on dimension comments alone', () => {
+      // Slic3r shares this comment dialect, so WIDTH/HEIGHT identify no single
+      // slicer -- claiming them here stole detection from the Slic3r parser.
+      const commands: GCodeCommand[] = [{ comment: 'WIDTH:0.45' }, { comment: 'HEIGHT:0.16' }];
+      expect(parser.canParse(commands)).toBe(false);
     });
 
     it('should not identify non-Prusa-family gcode', () => {

@@ -44,8 +44,6 @@ export class PrusaFamilyMetadataParser extends SlicerMetadataParser {
     /LAYER_CHANGE/,
     /BEFORE_LAYER_CHANGE/,
     /AFTER_LAYER_CHANGE/,
-    /^WIDTH:/,
-    /^HEIGHT:/,
     /PrusaSlicer/i,
     /SuperSlicer/i,
     /OrcaSlicer/i,
