@@ -2,7 +2,7 @@
 // and captures the WebGL canvas as a PNG. See ../lib/runner-frame.js for the
 // message protocol.
 
-import { loadPreview, send, onRun } from '../lib/preview-compat.js';
+import { loadPreview, parseInto, send, onRun } from '../lib/preview-compat.js';
 
 onRun(async ({ gcode, settings }) => {
   const canvas = document.getElementById('canvas');
@@ -16,11 +16,7 @@ onRun(async ({ gcode, settings }) => {
   const { preview, scene } = await loadPreview({ canvas, ...settings });
 
   send({ type: 'phase', phase: 'parsing' });
-  if (typeof preview.processGCodeStream === 'function') {
-    await preview.processGCodeStream(gcode, { render: false });
-  } else {
-    preview.parser.parseGCode(gcode);
-  }
+  await parseInto(preview, gcode);
 
   send({ type: 'phase', phase: 'rendering' });
   // Both majors run an internal rAF loop whose controls.update() forces
@@ -34,6 +30,11 @@ onRun(async ({ gcode, settings }) => {
   scene.render();
   send({ type: 'phase', phase: 'capturing' });
   const dataURL = canvas.toDataURL('image/png');
+
+  // Capture is done — stop the library's perpetual rAF render loop so this
+  // side can't keep rendering while the other side runs. The captured frame
+  // stays visible on the canvas; nothing clears it.
+  preview.dispose();
 
   send({ type: 'result', result: { dataURL, width: canvas.width, height: canvas.height } });
 });

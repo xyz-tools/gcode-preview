@@ -7,44 +7,9 @@
   <link rel="stylesheet" href="../lib/theme.css" />
   <script src="../lib/theme.js"></script>
   <style>
-    /* the demo stylesheet disables page scrolling; devtools pages need it */
-    html,
-    body {
-      height: auto;
-      min-height: 100%;
-      overflow: auto;
-    }
-
-    body {
-      margin: 0;
-      background-color: var(--dt-bg);
-      font-family: var(--bulma-family-primary, sans-serif);
-      color: var(--dt-text);
-    }
-
-    .diff-page {
+    /* page shell comes from ../lib/theme.css; below is visual-diff-specific */
+    .bench-page {
       max-width: 1400px;
-      margin: 0 auto;
-      padding: 1.5rem;
-    }
-
-    .diff-controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-      align-items: flex-end;
-      margin-bottom: 1rem;
-    }
-
-    .diff-controls .control-group {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
-    .diff-controls label {
-      font-size: 0.75rem;
-      color: var(--dt-text-strong);
     }
 
     input#threshold {
@@ -57,67 +22,21 @@
       font-size: 0.9rem;
     }
 
-    button.diff-run {
-      background-color: var(--dt-accent);
-      color: var(--dt-accent-contrast);
-      border: 0;
-      border-radius: 4px;
-      padding: 0.5rem 1.5rem;
-      font-size: 0.9rem;
-      cursor: pointer;
-    }
-
-    button.diff-run:disabled {
-      opacity: 0.5;
-      cursor: wait;
-    }
-
-    .diff-status {
-      min-height: 1.5rem;
-      font-size: 0.85rem;
-      margin-bottom: 1rem;
-      color: var(--dt-text-strong);
-    }
-
-    .diff-status.error {
-      color: var(--dt-bad);
-    }
-
-    .diff-viewports {
+    .bench-viewports {
       display: flex;
       gap: 1rem;
       margin-bottom: 1rem;
       overflow-x: auto;
     }
 
-    .diff-viewport {
-      border: 1px solid var(--dt-border-strong);
-      border-radius: 6px;
-      overflow: hidden;
+    .bench-viewport {
       flex: none;
     }
 
-    .diff-viewport header {
-      padding: 0.35rem 0.75rem;
-      font-size: 0.8rem;
-      color: var(--dt-text-strong);
-      background-color: var(--dt-table-head-bg);
-      display: flex;
-      justify-content: space-between;
-    }
-
     /* Fixed pixel size so both iframes get identical canvas buffers. */
-    .diff-viewport .frame-holder {
+    .bench-viewport .frame-holder {
       width: 640px;
       height: 480px;
-      background-color: var(--dt-canvas-well);
-    }
-
-    .diff-viewport iframe {
-      width: 100%;
-      height: 100%;
-      border: 0;
-      display: block;
     }
 
     .diff-results {
@@ -160,17 +79,11 @@
       margin-bottom: 1rem;
       color: var(--dt-text-strong);
     }
-
-    .diff-note {
-      font-size: 0.75rem;
-      color: var(--dt-text-muted);
-      margin-top: 0.75rem;
-    }
   </style>
 </head>
 
 <body>
-  <div class="diff-page">
+  <div class="bench-page">
     <div class="page-head">
       <h1 class="m-3 mb-2">GCode Preview Visual Diff</h1>
       <button id="theme-toggle" class="theme-toggle" type="button">Light</button>
@@ -180,7 +93,7 @@
       <a class="back-link" href="/index.html">demo</a>
     </p>
 
-    <div class="diff-controls">
+    <div class="bench-controls">
       <div class="control-group">
         <label for="version-a">Version A</label>
         <div class="bulma-select"><select id="version-a"></select></div>
@@ -206,17 +119,17 @@
         <label for="threshold">Threshold</label>
         <input id="threshold" type="number" min="0" max="255" step="1" value="12" />
       </div>
-      <button id="run-diff" class="diff-run">Run</button>
+      <button id="run-diff" class="bench-run">Run</button>
     </div>
 
-    <div id="status" class="diff-status">Pick two versions and a file, then hit run.</div>
+    <div id="status" class="bench-status">Pick two versions and a file, then hit run.</div>
 
-    <div class="diff-viewports">
-      <div class="diff-viewport">
+    <div class="bench-viewports">
+      <div class="bench-viewport">
         <header><span>Version A</span><span id="frame-label-a"></span></header>
         <div class="frame-holder" id="frame-a"></div>
       </div>
-      <div class="diff-viewport">
+      <div class="bench-viewport">
         <header><span>Version B</span><span id="frame-label-b"></span></header>
         <div class="frame-holder" id="frame-b"></div>
       </div>
@@ -239,7 +152,7 @@
 
     <div id="diff-stat" class="diff-stat"></div>
 
-    <p class="diff-note">
+    <p class="bench-note">
       Each version renders once in a fresh iframe, the camera is pinned to the preset's initial
       position with the orbit target at the origin, and the WebGL canvas is captured to a PNG
       immediately after the synchronous render. The diff paints unchanged pixels as dimmed grayscale

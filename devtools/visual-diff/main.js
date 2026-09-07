@@ -2,21 +2,14 @@
 // compares the captured pixels, to catch silent rendering regressions that
 // numeric benchmarks miss (colors, gradients, geometry placement).
 
-import { loadVersions, buildImportMap, populateVersionSelect, latestStable2, LOCAL_VERSION } from '../lib/versions.js';
+import { loadVersions, buildImportMap, populateVersionSelect, latestStable, LOCAL_VERSION } from '../lib/versions.js';
 import { runInIframe } from '../lib/runner-frame.js';
 import { populatePresetSelect, presetSettings, fetchPresetGcode } from '../lib/demo-presets.js';
-
-const el = (id) => document.getElementById(id);
-const statusEl = el('status');
+import { el, setStatus, runWithButton } from '../lib/page.js';
 
 // Captures from the last run, kept so threshold changes recompute the diff
 // without re-rendering.
 let lastCaptures = null;
-
-function setStatus(message, isError = false) {
-  statusEl.textContent = message;
-  statusEl.classList.toggle('error', isError);
-}
 
 async function decodeCapture(capture) {
   const image = new Image();
@@ -137,23 +130,12 @@ async function runVisualDiff() {
   setStatus(`Done — captures are ${captureA.width}×${captureA.height}.`);
 }
 
-el('run-diff').addEventListener('click', async () => {
-  const button = el('run-diff');
-  button.disabled = true;
-  try {
-    await runVisualDiff();
-  } catch (error) {
-    console.error(error);
-    setStatus(`Visual diff failed: ${error.message}`, true);
-  } finally {
-    button.disabled = false;
-  }
-});
+runWithButton(el('run-diff'), 'Visual diff', runVisualDiff);
 
 el('threshold').addEventListener('input', renderDiff);
 
 populatePresetSelect(el('gcode-select'), 'benchy');
 loadVersions().then((versions) => {
-  populateVersionSelect(el('version-a'), versions, latestStable2(versions) ?? versions[0]);
+  populateVersionSelect(el('version-a'), versions, latestStable(versions) ?? versions[0]);
   populateVersionSelect(el('version-b'), versions, LOCAL_VERSION);
 });

@@ -1,7 +1,7 @@
 // Benchmark runner — measures one gcode-preview version inside its iframe.
 // See ../lib/runner-frame.js for the message protocol.
 
-import { loadPreview, send, onRun } from '../lib/preview-compat.js';
+import { loadPreview, parseInto, send, onRun } from '../lib/preview-compat.js';
 
 const ORBIT_MS = 5000;
 const HEAP_SAMPLE_MS = 50;
@@ -61,11 +61,7 @@ onRun(async ({ gcode, settings }) => {
 
   send({ type: 'phase', phase: 'parsing' });
   const parseStart = performance.now();
-  if (typeof preview.processGCodeStream === 'function') {
-    await preview.processGCodeStream(gcode, { render: false });
-  } else {
-    preview.parser.parseGCode(gcode);
-  }
+  await parseInto(preview, gcode);
   const parseMs = performance.now() - parseStart;
 
   send({ type: 'phase', phase: 'rendering' });
@@ -81,6 +77,12 @@ onRun(async ({ gcode, settings }) => {
   const fps = await measureFpsWhileOrbiting(scene.camera, scene.controls.target);
 
   const peakHeapMB = heapSampler.stop();
+
+  // All metrics are in — stop this run's perpetual rAF render loop so the
+  // finished side can't keep rendering the full model (and stealing CPU/GPU
+  // time) while the other side's FPS and heap are measured. The last
+  // presented frame stays visible on the canvas; nothing clears it.
+  preview.dispose();
 
   send({
     type: 'result',

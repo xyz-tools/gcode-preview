@@ -14,6 +14,17 @@ export async function loadPreview(settings) {
   return { module, preview, scene: preview.sceneManager ?? preview };
 }
 
+// Parse gcode into a preview without drawing, across majors: 3.x has the
+// stream-capable processGCodeStream (explicit { render: false } — processGCode
+// would play an animation), 2.x parses synchronously.
+export async function parseInto(preview, gcode) {
+  if (typeof preview.processGCodeStream === 'function') {
+    await preview.processGCodeStream(gcode, { render: false });
+  } else {
+    preview.parser.parseGCode(gcode);
+  }
+}
+
 export const send = (message) => window.parent.postMessage(message, '*');
 
 // Boilerplate for runner scripts: announce readiness, wait for the 'run'

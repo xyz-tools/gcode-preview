@@ -1,6 +1,7 @@
-import { loadVersions, buildImportMap, populateVersionSelect, latestStable2, LOCAL_VERSION } from '../lib/versions.js';
+import { loadVersions, buildImportMap, populateVersionSelect, latestStable, LOCAL_VERSION } from '../lib/versions.js';
 import { runInIframe } from '../lib/runner-frame.js';
 import { populatePresetSelect, presetSettings, fetchPresetGcode } from '../lib/demo-presets.js';
+import { el, setStatus, escapeHtml, median, runWithButton } from '../lib/page.js';
 
 const METRICS = [
   { key: 'parseMs', label: 'Parse time', unit: 'ms', better: 'lower', decimals: 0 },
@@ -11,23 +12,6 @@ const METRICS = [
   { key: 'triangles', label: 'Triangles', unit: '', better: 'lower', decimals: 0 },
   { key: 'drawCalls', label: 'Draw calls', unit: '', better: 'lower', decimals: 0 }
 ];
-
-const el = (id) => document.getElementById(id);
-const statusEl = el('status');
-
-const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-
-function setStatus(message, isError = false) {
-  statusEl.textContent = message;
-  statusEl.classList.toggle('error', isError);
-}
-
-function median(values) {
-  const sorted = values.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
-  if (sorted.length === 0) return undefined;
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-}
 
 function aggregate(runs) {
   const result = {};
@@ -88,12 +72,22 @@ function toMarkdown(rows, labelA, labelB, runCount) {
   return lines.join('\n');
 }
 
+// Per-button restore timers, so a re-click within the 1.5s window can clear
+// the pending restore instead of racing it.
+const copyRestoreTimers = new WeakMap();
+
 async function copyToClipboard(text, button) {
   try {
     await navigator.clipboard.writeText(text);
-    const original = button.textContent;
+    // Capture the TRUE label exactly once — a second click while the button
+    // still says "Copied ✓" must not adopt that as the label to restore.
+    button.dataset.label ??= button.textContent;
     button.textContent = 'Copied ✓';
-    setTimeout(() => (button.textContent = original), 1500);
+    clearTimeout(copyRestoreTimers.get(button));
+    copyRestoreTimers.set(
+      button,
+      setTimeout(() => (button.textContent = button.dataset.label), 1500)
+    );
   } catch (error) {
     console.error(error);
     setStatus(`Could not copy to clipboard: ${error.message}`, true);
@@ -184,21 +178,10 @@ async function runBenchmark() {
   setStatus(`Done — ${runCount} run(s) each, medians below.`);
 }
 
-el('run-benchmark').addEventListener('click', async () => {
-  const button = el('run-benchmark');
-  button.disabled = true;
-  try {
-    await runBenchmark();
-  } catch (error) {
-    console.error(error);
-    setStatus(`Benchmark failed: ${error.message}`, true);
-  } finally {
-    button.disabled = false;
-  }
-});
+runWithButton(el('run-benchmark'), 'Benchmark', runBenchmark);
 
 populatePresetSelect(el('gcode-select'));
 loadVersions().then((versions) => {
-  populateVersionSelect(el('version-a'), versions, latestStable2(versions) ?? versions[0]);
+  populateVersionSelect(el('version-a'), versions, latestStable(versions) ?? versions[0]);
   populateVersionSelect(el('version-b'), versions, LOCAL_VERSION);
 });

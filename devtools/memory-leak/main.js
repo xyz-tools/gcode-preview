@@ -1,22 +1,14 @@
 import { loadVersions, buildImportMap, populateVersionSelect, LOCAL_VERSION } from '../lib/versions.js';
 import { runInIframe } from '../lib/runner-frame.js';
 import { populatePresetSelect, presetSettings, fetchPresetGcode } from '../lib/demo-presets.js';
+import { el, setStatus, median, runWithButton } from '../lib/page.js';
 
 // Steady-state growth beyond max(10 MB, 5%) counts as a leak. Without a forced
 // GC this honestly resolves leaks of roughly a MB per cycle and up; retained-
-// geometry leaks are far bigger, and the renderer counters catch structural
-// cases regardless.
+// geometry leaks are far bigger, and the post-dispose renderer residuals
+// (see runner.js) catch dispose() leaking GPU resources directly.
 const HEAP_GROWTH_ALLOWANCE_MB = 10;
 const HEAP_GROWTH_ALLOWANCE_RATIO = 0.05;
-const COUNTER_SLOPE_LIMIT = 0.01; // geometries/textures per cycle
-
-const el = (id) => document.getElementById(id);
-const statusEl = el('status');
-
-function setStatus(message, isError = false) {
-  statusEl.textContent = message;
-  statusEl.classList.toggle('error', isError);
-}
 
 // ---------------------------------------------------------------------------
 // Chart — single-series line of heap MB per cycle on a plain 2D canvas.
@@ -224,8 +216,8 @@ function tableReset() {
       <tr>
         <th>Cycle</th>
         <th>Heap (MB)</th>
-        <th>Geometries</th>
-        <th>Textures</th>
+        <th>Geometries after dispose</th>
+        <th>Textures after dispose</th>
         <th>Triangles</th>
       </tr>
     </thead>
@@ -235,11 +227,18 @@ function tableReset() {
 
 function tableAppend(sample) {
   const row = document.createElement('tr');
-  row.innerHTML = `<td>${sample.cycle}</td>
-    <td>${format(sample.heapMB, 1)}</td>
-    <td>${format(sample.geometries)}</td>
-    <td>${format(sample.textures)}</td>
-    <td>${format(sample.triangles)}</td>`;
+  const cells = [
+    String(sample.cycle),
+    format(sample.heapMB, 1),
+    format(sample.geometries),
+    format(sample.textures),
+    format(sample.triangles)
+  ];
+  for (const text of cells) {
+    const cell = document.createElement('td');
+    cell.textContent = text;
+    row.appendChild(cell);
+  }
   el('results-body').appendChild(row);
 }
 
@@ -250,32 +249,14 @@ function tableAppend(sample) {
 // skip the warm-up, then compare the median heap of the first vs second half
 // of the steady-state cycles.
 
-function median(values) {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-}
-
-function leastSquaresSlope(points) {
-  if (points.length < 2) return 0;
-  const meanX = points.reduce((sum, p) => sum + p.x, 0) / points.length;
-  const meanY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
-  let numerator = 0;
-  let denominator = 0;
-  for (const p of points) {
-    numerator += (p.x - meanX) * (p.y - meanY);
-    denominator += (p.x - meanX) ** 2;
-  }
-  return denominator === 0 ? 0 : numerator / denominator;
-}
-
-function counterTrend(samples, key) {
-  const points = samples.filter((s) => Number.isFinite(s[key])).map((s) => ({ x: s.cycle, y: s[key] }));
-  if (points.length < 2) return null;
-  const slope = leastSquaresSlope(points);
-  const first = points[0].y;
-  const last = points[points.length - 1].y;
-  return slope > COUNTER_SLOPE_LIMIT && last > first ? { first, last } : null;
+// The geometry/texture columns are post-dispose residuals from each cycle's
+// own renderer (see runner.js): a correct dispose() drives them to 0, so any
+// persistent residual is a direct "dispose() leaked GPU resources" signal.
+function counterResidual(samples, key) {
+  const points = samples.filter((s) => Number.isFinite(s[key]));
+  if (points.length === 0) return null;
+  const max = Math.max(...points.map((s) => s[key]));
+  return max > 0 ? { max, last: points[points.length - 1][key] } : null;
 }
 
 function renderVerdict(samples) {
@@ -289,7 +270,8 @@ function renderVerdict(samples) {
   const steady = heapPoints.slice(Math.min(heapPoints.length - 3, Math.max(2, Math.floor(heapPoints.length * 0.3))));
   if (heapPoints.length < 2) {
     cssClass = '';
-    text = 'Heap data unavailable (performance.memory is Chrome-only) — verdict based on renderer counters below.';
+    text =
+      'Heap data unavailable (performance.memory is Chrome-only) — verdict based on post-dispose renderer residuals below.';
   } else if (steady.length < 3) {
     cssClass = '';
     text = 'Too few cycles for a heap verdict — run at least 5 cycles.';
@@ -311,8 +293,12 @@ function renderVerdict(samples) {
 
   const notes = [];
   for (const key of ['geometries', 'textures']) {
-    const trend = counterTrend(samples, key);
-    if (trend) notes.push(`${key} trending upward across cycles (${trend.first} → ${trend.last}).`);
+    const residual = counterResidual(samples, key);
+    if (residual) {
+      notes.push(
+        `${key} left allocated after dispose() — up to ${residual.max} per cycle (last cycle: ${residual.last}).`
+      );
+    }
   }
 
   verdictEl.className = `verdict ${notes.length > 0 ? 'bad' : cssClass}`.trim();
@@ -359,7 +345,7 @@ async function runTest() {
       tableAppend(sample);
       drawChart();
       const heapText = Number.isFinite(sample.heapMB) ? `${sample.heapMB.toFixed(1)} MB heap` : 'heap n/a';
-      setStatus(`Cycle ${sample.cycle}/${cycles} done — ${heapText}, ${sample.geometries} geometries.`);
+      setStatus(`Cycle ${sample.cycle}/${cycles} done — ${heapText}, ${sample.geometries} geometries residual.`);
     }
   });
 
@@ -370,18 +356,7 @@ async function runTest() {
   setStatus(`Done — ${samples.length} cycles on ${version}.`);
 }
 
-el('run-test').addEventListener('click', async () => {
-  const button = el('run-test');
-  button.disabled = true;
-  try {
-    await runTest();
-  } catch (error) {
-    console.error(error);
-    setStatus(`Memory-leak test failed: ${error.message}`, true);
-  } finally {
-    button.disabled = false;
-  }
-});
+runWithButton(el('run-test'), 'Memory-leak test', runTest);
 
 window.addEventListener('resize', drawChart);
 // an existing chart must flip its colors when the page theme changes

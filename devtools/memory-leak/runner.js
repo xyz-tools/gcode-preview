@@ -2,7 +2,7 @@
 // preview inside its iframe, sampling heap and renderer counters per cycle.
 // See ../lib/runner-frame.js for the message protocol.
 
-import { loadPreview, send, onRun } from '../lib/preview-compat.js';
+import { loadPreview, parseInto, send, onRun } from '../lib/preview-compat.js';
 
 const SETTLE_MS = 150;
 
@@ -30,29 +30,30 @@ onRun(async ({ gcode, settings, cycles }) => {
 
     const { preview, scene } = await loadPreview({ canvas, ...settings });
 
-    if (typeof preview.processGCodeStream === 'function') {
-      // 3.x — explicit { render: false }: processGCode would play an animation.
-      await preview.processGCodeStream(gcode, { render: false });
-    } else {
-      // 2.x — synchronous parse.
-      preview.parser.parseGCode(gcode);
-    }
+    await parseInto(preview, gcode);
 
     scene.render();
 
-    // Read renderer counters while the preview is alive. `scene` was grabbed at
-    // construction; never touch preview.sceneManager after dispose() — on 3.x
-    // that lazy getter would silently re-create the SceneManager.
-    const info = scene.renderer?.info;
-    const geometries = info?.memory?.geometries;
-    const textures = info?.memory?.textures;
-    const triangles = info?.render?.triangles;
+    // Grab the renderer and the per-render triangle count while the preview is
+    // alive. `scene` was grabbed at construction; never touch
+    // preview.sceneManager after dispose() — on 3.x that lazy getter would
+    // silently re-create the SceneManager.
+    const renderer = scene.renderer;
+    const triangles = renderer?.info?.render?.triangles;
 
     preview.dispose();
     canvas.remove();
 
     // Let GC, GPU teardown, and pending rAF callbacks settle before sampling.
     await wait(SETTLE_MS);
+
+    // Residual counters AFTER dispose, read from the renderer this cycle
+    // created: three.js decrements info.memory as geometries/textures are
+    // disposed, so a correct dispose() drives both to ~0 and any residual is
+    // a direct "dispose() leaked GPU resources" signal — unlike a pre-dispose
+    // read, which is constant by construction on a per-cycle renderer.
+    const geometries = renderer?.info?.memory?.geometries;
+    const textures = renderer?.info?.memory?.textures;
 
     const sample = { cycle, heapMB: heapMB(), geometries, textures, triangles };
     samples.push(sample);

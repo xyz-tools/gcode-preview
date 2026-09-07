@@ -5,7 +5,8 @@ export const CDN = 'https://cdn.jsdelivr.net/npm';
 export const CDN_API = 'https://data.jsdelivr.com/v1/packages/npm';
 export const LOCAL_VERSION = 'local';
 
-// Known versions, used when the jsDelivr API is unreachable.
+// Best-effort snapshot used when the jsDelivr API is unreachable — it may lag
+// behind npm, so treat it as "some versions", not "the versions".
 const FALLBACK_VERSIONS = ['3.0.0-alpha.5', '2.18.0', '2.17.0', '2.16.0', '2.15.0'];
 
 export async function fetchJson(url) {
@@ -24,8 +25,11 @@ export async function loadVersions() {
   }
 }
 
-export function latestStable2(versions) {
-  return versions.find((v) => v.startsWith('2.') && !v.includes('-'));
+// Newest non-prerelease version of ANY major, so the default baseline tracks
+// whatever is actually released. jsDelivr (and the fallback list) order
+// versions newest-first, so the first match is the latest stable.
+export function latestStable(versions) {
+  return versions.find((v) => !v.includes('-'));
 }
 
 export function populateVersionSelect(select, versions, defaultValue) {

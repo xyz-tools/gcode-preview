@@ -1,6 +1,7 @@
 import { loadVersions, buildImportMap, populateVersionSelect, LOCAL_VERSION } from '../lib/versions.js';
 import { runInIframe } from '../lib/runner-frame.js';
 import { populatePresetSelect, presetSettings, fetchPresetGcode } from '../lib/demo-presets.js';
+import { el, setStatus, escapeHtml, runWithButton } from '../lib/page.js';
 
 const METRIC_LABELS = {
   lineCount: 'Lines parsed',
@@ -19,16 +20,6 @@ const METRIC_LABELS = {
 // extrusionDistance legitimately accumulates float error across thousands of
 // additions; round before comparing so only real divergence gets flagged.
 const FLOAT_DECIMALS = 4;
-
-const el = (id) => document.getElementById(id);
-
-const escapeHtml = (text) => String(text).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const statusEl = el('status');
-
-function setStatus(message, isError = false) {
-  statusEl.textContent = message;
-  statusEl.classList.toggle('error', isError);
-}
 
 function formatValue(value) {
   if (value === undefined) return 'n/a';
@@ -130,18 +121,7 @@ async function runCheck() {
   );
 }
 
-el('run-check').addEventListener('click', async () => {
-  const button = el('run-check');
-  button.disabled = true;
-  try {
-    await runCheck();
-  } catch (error) {
-    console.error(error);
-    setStatus(`Check failed: ${error.message}`, true);
-  } finally {
-    button.disabled = false;
-  }
-});
+runWithButton(el('run-check'), 'Check', runCheck);
 
 populatePresetSelect(el('gcode-select'), 'benchy');
 loadVersions().then((versions) => {

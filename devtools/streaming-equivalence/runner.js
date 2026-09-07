@@ -2,7 +2,7 @@
 // iframe (whole string, then chunked stream) and reports stats for both.
 // See ../lib/runner-frame.js for the message protocol.
 
-import { loadPreview, send, onRun } from '../lib/preview-compat.js';
+import { loadPreview, parseInto, send, onRun } from '../lib/preview-compat.js';
 
 // The iframe srcdoc ships one unused <canvas id="canvas">; the first pass
 // claims it, later passes get their own stacked canvas. Never reuse a canvas
@@ -74,13 +74,12 @@ async function runPass({ gcode, settings, mode, chunkSize }) {
   const { preview, scene } = await loadPreview({ canvas: freshCanvas(), ...settings });
 
   try {
-    if (typeof preview.processGCodeStream === 'function') {
-      // 3.x: one entry point for both; parses AND executes without drawing.
-      const input = mode === 'streamed' ? stringToStream(gcode, chunkSize) : gcode;
-      await preview.processGCodeStream(input, { render: false });
-    } else if (mode === 'whole') {
-      // 2.x whole-string path (sync).
-      preview.parser.parseGCode(gcode);
+    if (mode === 'whole') {
+      // Whole-string pass: the same cross-major fork every tool uses.
+      await parseInto(preview, gcode);
+    } else if (typeof preview.processGCodeStream === 'function') {
+      // 3.x streamed pass: same entry point, fed a chunked stream instead.
+      await preview.processGCodeStream(stringToStream(gcode, chunkSize), { render: false });
     } else if (typeof preview._readFromStream === 'function') {
       // 2.x streaming path (@experimental, parse-only, wants byte chunks).
       await preview._readFromStream(stringToStream(gcode, chunkSize, { asBytes: true }));

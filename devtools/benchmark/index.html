@@ -7,46 +7,7 @@
   <link rel="stylesheet" href="../lib/theme.css" />
   <script src="../lib/theme.js"></script>
   <style>
-    /* the demo stylesheet disables page scrolling; devtools pages need it */
-    html,
-    body {
-      height: auto;
-      min-height: 100%;
-      overflow: auto;
-    }
-
-    body {
-      margin: 0;
-      background-color: var(--dt-bg);
-      font-family: var(--bulma-family-primary, sans-serif);
-      color: var(--dt-text);
-    }
-
-    .bench-page {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 1.5rem;
-    }
-
-    .bench-controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-      align-items: flex-end;
-      margin-bottom: 1rem;
-    }
-
-    .bench-controls .control-group {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
-    .bench-controls label {
-      font-size: 0.75rem;
-      color: var(--dt-text-strong);
-    }
-
+    /* page shell comes from ../lib/theme.css; below is benchmark-specific */
     .bench-viewports {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -54,115 +15,12 @@
       margin-bottom: 1rem;
     }
 
-    .bench-viewport {
-      border: 1px solid var(--dt-border-strong);
-      border-radius: 6px;
-      overflow: hidden;
-    }
-
-    .bench-viewport header {
-      padding: 0.35rem 0.75rem;
-      font-size: 0.8rem;
-      color: var(--dt-text-strong);
-      background-color: var(--dt-table-head-bg);
-      display: flex;
-      justify-content: space-between;
-    }
-
     .bench-viewport .frame-holder {
       height: 340px;
-      background-color: var(--dt-canvas-well);
-    }
-
-    .bench-viewport iframe {
-      width: 100%;
-      height: 100%;
-      border: 0;
-      display: block;
-    }
-
-    .bench-status {
-      min-height: 1.5rem;
-      font-size: 0.85rem;
-      margin-bottom: 1rem;
-      color: var(--dt-text-strong);
-    }
-
-    .bench-status.error {
-      color: var(--dt-bad);
-    }
-
-    table.bench-results {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.9rem;
-    }
-
-    table.bench-results th,
-    table.bench-results td {
-      border: 1px solid var(--dt-border);
-      padding: 0.4rem 0.75rem;
-      text-align: right;
-    }
-
-    table.bench-results th:first-child,
-    table.bench-results td:first-child {
-      text-align: left;
-    }
-
-    table.bench-results thead th {
-      color: var(--dt-text-strong);
-      background-color: var(--dt-table-head-bg);
     }
 
     td.delta-better { color: var(--dt-good); }
     td.delta-worse { color: var(--dt-bad); }
-
-    .bench-export {
-      display: flex;
-      gap: 0.5rem;
-      margin-top: 0.75rem;
-    }
-
-    button.bench-copy {
-      background-color: transparent;
-      color: var(--dt-text);
-      border: 1px solid var(--dt-border-strong);
-      border-radius: 4px;
-      padding: 0.3rem 0.9rem;
-      font-size: 0.8rem;
-      cursor: pointer;
-    }
-
-    button.bench-copy:hover {
-      border-color: var(--dt-border-hover);
-      color: var(--dt-text-strong);
-    }
-
-    .bench-note {
-      font-size: 0.75rem;
-      color: var(--dt-text-muted);
-      margin-top: 0.75rem;
-    }
-
-    button.bench-run {
-      background-color: var(--dt-accent);
-      color: var(--dt-accent-contrast);
-      border: 0;
-      border-radius: 4px;
-      padding: 0.5rem 1.5rem;
-      font-size: 0.9rem;
-      cursor: pointer;
-    }
-
-    button.bench-run:disabled {
-      opacity: 0.5;
-      cursor: wait;
-    }
-
-    a.back-link {
-      font-size: 0.8rem;
-    }
   </style>
 </head>
 
