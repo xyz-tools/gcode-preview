@@ -103,22 +103,24 @@ export abstract class SlicerMetadataParser {
   }
 
   /**
-   * Whether per-path extrusion dimensions should be derived from the moves
-   * themselves for this gcode
+   * Whether the moves of this gcode can be trusted to derive per-path
+   * extrusion dimensions from
    * @param commentCommands - Array of gcode commands with comments
-   * @returns True when the job should derive dimensions volumetrically
+   * @returns True unless the dialect's E values are not filament lengths
    * @remarks
-   * Dialects that announce no dimension comments at all (Cura) opt in here,
-   * so the job can reconstruct per-path width and height from extrusion
-   * amounts and Z changes instead. Dialects with explicit `;WIDTH:` /
-   * `;HEIGHT:` comments keep the default `false`: their announced values are
-   * exact and must not be overridden by derived approximations. Evaluated on
-   * the chunk that identified the slicer (like `detectSlicerName`), so it can
-   * inspect header comments.
+   * Deriving is the default, for every dialect and for gcode no parser
+   * recognised: a file that announces its dimensions simply outranks the
+   * derived values path by path (see `State.resolvedExtrusionWidth`), so
+   * there is nothing to gate on. A dialect only opts out when the arithmetic
+   * itself does not hold -- Cura's UltiGCode flavor, whose E is cubic
+   * millimetres of material rather than millimetres of filament, would
+   * otherwise derive confidently wrong widths. Evaluated on the chunk that
+   * identified the slicer (like `detectSlicerName`), so it can inspect header
+   * comments.
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   derivesExtrusionDimensions(commentCommands: GCodeCommand[]): boolean {
-    return false;
+    return true;
   }
 
   /**

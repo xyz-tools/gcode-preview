@@ -140,7 +140,10 @@ describe('extrusion dimension metadata (;WIDTH: / ;HEIGHT:)', () => {
   });
 
   test('a HEIGHT change mid-path breaks the path, continuing from the same point', () => {
-    const job = run([';HEIGHT:0.2', 'G1 X10 Y10 E1', 'G1 X20 Y10 E1', ';HEIGHT:0.3', 'G1 X30 Y10 E1']);
+    // The announced WIDTH keeps the derivation out of it: these moves extrude
+    // the same E over different lengths, so a derived width would change and
+    // break the path on its own.
+    const job = run([';WIDTH:0.45', ';HEIGHT:0.2', 'G1 X10 Y10 E1', 'G1 X20 Y10 E1', ';HEIGHT:0.3', 'G1 X30 Y10 E1']);
 
     expect(job.paths.length).toEqual(2);
     expect(job.paths[0].lineHeight).toEqual(0.2);
@@ -188,6 +191,38 @@ describe('extrusion dimension metadata (;WIDTH: / ;HEIGHT:)', () => {
     expect(job.paths.length).toEqual(1);
     expect(job.paths[0].extrusionWidth).toBeUndefined();
     expect(job.paths[0].lineHeight).toBeUndefined();
+  });
+
+  test('an announced width outranks the width derived from the same move', () => {
+    // The move's volume implies ~1.2mm; the slicer says 0.45, and the slicer
+    // is stating what it asked for rather than inferring it.
+    const job = run([';WIDTH:0.45', ';HEIGHT:0.2', 'G0 X0 Y0 Z0.2', 'G1 X10 Y0 E1']);
+
+    expect(job.extrusions[0].extrusionWidth).toEqual(0.45);
+  });
+
+  test('a file no slicer parser recognises still derives its dimensions', () => {
+    // The point of deriving: it is the default for any gcode, not a Cura
+    // feature. This has no slicer fingerprint at all.
+    const { commands, metadata } = new Parser().parseGCode(
+      ['M83', 'G28', 'G0 X0 Y0 Z0.2', 'G1 X10 Y0 E0.48'].join('\n')
+    );
+    const job = new Job();
+    job.metadata = metadata;
+    new Interpreter().execute(commands, job);
+
+    expect(metadata.slicerName).toBeUndefined();
+    expect(job.extrusions[0].lineHeight).toEqual(0.2);
+    expect(job.extrusions[0].extrusionWidth).toBeGreaterThan(0);
+  });
+
+  test('a derived width change breaks the path, like an announced one', () => {
+    // Same E over half the distance means twice the bead width (0.6 -> 1.2),
+    // so the second move cannot share a path with the first.
+    const job = run(['M83', 'G0 X0 Y0 Z0.2', 'G1 X20 Y0 E1', 'G1 X30 Y0 E1']);
+
+    expect(job.extrusions.length).toEqual(2);
+    expect(job.extrusions[1].extrusionWidth).toBeGreaterThan(job.extrusions[0].extrusionWidth!);
   });
 });
 

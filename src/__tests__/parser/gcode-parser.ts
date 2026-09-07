@@ -344,7 +344,7 @@ describe('header metadata across chunk boundaries', () => {
     streamed.parseGCode(';FLAVOR:UltiGCode\n');
     streamed.parseGCode(identifying);
 
-    expect(oneshot.metadata.deriveExtrusionDimensions).toBeUndefined();
+    expect(oneshot.metadata.deriveExtrusionDimensions).toBe(false);
     expect(streamed.metadata.deriveExtrusionDimensions).toEqual(oneshot.metadata.deriveExtrusionDimensions);
   });
 

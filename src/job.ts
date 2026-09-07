@@ -66,8 +66,14 @@ export class Job {
   private extrusionDimensions: ExtrusionDimensionMetadata[] = [];
   /** Position in extrusionDimensions up to which events have been applied */
   private dimensionCursor = 0;
-  /** Whether per-path dimensions are derived from the moves (see metadata) */
-  private deriveDimensions = false;
+  /**
+   * Whether per-path dimensions are derived from the moves.
+   * @remarks
+   * On unless the slicer metadata opts out (see
+   * `SlicerMetadataParser.derivesExtrusionDimensions`); announced dimensions
+   * outrank derived ones per path rather than switching the derivation off.
+   */
+  private deriveDimensions = true;
   /** Filament cross-section area feeding the width derivation, in mm² */
   private filamentCrossSection = Math.PI * (DEFAULT_FILAMENT_DIAMETER / 2) ** 2;
   /** Z of the last extrusion move, from which derived layer heights are measured */
@@ -114,7 +120,7 @@ export class Job {
     this._metadata = metadata;
     this.layersIndexer.setLayerMetadata(metadata?.layerMetadata ?? []);
     this.setExtrusionDimensions(metadata?.extrusionDimensions ?? []);
-    this.deriveDimensions = metadata?.deriveExtrusionDimensions === true;
+    this.deriveDimensions = metadata?.deriveExtrusionDimensions !== false;
     const filamentDiameter = metadata?.filamentDiameter ?? DEFAULT_FILAMENT_DIAMETER;
     this.filamentCrossSection = Math.PI * (filamentDiameter / 2) ** 2;
   }
@@ -198,12 +204,20 @@ export class Job {
       if (step >= MIN_DERIVED_HEIGHT && step <= MAX_DERIVED_HEIGHT) {
         // rounded so consecutive layers with equal heights compare equal
         // despite floating-point Z subtraction noise
-        this.state.lineHeight = Math.round(step * 10000) / 10000;
+        this.state.derivedLineHeight = Math.round(step * 10000) / 10000;
       }
       this.lastExtrusionZ = target.z;
     }
 
-    const height = this.state.lineHeight;
+    // Nothing below is needed while the slicer announces the width itself: it
+    // would outrank the derived one anyway. Worth skipping rather than
+    // discarding -- on a file that announces every width (3DBenchy) the
+    // segment length and volume arithmetic is a third of the interpret time.
+    if (this.state.extrusionWidth !== undefined) return;
+
+    // The announced height still feeds the width derivation, which needs the
+    // height the material was actually laid at, not the inferred one.
+    const height = this.state.resolvedLineHeight;
     if (height === undefined) return;
 
     // Resolved exactly like the rendered geometry: an unknown axis is assumed
@@ -220,9 +234,9 @@ export class Job {
     if (!(width >= MIN_DERIVED_WIDTH && width <= MAX_DERIVED_WIDTH)) return;
 
     const quantized = Math.round(width * 100) / 100;
-    const current = this.state.extrusionWidth;
+    const current = this.state.derivedExtrusionWidth;
     if (current !== undefined && Math.abs(quantized - current) <= current * DERIVED_WIDTH_TOLERANCE) return;
-    this.state.extrusionWidth = quantized;
+    this.state.derivedExtrusionWidth = quantized;
   }
 
   /**
@@ -306,7 +320,12 @@ export class Job {
    */
   breakPath(newType: PathType): Path {
     this.finishPath();
-    const currentPath = new Path(newType, this.state.extrusionWidth, this.state.lineHeight, this.state.tool);
+    const currentPath = new Path(
+      newType,
+      this.state.resolvedExtrusionWidth,
+      this.state.resolvedLineHeight,
+      this.state.tool
+    );
     const pos = this.resolvePosition();
     currentPath.addPoint(pos.x, pos.y, pos.z);
     this.inprogressPath = currentPath;
@@ -331,8 +350,8 @@ export class Job {
     if (
       currentPath !== undefined &&
       currentPath.travelType === pathType &&
-      currentPath.extrusionWidth === this.state.extrusionWidth &&
-      currentPath.lineHeight === this.state.lineHeight
+      currentPath.extrusionWidth === this.state.resolvedExtrusionWidth &&
+      currentPath.lineHeight === this.state.resolvedLineHeight
     ) {
       return currentPath;
     }

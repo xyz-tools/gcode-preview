@@ -51,10 +51,12 @@ test('extrusion dimension metadata reaches the paths end-to-end', () => {
   job.metadata = metadata;
   new Interpreter().execute(commands, job);
 
-  // every extrusion follows a ;HEIGHT:0.2 comment; no ;WIDTH: was announced
+  // every extrusion follows a ;HEIGHT:0.2 comment, so the announced height is
+  // what the paths carry; no ;WIDTH: was announced, so the width is the one
+  // derived from the moves rather than nothing at all
   for (const path of job.extrusions) {
     expect(path.lineHeight).toBe(0.2);
-    expect(path.extrusionWidth).toBeUndefined();
+    expect(path.extrusionWidth).toBeGreaterThan(0);
   }
 });
 
@@ -73,13 +75,14 @@ test('accumulates dimension events with whole-file line indices when parsing in 
   ]);
 });
 
-test('parser flags a Cura file for derived extrusion dimensions', () => {
+test('parser leaves a Cura file deriving, which is the default', () => {
   const { metadata } = new Parser().parseGCode(
     [';FLAVOR:Marlin', ';Generated with Cura_SteamEngine 5.7.0', ';LAYER:0', 'G1 X10 Y10 Z0.2 E1'].join('\n')
   );
 
   expect(metadata.slicerName).toBe('Cura');
-  expect(metadata.deriveExtrusionDimensions).toBe(true);
+  // only the opt-out is ever recorded, so deriving reads as "not opted out"
+  expect(metadata.deriveExtrusionDimensions).toBeUndefined();
   // Marlin flavor implies no particular machine, so no diameter is announced
   expect(metadata.filamentDiameter).toBeUndefined();
 });
@@ -89,24 +92,24 @@ test('parser reads the filament diameter from a Griffin-flavored Cura file', () 
     [';FLAVOR:Griffin', ';GENERATOR.NAME:Cura_SteamEngine', ';LAYER:0', 'G1 X10 Y10 Z0.2 E1'].join('\n')
   );
 
-  expect(metadata.deriveExtrusionDimensions).toBe(true);
+  expect(metadata.deriveExtrusionDimensions).toBeUndefined();
   expect(metadata.filamentDiameter).toEqual(2.85);
 });
 
-test('parser does not flag a Prusa-family file for derivation', () => {
-  // PrusaSlicer announces exact dimensions in comments; deriving would
-  // override them with approximations.
+test('a Prusa-family file derives too, its announced dimensions simply outrank it', () => {
   const { metadata } = new Parser().parseGCode(PRUSA_GCODE);
 
   expect(metadata.deriveExtrusionDimensions).toBeUndefined();
   expect(metadata.filamentDiameter).toBeUndefined();
 });
 
-test('parser does not flag an UltiGCode-flavored Cura file for derivation', () => {
+test('an UltiGCode-flavored Cura file opts out of derivation', () => {
+  // Its E values are cubic millimetres of material, not millimetres of
+  // filament, so the volumetric arithmetic does not hold.
   const { metadata } = new Parser().parseGCode([';FLAVOR:UltiGCode', ';LAYER:0', 'G1 X10 Y10 Z0.2 E1'].join('\n'));
 
   expect(metadata.slicerName).toBe('Cura');
-  expect(metadata.deriveExtrusionDimensions).toBeUndefined();
+  expect(metadata.deriveExtrusionDimensions).toBe(false);
 });
 
 test('slicer metadata drives job layer indexing end-to-end', () => {

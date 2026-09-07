@@ -270,8 +270,11 @@ export class Parser {
       // flag are read from, which made those answers depend on chunk size.
       if (this.metadataParser) {
         this.metadata.slicerName = this.metadataParser.detectSlicerName(this.headerComments);
-        if (this.metadataParser.derivesExtrusionDimensions(this.headerComments)) {
-          this.metadata.deriveExtrusionDimensions = true;
+        // Only the opt-out is recorded: deriving is the default, so a job with
+        // no metadata at all still derives, and the flag never flips on
+        // mid-stream when a later chunk finally identifies the slicer.
+        if (!this.metadataParser.derivesExtrusionDimensions(this.headerComments)) {
+          this.metadata.deriveExtrusionDimensions = false;
         }
         const filamentDiameter = this.metadataParser.parseFilamentDiameter(this.headerComments);
         if (filamentDiameter !== undefined) {
