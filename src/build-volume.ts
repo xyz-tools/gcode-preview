@@ -19,6 +19,8 @@ export class BuildVolume {
   private _y: number;
   /** Height of the build volume in mm */
   private _z: number;
+  /** Whether the finer secondary grid is drawn */
+  private _smallGrid: boolean | undefined;
   /** Color used for the grid */
   private gridColor: Color = new Color(0x888888); // Default grid color
   private smallGridColor: Color = new Color(0x444444); // Default small grid color
@@ -31,20 +33,21 @@ export class BuildVolume {
    * @param x - Width in mm
    * @param y - Depth in mm
    * @param z - Height in mm
-   * @param _smallGrid - Whether to show a small grid
+   * @param smallGrid - Whether to show a small grid
    * @param scene - The Three.js scene to add the build volume to
    */
   constructor(
     x: number,
     y: number,
     z: number,
-    private _smallGrid: boolean | undefined,
+    smallGrid: boolean | undefined,
     private scene: Scene
   ) {
     // Negative dimensions clamp to 0, like the setters
     this._x = Math.max(0, x);
     this._y = Math.max(0, y);
     this._z = Math.max(0, z);
+    this._smallGrid = smallGrid;
   }
 
   /** Width of the build volume in mm */
