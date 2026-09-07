@@ -1284,13 +1284,15 @@ describe('SceneManager properties', () => {
       );
     });
 
-    test('throws without a build volume while centering the controls', () => {
-      // Current behavior: the constructor dereferences this._buildVolume
-      // unconditionally when aiming the controls, so a missing buildVolume
-      // option fails construction. If this starts passing, the constructor
-      // learned to handle it and this test should assert the new behavior.
-      const canvas = document.createElement('canvas');
-      expect(() => new SceneManager({ canvas }, createJob())).toThrow(TypeError);
+    test('constructs without a build volume, aiming the controls at a fallback center', () => {
+      // buildVolume is optional (#446): without one, no plate is drawn and the
+      // controls aim at where a print on a typical ~200x200 plate lands, as v2.8 did
+      const fresh = createSceneManager({ buildVolume: undefined });
+
+      expect(fresh.buildVolume).toBeUndefined();
+      expect(fresh.controls.target.toArray()).toEqual([100, 0, -100]);
+
+      fresh.dispose();
     });
 
     test('applies every optional setting', () => {
