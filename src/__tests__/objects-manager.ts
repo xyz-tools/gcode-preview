@@ -37,6 +37,10 @@ describe('ObjectsManager', () => {
       expect(objectsManager.lineHeight).toBe(0.2);
     });
 
+    test('leaves lineHeight undefined when not provided, so each path uses its own', () => {
+      expect(new ObjectsManager(new Scene(), 0.4).lineHeight).toBeUndefined();
+    });
+
     test('sets extrusion width', () => {
       expect(objectsManager.extrusionWidth).toBe(0.6);
     });
@@ -165,6 +169,61 @@ describe('ObjectsManager', () => {
         manager.renderExtrusionLines([path], new Color(0x00ff00));
 
         // y drops by 0.1, z drops by half the line height
+        const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
+        expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9]));
+      });
+
+      test('offsets each path by its own line height', () => {
+        const manager = new ObjectsManager(new Scene(), 0.4);
+        const thin = new Path(PathType.Extrusion, 0.6, 0.2, 0);
+        thin.addPoint(1, 2, 3);
+        thin.addPoint(4, 5, 6);
+        const thick = new Path(PathType.Extrusion, 0.6, 0.4, 0);
+        thick.addPoint(1, 2, 3);
+        thick.addPoint(4, 5, 6);
+
+        manager.renderExtrusionLines([thin, thick], new Color(0x00ff00));
+
+        // z drops by half of each path's own height: 0.1 and 0.2
+        const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
+        expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9, 1, 1.9, 2.8, 4, 4.9, 5.8]));
+      });
+
+      test("a path's own height wins over the global line height", () => {
+        const manager = new ObjectsManager(new Scene(), 0.4, 0.4);
+        const path = new Path(PathType.Extrusion, 0.6, 0.2, 0);
+        path.addPoint(1, 2, 3);
+        path.addPoint(4, 5, 6);
+
+        manager.renderExtrusionLines([path], new Color(0x00ff00));
+
+        // z drops by half the path's own 0.2, not the global 0.4
+        const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
+        expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9]));
+      });
+
+      test('the global line height fills in for a path without its own', () => {
+        const manager = new ObjectsManager(new Scene(), 0.4, 0.4);
+        const path = new Path(PathType.Extrusion, undefined, undefined, 0);
+        path.addPoint(1, 2, 3);
+        path.addPoint(4, 5, 6);
+
+        manager.renderExtrusionLines([path], new Color(0x00ff00));
+
+        // z drops by half the global 0.4
+        const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
+        expect(positions).toEqual(new Float32Array([1, 1.9, 2.8, 4, 4.9, 5.8]));
+      });
+
+      test('the built-in default height applies when neither the path nor a global is set', () => {
+        const manager = new ObjectsManager(new Scene(), 0.4);
+        const path = new Path(PathType.Extrusion, undefined, undefined, 0);
+        path.addPoint(1, 2, 3);
+        path.addPoint(4, 5, 6);
+
+        manager.renderExtrusionLines([path], new Color(0x00ff00));
+
+        // z drops by half the built-in 0.2
         const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
         expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9]));
       });
@@ -838,6 +897,7 @@ describe('ObjectsManager', () => {
     test.each([
       ['setLineWidth', () => manager.setLineWidth(2)],
       ['setLineHeight', () => manager.setLineHeight(0.5)],
+      ['setLineHeight back to per-path', () => manager.setLineHeight(undefined)],
       ['setExtrusionWidth', () => manager.setExtrusionWidth(1.2)],
       ['setRenderTubes', () => manager.setRenderTubes(true)]
     ])('%s asks for a rebuild', (_name, change) => {
