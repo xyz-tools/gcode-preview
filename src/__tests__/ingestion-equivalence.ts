@@ -311,14 +311,13 @@ describe.each(MODES)('ingestion via %s', (_name, ingest) => {
     await ingest(preview, gcode);
 
     expect(preview.parser.metadata.slicerName).toEqual('PrusaSlicer');
-    // lineIndex is left out: readStream parses an empty string for every chunk
-    // that completes no line, and each of those counts a line the file does not
-    // have. That is a separate defect, fixed on its own branch -- pinning the
-    // inflated numbers here would freeze them.
+    // lineIndex points into the original file, so it only agrees across modes
+    // while every mode counts the same lines.
     expect(preview.parser.metadata.layerMetadata).toEqual([
-      expect.objectContaining({ layerIndex: 0, z: 0.2, height: 0.2 }),
-      expect.objectContaining({ layerIndex: 1, z: 0.4, height: 0.2 })
+      { layerIndex: 0, z: 0.2, height: 0.2, lineIndex: 3 },
+      { layerIndex: 1, z: 0.4, height: 0.2, lineIndex: 8 }
     ]);
+    expect(preview.parser.lineCount).toEqual(13);
     expect(preview.countLayers).toEqual(2);
     expect(preview.job.layers[0].z).toEqual(0.2);
     expect(preview.job.layers[1].z).toEqual(0.4);
