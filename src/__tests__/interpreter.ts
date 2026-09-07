@@ -184,7 +184,8 @@ describe('dimension comments (;WIDTH: / ;HEIGHT:)', () => {
     ['empty value', ';WIDTH:'],
     ['zero', ';WIDTH:0'],
     ['negative value', ';WIDTH:-0.4'],
-    ['non-finite value', ';WIDTH:Infinity'],
+    ['non-finite value', ';WIDTH:1e999'],
+    ['trailing junk after the number', ';WIDTH:0.45mm'],
     ['unrelated comment', ';TYPE:External perimeter'],
     ['prefixed key', ';LAYER_HEIGHT:0.15']
   ])('ignores a comment with a %s', (_name, line) => {

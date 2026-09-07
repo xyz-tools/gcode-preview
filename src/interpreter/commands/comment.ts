@@ -4,9 +4,11 @@ import type { CommandHandler } from '../../interpreter';
  * Matches the extrusion-dimension comments of the PrusaSlicer family
  * (PrusaSlicer, SuperSlicer, OrcaSlicer, Bambu Studio): `;WIDTH:0.45` and
  * `;HEIGHT:0.16`. The parser has already stripped the `;` and trimmed the
- * text; whitespace around the colon and after the value is tolerated.
+ * text; whitespace around the colon and after the value is tolerated. The
+ * value must be a plain decimal number — trailing junk (`0.45mm`) rejects the
+ * line rather than being silently truncated by parseFloat.
  */
-const dimensionPattern = /^(WIDTH|HEIGHT)\s*:\s*(\S+)\s*$/i;
+const dimensionPattern = /^(WIDTH|HEIGHT)\s*:\s*(\d*\.?\d+(?:[eE][+-]?\d+)?)\s*$/i;
 
 /**
  * Executes a standalone comment line
