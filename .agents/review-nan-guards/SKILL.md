@@ -7,8 +7,7 @@ description: Reviews changes for NaN/non-finite propagation into state, buffers,
 
 Focused code review of the current changes for ONE class of defect: NaN/Infinity values entering and silently poisoning state, vertex buffers, bounding boxes, or camera math. Report findings only for this class — no general style feedback.
 
-## Scope
-Resolve the target and obtain the code per section 1 of `.claude/skills/review-checklist/SKILL.md` — the work may be a local branch with no PR yet, an open PR, or uncommitted changes; never mutate the working tree to review. Read enough surrounding code of each changed file to judge correctness, not just the hunks.
+**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
 
 ## What to hunt
 - `parseFloat`/`Number()` results used without an `isFinite`/`Number.isFinite` check — malformed words like `G1 Xabc` yield NaN, and `??` does NOT catch NaN (NaN is not nullish).
@@ -30,10 +29,4 @@ Resolve the target and obtain the code per section 1 of `.claude/skills/review-c
 - New pushes into vertex/points arrays: trace each component back to its source; is there any point where a NaN could enter?
 - Arithmetic on possibly-`undefined` state fields (un-homed axes after #401 are `undefined`).
 
-## Report format
-Follow the shared standard in `.claude/skills/review-checklist/SKILL.md`. Each finding carries a severity tag — **[critical]** (crash/data loss), **[major]** (wrong output, silent no-op, broken contract), **[minor]** (perf, slow leak), or **[process]** (tests, disclosure, docs) — and three short parts:
-- **Problem** — `file:line`, one sentence naming the defect.
-- **Example** — concrete failure: input → wrong behavior, with a measured number where you have one (e.g. "`G1 Xoops` → NaN into buffer → blank viewport, no error").
-- **Recommendation** — the specific fix, one sentence or a short code suggestion.
-
-Rank by severity. Put real-but-currently-masked defects under **Latent**, and genuine bugs this change did not introduce under **Out of scope / pre-existing**, per the standard. Verify empirically where cheap — a measured number beats a reasoned claim. If nothing is found, say so in one line — no speculative findings. Output the review as your response first; never post to GitHub without explicit user confirmation, and prefer inline comments when it is granted.
+**Example finding:** "`G1 Xoops` → NaN into buffer → blank viewport, no error"

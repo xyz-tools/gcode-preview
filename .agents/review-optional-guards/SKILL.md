@@ -7,8 +7,7 @@ description: Reviews changes for unguarded access on optional public config (bui
 
 Focused code review of the current changes for ONE class of defect: member access on values the public API allows to be undefined or absent. This class has crashed the whole library repeatedly. Report findings only for this class — no general style feedback.
 
-## Scope
-Resolve the target and obtain the code per section 1 of `.claude/skills/review-checklist/SKILL.md` — the work may be a local branch with no PR yet, an open PR, or uncommitted changes; never mutate the working tree to review. Read enough surrounding code of each changed file to judge correctness, not just the hunks.
+**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
 
 ## What to hunt
 - `buildVolume` is optional in the public constructor options and can also be unset/cleared at runtime. Any `this.buildVolume.x`, `_buildVolume.*`, camera/`controls.target` centering math, or LineBox construction from it needs an undefined guard *and* a sensible fallback (approximate centering, not a throw — v2.8 contract, restored in #455).
@@ -34,10 +33,4 @@ Resolve the target and obtain the code per section 1 of `.claude/skills/review-c
 - Check `gcode-preview.ts` option types: for every `?:` field, grep its consumers for unguarded access.
 - Grep for `throw` in build-volume.ts — violates the clamp-don't-throw policy.
 
-## Report format
-Follow the shared standard in `.claude/skills/review-checklist/SKILL.md`. Each finding carries a severity tag — **[critical]** (crash/data loss), **[major]** (wrong output, silent no-op, broken contract), **[minor]** (perf, slow leak), or **[process]** (tests, disclosure, docs) — and three short parts:
-- **Problem** — `file:line`, one sentence naming the defect.
-- **Example** — concrete failure: input → wrong behavior, with a measured number where you have one (e.g. "new GCodePreview({}) with no buildVolume → TypeError in SceneManager → blank canvas").
-- **Recommendation** — the specific fix, one sentence or a short code suggestion.
-
-Rank by severity. Put real-but-currently-masked defects under **Latent**, and genuine bugs this change did not introduce under **Out of scope / pre-existing**, per the standard. Verify empirically where cheap — a measured number beats a reasoned claim. If nothing is found, say so in one line — no speculative findings. Output the review as your response first; never post to GitHub without explicit user confirmation, and prefer inline comments when it is granted.
+**Example finding:** "new GCodePreview({}) with no buildVolume → TypeError in SceneManager → blank canvas"

@@ -7,8 +7,7 @@ description: Reviews changes for public API surface discipline (new exports need
 
 Focused code review of the current changes for ONE class of defect: unjustified or accidental growth/breakage of the public API surface. Report findings only for this class — no general style feedback. Maintainer's literal words: "the public api is expanded and this is never taken lightly. Please add your rationale."
 
-## Scope
-Resolve the target and obtain the code per section 1 of `.claude/skills/review-checklist/SKILL.md` — the work may be a local branch with no PR yet, an open PR, or uncommitted changes; never mutate the working tree to review. Read enough surrounding code of each changed file to judge correctness, not just the hunks.
+**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
 
 ## What to hunt
 - List EVERY newly public/exported symbol in the diff: new `export`s (index.ts and per-file), class members that gained `public` (or lost `private`/`#`), new options on the preview constructor, new exported types. Each one needs an explicit rationale — if the PR body doesn't give one, that is a finding.
@@ -30,10 +29,4 @@ Resolve the target and obtain the code per section 1 of `.claude/skills/review-c
 - Grep for renamed symbols: an identifier deleted on one line and a similar one added — check for a `@deprecated` alias.
 - Grep changed code for unguarded access to optional public config (`buildVolume`, callbacks, colors) — optional-by-contract means every access needs a guard.
 
-## Report format
-Follow the shared standard in `.claude/skills/review-checklist/SKILL.md`. Each finding carries a severity tag — **[critical]** (crash/data loss), **[major]** (wrong output, silent no-op, broken contract), **[minor]** (perf, slow leak), or **[process]** (tests, disclosure, docs) — and three short parts:
-- **Problem** — `file:line`, one sentence naming the defect.
-- **Example** — concrete failure: input → wrong behavior, with a measured number where you have one (e.g. "consumer on v2.8 constructs without buildVolume → throws at init").
-- **Recommendation** — the specific fix, one sentence or a short code suggestion.
-
-Rank by severity. Put real-but-currently-masked defects under **Latent**, and genuine bugs this change did not introduce under **Out of scope / pre-existing**, per the standard. Verify empirically where cheap — a measured number beats a reasoned claim. If nothing is found, say so in one line — no speculative findings. Output the review as your response first; never post to GitHub without explicit user confirmation, and prefer inline comments when it is granted.
+**Example finding:** "consumer on v2.8 constructs without buildVolume → throws at init"

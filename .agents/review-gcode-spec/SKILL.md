@@ -7,8 +7,7 @@ description: Reviews new or changed G-code command handlers against documented f
 
 Focused code review of the current changes for ONE class of defect: command handlers that don't match documented firmware semantics. Report findings only for this class — no general style feedback.
 
-## Scope
-Resolve the target and obtain the code per section 1 of `.claude/skills/review-checklist/SKILL.md` — the work may be a local branch with no PR yet, an open PR, or uncommitted changes; never mutate the working tree to review. Read enough surrounding code of each changed file to judge correctness, not just the hunks.
+**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
 
 ## What to hunt
 - Every new/changed handler in the interpreter must be checked against the firmware docs it claims to implement (Marlin, Smoothieware, RepRapFirmware). Cite the doc; don't trust the PR body's paraphrase.
@@ -31,10 +30,4 @@ Resolve the target and obtain the code per section 1 of `.claude/skills/review-c
 - Handlers that read only `x`,`y`,`z` params: ask what the firmware says about `e`, `f`, and firmware-specific params (`P`, `L`, `S`).
 - No doc link in PR body or code comment for a new command → request the firmware citation.
 
-## Report format
-Follow the shared standard in `.claude/skills/review-checklist/SKILL.md`. Each finding carries a severity tag — **[critical]** (crash/data loss), **[major]** (wrong output, silent no-op, broken contract), **[minor]** (perf, slow leak), or **[process]** (tests, disclosure, docs) — and three short parts:
-- **Problem** — `file:line`, one sentence naming the defect.
-- **Example** — concrete failure: input → wrong behavior, with a measured number where you have one (e.g. "G92.1 → E offset kept while XYZ reset → extrusion misrendered; cite the firmware doc violated").
-- **Recommendation** — the specific fix, one sentence or a short code suggestion.
-
-Rank by severity. Put real-but-currently-masked defects under **Latent**, and genuine bugs this change did not introduce under **Out of scope / pre-existing**, per the standard. Verify empirically where cheap — a measured number beats a reasoned claim. If nothing is found, say so in one line — no speculative findings. Output the review as your response first; never post to GitHub without explicit user confirmation, and prefer inline comments when it is granted.
+**Example finding:** "G92.1 → E offset kept while XYZ reset → extrusion misrendered; cite the firmware doc violated"

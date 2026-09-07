@@ -7,8 +7,7 @@ description: Reviews changes for per-render allocations, repeated derived-data c
 
 Focused code review of the current changes for ONE class of defect: per-render allocations and hidden copies — work re-done or memory re-allocated on every frame/pass that should happen once. Report findings only for this class — no general style feedback.
 
-## Scope
-Resolve the target and obtain the code per section 1 of `.claude/skills/review-checklist/SKILL.md` — the work may be a local branch with no PR yet, an open PR, or uncommitted changes; never mutate the working tree to review. Read enough surrounding code of each changed file to judge correctness, not just the hunks.
+**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
 
 ## What to hunt
 - `filter`/`map`/`slice`/`concat`/spread or object/array construction inside `render()`, `animate()`, the rAF loop, `renderAnimated`, or anything called per frame or per path in ObjectsManager/SceneManager.
@@ -31,10 +30,4 @@ Resolve the target and obtain the code per section 1 of `.claude/skills/review-c
 - Grep for numeric literals passed as buffer/vertex capacity (`maxVertexCount`, `reserve`, sizes like `1000000`).
 - `push(...largeArray)` or `Array.from` on per-path vertex data inside loops.
 
-## Report format
-Follow the shared standard in `.claude/skills/review-checklist/SKILL.md`. Each finding carries a severity tag — **[critical]** (crash/data loss), **[major]** (wrong output, silent no-op, broken contract), **[minor]** (perf, slow leak), or **[process]** (tests, disclosure, docs) — and three short parts:
-- **Problem** — `file:line`, one sentence naming the defect.
-- **Example** — concrete failure: input → wrong behavior, with a measured number where you have one (e.g. "10MB benchy → N full-array filters per frame → progressive render stalls").
-- **Recommendation** — the specific fix, one sentence or a short code suggestion.
-
-Rank by severity. Put real-but-currently-masked defects under **Latent**, and genuine bugs this change did not introduce under **Out of scope / pre-existing**, per the standard. Verify empirically where cheap — a measured number beats a reasoned claim. If nothing is found, say so in one line — no speculative findings. Output the review as your response first; never post to GitHub without explicit user confirmation, and prefer inline comments when it is granted.
+**Example finding:** "10MB benchy → N full-array filters per frame → progressive render stalls"
