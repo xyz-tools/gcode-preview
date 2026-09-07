@@ -159,6 +159,62 @@ describe.each(MODES)('ingestion via %s', (_name, ingest) => {
     expect(preview.job.state.y).toEqual(5);
   });
 
+  /**
+   * Wraps the preview's parseGCode so every command produced during ingestion
+   * is counted, whichever mode delivered it. Returns the running-total getter.
+   */
+  const countParsedCommands = (target: GCodePreview): (() => number) => {
+    const parser = target.parser;
+    const original = parser.parseGCode.bind(parser);
+    let count = 0;
+    parser.parseGCode = (input) => {
+      const result = original(input);
+      count += result.commands.length;
+      return result;
+    };
+    return () => count;
+  };
+
+  test('a newline-terminated file yields the same lineCount and command count', async () => {
+    // Every bundled demo file ends in '\n'. That terminator must not add a
+    // phantom empty line (whole-string split) nor phantom per-chunk lines
+    // (streamed no-newline chunks): whole-string and streamed parses of the
+    // exact same bytes must agree line for line.
+    const gcode = 'G28\nG0 X10 Y10 Z0.2\nG1 X20 Y10 E1\n';
+    const parsedCommands = countParsedCommands(preview);
+
+    await ingest(preview, gcode);
+
+    expect(preview.parser.lineCount).toEqual(3);
+    expect(parsedCommands()).toEqual(3);
+  });
+
+  test('a file without a trailing newline yields the same lineCount and command count', async () => {
+    const gcode = 'G28\nG0 X5 Y5 Z0.2\nG1 X15 Y5 E1';
+    const parsedCommands = countParsedCommands(preview);
+
+    await ingest(preview, gcode);
+
+    expect(preview.parser.lineCount).toEqual(3);
+    expect(parsedCommands()).toEqual(3);
+  });
+
+  test('mid-file blank lines count once each, in every ingestion mode', async () => {
+    // Two blank lines plus a terminating newline: each blank line is exactly
+    // one (empty) line and one empty command in every mode, and the final
+    // newline adds nothing.
+    const gcode = 'G28\n\nG0 X10 Y10 Z0.5\n\nG1 X20 Y10 E1\n';
+    const parsedCommands = countParsedCommands(preview);
+
+    await ingest(preview, gcode);
+
+    expect(preview.parser.lineCount).toEqual(5);
+    expect(parsedCommands()).toEqual(5);
+    // the blank lines change nothing downstream
+    expect(preview.job.paths.length).toEqual(2);
+    expect(preview.job.paths[1].vertices).toEqual([10, 10, 0.5, 20, 10, 0.5]);
+  });
+
   test('a two-layer print indexes the same layers and paths per layer', async () => {
     const gcode = [
       'G28',
@@ -257,5 +313,38 @@ describe.each(MODES)('ingestion via %s', (_name, ingest) => {
       min: expect.objectContaining({ x: 10, y: 10, z: 1 }),
       max: expect.objectContaining({ x: 30, y: 25, z: 1 })
     });
+  });
+});
+
+describe('public executeCommands re-entrancy', () => {
+  // External tools (the devtools debugger among them) step through a file by
+  // calling executeCommands repeatedly with small batches. That only works
+  // because each call resumes the job's in-progress path before executing and
+  // finishes it afterwards — this test pins that contract with real objects.
+  test('command-by-command calls accumulate into the job exactly like one big call', () => {
+    // Same fixture and expectations as 'a multi-move file yields the exact
+    // same paths and vertices' above: concrete values, not mode-vs-mode.
+    const lines = ['G28', 'G0 X10 Y10 Z0.2', 'G1 X20 Y10 E1', 'G1 X20 Y20 E1', 'G1 X10 Y20 E1'];
+    const oneshot = createPreview();
+    const stepped = createPreview();
+
+    try {
+      oneshot.executeCommands(oneshot.parser.parseGCode(lines).commands);
+
+      for (const line of lines) {
+        stepped.executeCommands(stepped.parser.parseGCode([line]).commands);
+      }
+
+      for (const preview of [oneshot, stepped]) {
+        expect(preview.job.paths.length).toEqual(2);
+        expect(preview.job.paths[0].travelType).toEqual(PathType.Travel);
+        expect(preview.job.paths[0].vertices).toEqual([0, 0, 0, 10, 10, 0.2]);
+        expect(preview.job.paths[1].travelType).toEqual(PathType.Extrusion);
+        expect(preview.job.paths[1].vertices).toEqual([10, 10, 0.2, 20, 10, 0.2, 20, 20, 0.2, 10, 20, 0.2]);
+      }
+    } finally {
+      oneshot.dispose();
+      stepped.dispose();
+    }
   });
 });

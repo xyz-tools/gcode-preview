@@ -10,9 +10,15 @@
  * The returned `tail` excludes the newline itself, so prepending it to the
  * next chunk never fabricates an empty line at a chunk boundary.
  *
- * A chunk containing no newline at all completes nothing: the whole chunk is
- * carried into the tail, so a line is only ever parsed once its terminating
- * newline (or the end of the stream) has arrived.
+ * `complete` keeps its final newline: every newline in it terminates one
+ * line, which is exactly how the parser reads strings. A trailing newline
+ * would otherwise be ambiguous — `'A\n'` completing lines `A` and `''` here,
+ * but line `A` alone in a whole-file parse.
+ *
+ * A chunk containing no newline at all completes nothing: `complete` is empty
+ * (which parses to zero lines) and the whole chunk is carried into the tail,
+ * so a line is only ever parsed once its terminating newline (or the end of
+ * the stream) has arrived.
  */
 export function splitChunk(tail: string, chunk: string): { complete: string; tail: string } {
   const idxNewLine = chunk.lastIndexOf('\n');
@@ -21,5 +27,5 @@ export function splitChunk(tail: string, chunk: string): { complete: string; tai
     return { complete: '', tail: tail + chunk };
   }
 
-  return { complete: tail + chunk.slice(0, idxNewLine), tail: chunk.slice(idxNewLine + 1) };
+  return { complete: tail + chunk.slice(0, idxNewLine + 1), tail: chunk.slice(idxNewLine + 1) };
 }

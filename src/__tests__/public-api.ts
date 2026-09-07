@@ -66,6 +66,7 @@ describe('public API surface', () => {
       processGCode: 1,
       processGCodeStream: 1,
       readStream: 1,
+      executeCommands: 1,
       dispose: 0
     };
 

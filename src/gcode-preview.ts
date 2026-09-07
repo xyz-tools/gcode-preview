@@ -283,10 +283,22 @@ export class GCodePreview {
   }
 
   /**
-   * Folds parsed commands into the job and announces the result.
-   * @param commands - Parsed G-code commands
+   * Executes already-parsed commands into the current job, without rendering.
+   * @param commands - Parsed G-code commands (e.g. from `parser.parseGCode(...).commands`)
+   *
+   * @remarks
+   * Feeds the commands to the interpreter, which folds the resulting paths and
+   * state changes into `job`, then fires {@link onJobUpdated}. Nothing is
+   * drawn: call `sceneManager.render()` (or a processGCode variant) to see the
+   * result.
+   *
+   * Safe to call repeatedly: each call resumes the job's in-progress path
+   * before executing and finishes it after, so commands delivered across many
+   * calls accumulate into the job exactly as one big call would. This is how
+   * the streaming path executes each chunk, and it lets external tools (such
+   * as debuggers) step through a file command by command.
    */
-  private executeCommands(commands: GCodeCommand[]): void {
+  executeCommands(commands: GCodeCommand[]): void {
     this.interpreter.execute(commands, this.job);
     this.onJobUpdated?.(this.job);
   }

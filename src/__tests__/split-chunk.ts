@@ -7,22 +7,34 @@ describe('splitChunk', () => {
   test('keeps the newline out of the tail', () => {
     const { complete, tail } = splitChunk('', 'G1 X0\nG1 X1\nG1 X');
 
-    expect(complete).toEqual('G1 X0\nG1 X1');
+    // complete keeps its final newline: to the parser a newline terminates a
+    // line, so 'G1 X0\nG1 X1\n' is exactly the two completed lines
+    expect(complete).toEqual('G1 X0\nG1 X1\n');
     expect(tail).toEqual('G1 X');
   });
 
   test('prepends the previous tail to the complete lines', () => {
     const { complete, tail } = splitChunk('G1 X', '2\nG1 X3\nG1 X4');
 
-    expect(complete).toEqual('G1 X2\nG1 X3');
+    expect(complete).toEqual('G1 X2\nG1 X3\n');
     expect(tail).toEqual('G1 X4');
   });
 
   test('a chunk ending on a newline leaves an empty tail', () => {
     const { complete, tail } = splitChunk('', 'G1 X0\nG1 X1\n');
 
-    expect(complete).toEqual('G1 X0\nG1 X1');
+    expect(complete).toEqual('G1 X0\nG1 X1\n');
     expect(tail).toEqual('');
+  });
+
+  test('a blank line completing at a chunk boundary stays a line', () => {
+    // The previous chunk ended right after 'A\n'; this chunk opens with the
+    // newline that terminates a blank line. It must complete as '\n' (one
+    // empty line), not vanish.
+    const { complete, tail } = splitChunk('', '\nG1 X1\nG1 ');
+
+    expect(complete).toEqual('\nG1 X1\n');
+    expect(tail).toEqual('G1 ');
   });
 
   test('a chunk with no newline carries fully into the tail', () => {
@@ -71,6 +83,25 @@ describe('streaming across a chunk boundary', () => {
     parser.parseGCode(tail);
 
     expect(parser.lines).toEqual(['G1 X0', 'G1 X1', 'G1 X42']);
+    expect(parser.lineCount).toEqual(3);
+  });
+
+  test('a mid-file blank line survives chunking; a trailing newline adds none', () => {
+    // The boundary falls right after the blank line's newline, and the input
+    // ends on a newline: the blank line must be kept as exactly one empty
+    // line, while the terminating newline must not add a phantom one.
+    const chunks = ['G1 X0\n\nG1', ' X1\n'];
+
+    const parser = new Parser({ keepLines: true });
+    let tail = '';
+    for (const chunk of chunks) {
+      const split = splitChunk(tail, chunk);
+      tail = split.tail;
+      parser.parseGCode(split.complete);
+    }
+    if (tail !== '') parser.parseGCode(tail);
+
+    expect(parser.lines).toEqual(['G1 X0', '', 'G1 X1']);
     expect(parser.lineCount).toEqual(3);
   });
 });
