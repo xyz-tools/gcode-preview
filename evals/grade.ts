@@ -3,19 +3,26 @@
  *
  *   npm run evals:grade -- results/2026-09-07-opus-skill
  *
- * Checks only what a regex can settle: did the run name the expected file, carry a
- * severity tag, and stay silent where silence was required. Whether a finding describes
- * the *actual* defect is tier 2 — see README.md, "Grading".
+ * Two independent signals, deliberately kept apart:
+ *
+ *   DETECT  did the review point at the right file? Format-neutral, so a skill run and a
+ *           baseline run are judged on the same terms. This is the pass criterion.
+ *   FORMAT  did it use the skill's severity tags? Only the skill mandates these, so this
+ *           is reported for information and never decides a verdict — an earlier version
+ *           conflated the two and scored the baseline 1/5 for prose it had got right.
+ *
+ * Whether a finding describes the *actual* defect is tier 2 — see README.md, "Grading".
  */
 import { readdirSync, readFileSync } from 'node:fs';
-import { dirname, join, isAbsolute } from 'node:path';
+import { basename, dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadCases, expectsSilence, type EvalCase } from './types.ts';
+import { expectsSilence, loadCases, type EvalCase } from './types.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const arg = process.argv[2];
 if (!arg) throw new Error('usage: npm run evals:grade -- results/<dir>');
 const resultsDir = isAbsolute(arg) ? arg : join(here, arg.replace(/^evals\//, ''));
+const isBaseline = basename(resultsDir).endsWith('-baseline');
 
 const byId = new Map<string, EvalCase>(loadCases(join(here, 'cases')).map((c) => [c.id, c]));
 const SEVERITY = /\[(critical|major|minor|process)\]/g;
@@ -23,10 +30,10 @@ const SEVERITY = /\[(critical|major|minor|process)\]/g;
 interface Row {
   id: string;
   run: string;
-  fileHit: string;
-  findings: number;
+  detect: string;
+  tags: number;
   verdict: string;
-  pass: boolean;
+  pass: boolean | null;
 }
 const rows: Row[] = [];
 
@@ -41,48 +48,55 @@ for (const name of readdirSync(resultsDir).sort()) {
   }
 
   const body = readFileSync(join(resultsDir, name), 'utf8');
-  const findings = (body.match(SEVERITY) ?? []).length;
+  const tags = (body.match(SEVERITY) ?? []).length;
 
   if (expectsSilence(c)) {
-    const pass = findings === 0;
-    rows.push({
-      id,
-      run,
-      fileHit: '—',
-      findings,
-      pass,
-      verdict: pass ? 'PASS' : `FAIL — invented ${findings} finding(s)`
-    });
+    // A baseline run has no prescribed format, so "reported nothing" is not machine-decidable.
+    if (isBaseline) {
+      rows.push({ id, run, detect: '—', tags, verdict: 'MANUAL (no format to check)', pass: null });
+    } else {
+      const pass = tags === 0;
+      rows.push({
+        id,
+        run,
+        detect: '—',
+        tags,
+        pass,
+        verdict: pass ? 'PASS' : `FAIL — invented ${tags} finding(s)`
+      });
+    }
     continue;
   }
 
+  // Detection is format-neutral: accept the full path or the bare filename.
   const wanted = c.must_find[0].file;
-  const fileHit = body.includes(wanted);
-  const pass = fileHit && findings > 0;
+  const pass = body.includes(wanted) || body.includes(basename(wanted));
   rows.push({
     id,
     run,
-    fileHit: fileHit ? 'yes' : 'no',
-    findings,
+    detect: pass ? 'yes' : 'no',
+    tags,
     pass,
-    verdict: pass
-      ? 'PASS (tier-2 pending)'
-      : `FAIL — ${!fileHit ? `never named ${wanted}` : 'no severity-tagged finding'}`
+    verdict: pass ? 'PASS (tier-2 pending)' : `FAIL — never named ${basename(wanted)}`
   });
 }
 
 if (rows.length === 0) throw new Error(`no run output found in ${resultsDir}`);
 
-const w = (k: keyof Row, min: number) => Math.max(min, ...rows.map((r) => String(r[k]).length));
-const [wid, wrun] = [w('id', 4), w('run', 3)];
-console.log(`${'CASE'.padEnd(wid)}  ${'RUN'.padEnd(wrun)}  FILE  FINDINGS  VERDICT`);
+const width = (k: keyof Row, min: number) => Math.max(min, ...rows.map((r) => String(r[k]).length));
+const [wid, wrun] = [width('id', 4), width('run', 3)];
+console.log(`${isBaseline ? 'BASELINE (no skill)' : 'SKILL'} — ${basename(resultsDir)}\n`);
+console.log(`${'CASE'.padEnd(wid)}  ${'RUN'.padEnd(wrun)}  DETECT  TAGS  VERDICT`);
 for (const r of rows) {
   console.log(
-    `${r.id.padEnd(wid)}  ${r.run.padEnd(wrun)}  ${r.fileHit.padEnd(4)}  ${String(r.findings).padEnd(8)}  ${r.verdict}`
+    `${r.id.padEnd(wid)}  ${r.run.padEnd(wrun)}  ${r.detect.padEnd(6)}  ${String(r.tags).padEnd(4)}  ${r.verdict}`
   );
 }
 
-const passed = rows.filter((r) => r.pass).length;
-console.log(`\ntier-1: ${passed}/${rows.length} passed`);
+const scored = rows.filter((r) => r.pass !== null);
+const passed = scored.filter((r) => r.pass).length;
+const manual = rows.length - scored.length;
+console.log(`\ntier-1 detection: ${passed}/${scored.length} passed${manual ? ` (${manual} need manual review)` : ''}`);
+console.log('TAGS is reported for information only and never decides a verdict.');
 console.log('Extra findings beyond must_find are NOT failures — triage them by hand (README, "Scoring").');
-if (passed < rows.length) process.exitCode = 1;
+if (passed < scored.length) process.exitCode = 1;
