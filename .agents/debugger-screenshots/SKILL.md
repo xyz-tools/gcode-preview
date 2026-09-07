@@ -27,12 +27,14 @@ Run the server in the background and **always kill it when done**
 
 ## 2 — Drive the debugger reproducibly
 
-Open the page with the chrome-devtools MCP tools. Before anything else, make
-the run reproducible:
+Open the page with whatever browser automation is available (chrome-devtools
+MCP, Playwright, Puppeteer, …) — everything below is expressed as JavaScript
+to run in the page context plus element ids, so any of them works. Before
+anything else, make the run reproducible:
 
 ```js
 localStorage.removeItem('gcode-preview-devtools:debugger'); // no restored session/breakpoints/settings
-localStorage.setItem('gcode-preview-devtools:theme', 'dark'); // dark is the convention for PR shots
+localStorage.setItem('gcode-preview-devtools:theme', 'dark'); // either theme works — just use the same one for both shots
 ```
 
 Element ids you will script against: `version-select`, `preset-select`,
@@ -44,8 +46,10 @@ virtual list).
 - Wait for `version-select` to have >1 option before loading (the version
   list is fetched from jsDelivr).
 - Paste the synthetic gcode into `#gcode-text`, click Load, then poll
-  `#status` until it contains "Loaded". Poll with async `evaluate_script`
-  loops, not `wait_for` (its text matching is unreliable here).
+  `#status` until it contains "Loaded". Poll with a small async loop run in
+  the page context (check the text, `await` a short timeout, repeat) rather
+  than the automation tool's wait-for-text helper — the status text changes
+  quickly and text matchers have missed it here.
 - Between debug operations, wait until `#debug-step` is re-enabled.
 - Drive to the state that demonstrates the change: "Run to end" for a full
   render, or breakpoints/stepping for a mid-print state. For paused states,
@@ -59,10 +63,11 @@ virtual list).
 ## 3 — Capture both sides identically
 
 Keep the same browser window size, page scroll, split position, and theme for
-both shots. For tight framing, `take_snapshot` and screenshot the preview
-panel by uid; a viewport screenshot after `scrollIntoView` on the preview
-also works if both shots use identical scroll. Save as PNG or WebP with
-descriptive names, e.g. `pr<NUM>-<scene>-<side>.png`.
+both shots. For tight framing, take an element screenshot of the preview
+panel if the automation tool supports one; otherwise a viewport screenshot
+after `scrollIntoView` on the preview works, as long as both shots use
+identical scroll. Save as PNG or WebP with descriptive names, e.g.
+`pr<NUM>-<scene>-<side>.png`.
 
 - **After** (this PR): `version-select` = "local build (this checkout)" with
   `dist/` built from this branch.
@@ -123,10 +128,11 @@ Follow PR #439's structure inside a `## Screenshots` section:
 
 ## Gotchas
 
-- **Chrome profile lock**: if an MCP browser call fails with "browser is
-  already running for …/chrome-devtools-mcp/chrome-profile", run
-  `pkill -f chrome-profile`, wait 2s, retry once. That Chrome is the
-  dedicated automation instance, never the user's browser.
+- **Chrome profile lock** (only if using the chrome-devtools MCP): a browser
+  call failing with "browser is already running for
+  …/chrome-devtools-mcp/chrome-profile" means the automation Chrome got
+  orphaned — run `pkill -f chrome-profile`, wait 2s, retry once. That Chrome
+  is the dedicated automation instance, never the user's browser.
 - The preview canvas is intentionally **dark in both themes** — page theme
   never affects the rendered pixels.
 - The debugger needs a 3.x build; 2.x versions in `version-select` degrade to
