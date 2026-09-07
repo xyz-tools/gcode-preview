@@ -307,8 +307,13 @@ export class LayersMetadataIndexer extends Indexer {
    */
   private findLayerIndexForZ(pathZ: number): number {
     for (let i = this.currentMetadataLayerIndex; i < this.layerMetadata.length; i++) {
-      const z = this.layerMetadata[i].z;
-      // Metadata without a Z falls back to plain layer order.
+      // Metadata without a Z is pinned by the first path filed into it, which
+      // `ensureLayersUpTo` records as the layer's own Z. Reading that back is
+      // what lets the search move on: matching purely on layer order would
+      // return this same index for every later path, at any Z, because the
+      // scan restarts from the pointer this entry is holding.
+      const z = this.layerMetadata[i].z ?? this.indexes[i]?.z;
+      // Nothing has landed here yet, so this path is what defines the layer.
       if (z === undefined) return i;
       if (pathZ <= z + LayersMetadataIndexer.Z_MATCH_TOLERANCE) return i;
     }
