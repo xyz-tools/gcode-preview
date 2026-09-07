@@ -31,7 +31,8 @@ const MIN_DERIVED_SEGMENT_LENGTH = 0.05;
 /**
  * A derived width within this relative tolerance of the current one keeps the
  * current value, so residual noise cannot shatter the model into micro-paths.
- * 2% separates real Cura width steps (0.4 vs 0.42 infill is 5%) from noise.
+ * 2% separates a real width step (0.4 to 0.42 between wall and infill is 5%)
+ * from the noise.
  */
 const DERIVED_WIDTH_TOLERANCE = 0.02;
 
@@ -171,10 +172,10 @@ export class Job {
    * unchanged carries the current (possibly unknown) state value
    * @param extruded - The filament length the move extrudes (see `State.applyExtrusion`)
    * @remarks
-   * Active only when the slicer metadata asked for it (Cura, whose files
-   * announce no dimension comments); paths then carry these derived values as
-   * their own, taking the same render-time precedence over the global
-   * fallback as comment-announced dimensions do. Move handlers call this for
+   * Runs for every dialect, unless the slicer metadata opted out; a path
+   * carries the derived values as its own wherever the slicer announced
+   * none, taking the same render-time precedence over the global fallback as
+   * comment-announced dimensions do. Move handlers call this for
    * extruding moves before `continuePath`, so a change breaks the path
    * exactly like a `;WIDTH:` / `;HEIGHT:` comment would.
    *

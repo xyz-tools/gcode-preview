@@ -113,8 +113,9 @@ export type Metadata = {
   extrusionDimensions?: ExtrusionDimensionMetadata[];
   slicerName?: string;
   /**
-   * Set when the detected slicer announces no dimension comments (Cura), so
-   * per-path width and height should be derived from the moves instead
+   * Set to `false` when the detected dialect's E values cannot be read as
+   * filament lengths, so per-path dimensions must not be derived from the
+   * moves. Absent means derive, which is the default for every dialect
    * (see `Job.deriveMoveDimensions`)
    */
   deriveExtrusionDimensions?: boolean;

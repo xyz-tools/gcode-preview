@@ -150,7 +150,7 @@ test('Cura parser returns empty array when no LAYER comments found', () => {
   expect(layers).toHaveLength(0);
 });
 
-test('Cura parser asks for derived extrusion dimensions', () => {
+test('Cura parser keeps the default of deriving dimensions', () => {
   const parser = new CuraMetadataParser();
 
   const commands = [

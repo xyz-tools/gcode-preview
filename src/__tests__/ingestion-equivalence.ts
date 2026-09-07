@@ -287,8 +287,8 @@ describe.each(MODES)('ingestion via %s', (_name, ingest) => {
     expect(paths[3].vertices).toEqual([10, 20, 0.16, 10, 10, 0.16]);
   });
 
-  test('a Cura file derives the same per-path dimensions and breaks', async () => {
-    // Cura announces no dimension comments, so widths and heights are derived
+  test('a file without dimension comments derives the same dimensions and breaks', async () => {
+    // Nothing announces width or height here, so both are derived
     // from the moves: E values below deposit 0.4mm (E steps of 0.33260 per
     // 10mm at 0.2mm height, computed from the volumetric model for 1.75mm
     // filament) then 0.6mm (step 0.49890) wide lines. The layer change and

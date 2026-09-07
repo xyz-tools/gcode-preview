@@ -226,13 +226,13 @@ describe('extrusion dimension metadata (;WIDTH: / ;HEIGHT:)', () => {
   });
 });
 
-describe('derived extrusion dimensions (Cura)', () => {
+describe('extrusion dimensions derived from the moves', () => {
   const FILAMENT_AREA = Math.PI * (1.75 / 2) ** 2;
 
   /** The E increment depositing a width×height×length box of 1.75mm filament */
   const eFor = (width: number, height: number, length: number) => (width * height * length) / FILAMENT_AREA;
 
-  /** Accumulates absolute E positions the way Cura emits them (5 decimals) */
+  /** Accumulates absolute E positions the way a slicer emits them (5 decimals) */
   const absoluteE = () => {
     let e = 0;
     return (width: number, height: number, length: number) => {
@@ -241,7 +241,11 @@ describe('derived extrusion dimensions (Cura)', () => {
     };
   };
 
-  /** Parses and executes a Cura-style file: real header, then the given body */
+  /**
+   * Parses and executes a file that announces no dimensions: a Cura header
+   * stands in for one, since Cura is the slicer that never announces them,
+   * but nothing here depends on the dialect — deriving is the default.
+   */
   const run = (lines: string[]) => {
     const { commands, metadata } = new Parser().parseGCode(
       [';FLAVOR:Marlin', ';Generated with Cura_SteamEngine 5.7.0', 'M82', 'G28', ...lines].join('\n')
