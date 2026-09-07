@@ -162,11 +162,37 @@ export class Job {
    */
   breakPath(newType: PathType): Path {
     this.finishPath();
-    const currentPath = new Path(newType, 0.6, 0.2, this.state.tool);
+    const currentPath = new Path(newType, this.state.extrusionWidth, this.state.lineHeight, this.state.tool);
     const pos = this.resolvePosition();
     currentPath.addPoint(pos.x, pos.y, pos.z);
     this.inprogressPath = currentPath;
     return currentPath;
+  }
+
+  /**
+   * Returns the path the next move of the given type should extend
+   * @param pathType - Type of the move about to be added
+   * @returns The in-progress path when it can continue, otherwise a fresh one
+   * @remarks
+   * The in-progress path continues only while its type and its extrusion
+   * dimensions still match the state; a `;WIDTH:` / `;HEIGHT:` comment that
+   * changed the state since the path was started breaks it here, so every path
+   * carries a single width and height. Deciding this lazily at move time (and
+   * not when the comment is read) keeps streamed and one-shot parses
+   * identical: the interpreter resumes the last finished path at every chunk
+   * boundary, which would undo a break performed at comment time.
+   */
+  continuePath(pathType: PathType): Path {
+    const currentPath = this.inprogressPath;
+    if (
+      currentPath !== undefined &&
+      currentPath.travelType === pathType &&
+      currentPath.extrusionWidth === this.state.extrusionWidth &&
+      currentPath.lineHeight === this.state.lineHeight
+    ) {
+      return currentPath;
+    }
+    return this.breakPath(pathType);
   }
 
   /**

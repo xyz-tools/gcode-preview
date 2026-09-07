@@ -245,6 +245,43 @@ describe.each(MODES)('ingestion via %s', (_name, ingest) => {
     expect(preview.job.paths.length).toEqual(2);
   });
 
+  test('WIDTH/HEIGHT comments yield the same per-path dimensions and breaks', async () => {
+    // The ;HEIGHT: change lands mid-extrusion, so every mode must break the
+    // path at the same move and stamp the same dimensions on each piece. The
+    // 7-byte chunker cuts inside the comments themselves, and the chunk
+    // boundaries land between the comment and the move it applies to — where
+    // resumeLastPath revives the previous path, so the break may only happen
+    // lazily at the next move for streaming to match oneshot.
+    const gcode = [
+      'G28',
+      ';WIDTH:0.45',
+      ';HEIGHT:0.16',
+      'G0 X10 Y10 Z0.16',
+      'G1 X20 Y10 E1',
+      'G1 X20 Y20 E1',
+      ';HEIGHT:0.28',
+      'G1 X10 Y20 E1',
+      ';WIDTH:0.6',
+      'G1 X10 Y10 E1'
+    ].join('\n');
+
+    await ingest(preview, gcode);
+
+    const paths = preview.job.paths;
+    expect(paths.length).toEqual(4);
+    // the travel and first extrusion carry the initial comment values
+    expect(paths.map((path) => [path.extrusionWidth, path.lineHeight])).toEqual([
+      [0.45, 0.16],
+      [0.45, 0.16],
+      [0.45, 0.28],
+      [0.6, 0.28]
+    ]);
+    // each break continues from the previous path's endpoint
+    expect(paths[1].vertices).toEqual([10, 10, 0.16, 20, 10, 0.16, 20, 20, 0.16]);
+    expect(paths[2].vertices).toEqual([20, 20, 0.16, 10, 20, 0.16]);
+    expect(paths[3].vertices).toEqual([10, 20, 0.16, 10, 10, 0.16]);
+  });
+
   test('known extrusion coordinates produce the exact same bounding box', async () => {
     // The bounding box only tracks extrusion endpoints, so the corners come
     // straight from the three G1 targets below.

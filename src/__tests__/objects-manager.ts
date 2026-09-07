@@ -36,6 +36,10 @@ describe('ObjectsManager', () => {
       expect(objectsManager.lineHeight).toBe(0.2);
     });
 
+    test('leaves lineHeight undefined when not provided, so each path uses its own', () => {
+      expect(new ObjectsManager(new Scene(), 0.4).lineHeight).toBeUndefined();
+    });
+
     test('sets extrusion width', () => {
       expect(objectsManager.extrusionWidth).toBe(0.6);
     });
@@ -166,6 +170,35 @@ describe('ObjectsManager', () => {
         // y drops by 0.1, z drops by half the line height
         const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
         expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9]));
+      });
+
+      test('offsets each path by its own line height when no global height is set', () => {
+        const manager = new ObjectsManager(new Scene(), 0.4);
+        const thin = new Path(PathType.Extrusion, 0.6, 0.2, 0);
+        thin.addPoint(1, 2, 3);
+        thin.addPoint(4, 5, 6);
+        const thick = new Path(PathType.Extrusion, 0.6, 0.4, 0);
+        thick.addPoint(1, 2, 3);
+        thick.addPoint(4, 5, 6);
+
+        manager.renderExtrusionLines([thin, thick], new Color(0x00ff00));
+
+        // z drops by half of each path's own height: 0.1 and 0.2
+        const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
+        expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9, 1, 1.9, 2.8, 4, 4.9, 5.8]));
+      });
+
+      test('an explicitly set global line height overrides the paths', () => {
+        const manager = new ObjectsManager(new Scene(), 0.4, 0.4);
+        const path = new Path(PathType.Extrusion, 0.6, 0.2, 0);
+        path.addPoint(1, 2, 3);
+        path.addPoint(4, 5, 6);
+
+        manager.renderExtrusionLines([path], new Color(0x00ff00));
+
+        // z drops by half the global height, not the path's own 0.2
+        const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
+        expect(positions).toEqual(new Float32Array([1, 1.9, 2.8, 4, 4.9, 5.8]));
       });
 
       test('produces an empty buffer for a path too short to make a segment', () => {
@@ -796,6 +829,7 @@ describe('ObjectsManager', () => {
     test.each([
       ['setLineWidth', () => manager.setLineWidth(2)],
       ['setLineHeight', () => manager.setLineHeight(0.5)],
+      ['setLineHeight back to per-path', () => manager.setLineHeight(undefined)],
       ['setExtrusionWidth', () => manager.setExtrusionWidth(1.2)],
       ['setRenderTubes', () => manager.setRenderTubes(true)]
     ])('%s asks for a rebuild', (_name, change) => {

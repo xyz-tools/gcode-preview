@@ -29,6 +29,21 @@ export class State {
   positionShift = { x: 0, y: 0, z: 0 };
   /** Currently active tool */
   tool = 0;
+  /**
+   * Width of extruded material, in millimeters, for paths created from here on.
+   * @remarks
+   * Updated by slicer `;WIDTH:` comments (PrusaSlicer family). Defaults to 0.6,
+   * the width paths have always assumed when the file carries no such comments.
+   */
+  extrusionWidth = 0.6;
+  /**
+   * Height of the extruded line, in millimeters, for paths created from here on.
+   * @remarks
+   * Updated by slicer `;HEIGHT:` comments (PrusaSlicer family), which vary
+   * throughout a print when adaptive layer height is enabled. Defaults to 0.2,
+   * the height paths have always assumed when the file carries no such comments.
+   */
+  lineHeight = 0.2;
   /** Current units (millimeters or inches) */
   units: Units = 'mm';
   /**

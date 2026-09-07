@@ -107,6 +107,100 @@ describe('handler registry', () => {
   test('G3 is handled by the same handler as G2', () => {
     expect(handlers.get('g3')).toBe(handlers.get('g2'));
   });
+
+  test('comment-only lines are handled', () => {
+    expect(handlers.get('')).toBeDefined();
+  });
+});
+
+describe('dimension comments (;WIDTH: / ;HEIGHT:)', () => {
+  const run = (lines: string[]) => new Interpreter().execute(new Parser().parseGCode(lines.join('\n')).commands);
+
+  test('paths default to 0.6 width and 0.2 height when the file has no dimension comments', () => {
+    const job = run(['G1 X10 Y10 E1']);
+
+    expect(job.paths[0].extrusionWidth).toEqual(0.6);
+    expect(job.paths[0].lineHeight).toEqual(0.2);
+  });
+
+  test('WIDTH and HEIGHT comments set the dimensions of the paths that follow', () => {
+    const job = run([';WIDTH:0.45', ';HEIGHT:0.16', 'G1 X10 Y10 E1']);
+
+    expect(job.state.extrusionWidth).toEqual(0.45);
+    expect(job.state.lineHeight).toEqual(0.16);
+    expect(job.paths[0].extrusionWidth).toEqual(0.45);
+    expect(job.paths[0].lineHeight).toEqual(0.16);
+  });
+
+  test('a HEIGHT change mid-path breaks the path, continuing from the same point', () => {
+    const job = run(['G1 X10 Y10 E1', 'G1 X20 Y10 E1', ';HEIGHT:0.3', 'G1 X30 Y10 E1']);
+
+    expect(job.paths.length).toEqual(2);
+    expect(job.paths[0].lineHeight).toEqual(0.2);
+    expect(job.paths[1].lineHeight).toEqual(0.3);
+    // the new path starts where the finished one ended
+    expect(job.paths[0].vertices.slice(-3)).toEqual([20, 10, 0]);
+    expect(job.paths[1].vertices.slice(0, 3)).toEqual([20, 10, 0]);
+  });
+
+  test('a WIDTH change mid-path breaks the path', () => {
+    const job = run(['G1 X10 Y10 E1', ';WIDTH:0.42', 'G1 X20 Y10 E1']);
+
+    expect(job.paths.length).toEqual(2);
+    expect(job.paths[0].extrusionWidth).toEqual(0.6);
+    expect(job.paths[1].extrusionWidth).toEqual(0.42);
+  });
+
+  test('repeating the current value does not break the path', () => {
+    const job = run([';WIDTH:0.45', 'G1 X10 Y10 E1', ';WIDTH:0.45', ';HEIGHT:0.2', 'G1 X20 Y10 E1']);
+
+    expect(job.paths.length).toEqual(1);
+    expect(job.paths[0].extrusionWidth).toEqual(0.45);
+  });
+
+  test('an arc move also picks up the current dimensions', () => {
+    const job = run(['G1 X10 Y10 E1', ';HEIGHT:0.12', 'G2 X20 Y10 I5 J0 E1']);
+
+    expect(job.paths.length).toEqual(2);
+    expect(job.paths[1].lineHeight).toEqual(0.12);
+  });
+
+  test('whitespace around the colon and value is tolerated', () => {
+    const job = run(['; WIDTH : 0.33 ', ';HEIGHT:  0.11', 'G1 X10 Y10 E1']);
+
+    expect(job.paths[0].extrusionWidth).toEqual(0.33);
+    expect(job.paths[0].lineHeight).toEqual(0.11);
+  });
+
+  test('lowercase keys are accepted', () => {
+    const job = run([';width:0.5', ';height:0.25', 'G1 X10 Y10 E1']);
+
+    expect(job.paths[0].extrusionWidth).toEqual(0.5);
+    expect(job.paths[0].lineHeight).toEqual(0.25);
+  });
+
+  test.each([
+    ['non-numeric value', ';WIDTH:abc'],
+    ['empty value', ';WIDTH:'],
+    ['zero', ';WIDTH:0'],
+    ['negative value', ';WIDTH:-0.4'],
+    ['non-finite value', ';WIDTH:Infinity'],
+    ['unrelated comment', ';TYPE:External perimeter'],
+    ['prefixed key', ';LAYER_HEIGHT:0.15']
+  ])('ignores a comment with a %s', (_name, line) => {
+    const job = run([line, 'G1 X10 Y10 E1']);
+
+    expect(job.state.extrusionWidth).toEqual(0.6);
+    expect(job.state.lineHeight).toEqual(0.2);
+    expect(job.paths[0].extrusionWidth).toEqual(0.6);
+  });
+
+  test('blank lines are ignored', () => {
+    const job = run(['', 'G1 X10 Y10 E1', '']);
+
+    expect(job.paths.length).toEqual(1);
+    expect(job.paths[0].extrusionWidth).toEqual(0.6);
+  });
 });
 
 describe('malformed coordinates through the whole pipeline', () => {

@@ -9,7 +9,8 @@ import {
   home,
   setPosition,
   probe,
-  selectTool
+  selectTool,
+  comment
 } from './interpreter/commands';
 
 /** Options for the {@link Interpreter} */
@@ -42,6 +43,8 @@ export type CommandHandler = (command: GCodeCommand, job: Job) => void;
  * in this map.
  */
 export const handlers: ReadonlyMap<string, CommandHandler> = new Map<string, CommandHandler>([
+  // a line holding only a comment (or nothing at all) parses to an empty gcode
+  ['', comment],
   ['g0', linearMove],
   ['g1', linearMove],
   ['g2', arcMove],

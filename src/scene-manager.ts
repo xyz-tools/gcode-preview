@@ -47,7 +47,7 @@ export type SceneManagerOptions = {
   lastSegmentColor?: ColorRepresentation;
   /** Width of rendered lines */
   lineWidth?: number;
-  /** Height of extruded lines */
+  /** Height of extruded lines. When unset, each path uses its own height (from `;HEIGHT:` slicer comments, default 0.2) */
   lineHeight?: number;
   /** Minimum layer height threshold */
   minLayerThreshold?: number;
@@ -434,10 +434,10 @@ export class SceneManager {
     this.objectsManager.setLineWidth(value);
   }
 
-  get lineHeight(): number {
+  get lineHeight(): number | undefined {
     return this.objectsManager.lineHeight;
   }
-  set lineHeight(value: number) {
+  set lineHeight(value: number | undefined) {
     this.objectsManager.setLineHeight(value);
   }
 
