@@ -5,6 +5,9 @@ What changes, and why.
 
 Link the issue this closes ("Fixes #123"), and mention any related issues or PRs
 ("Ref #123", "stacked on #123", "supersedes #123") so the context is one click away.
+
+Don't list the changes — the diff shows those. Explain the reasoning instead.
+See "Writing a good PR description" in CONTRIBUTING.md.
 -->
 
 ## Behavior changes

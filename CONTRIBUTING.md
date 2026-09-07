@@ -57,6 +57,38 @@ https://github.com/xyz-tools/gcode-preview/compare/develop...my-branch?template=
 
 Anything else (docs, refactors, dependency bumps) uses the default template.
 
+## Writing a good PR description
+
+The diff already shows *what* changed. The description is for everything the diff
+can't show: why this change, why here, and what a reviewer would otherwise have to
+reconstruct on their own.
+
+**Don't list the changes.** A bullet per file or per function is the one thing
+GitHub already renders perfectly. Spend that space on reasoning instead — the root
+cause, the constraint that ruled out the obvious approach, the trade-off you took
+knowingly.
+
+**Draw it when it's structural.** GitHub renders Mermaid in PR descriptions. When a
+change moves data between components, reorders a pipeline or introduces a new
+lifecycle, a small diagram beats three paragraphs:
+
+```mermaid
+flowchart LR
+  gcode[G-code] --> Parser --> Interpreter --> Geometry --> Scene
+```
+
+Diagram only the part you changed; a picture of the whole app helps nobody.
+
+**Explain the math.** New geometry, projections, interpolation, coordinate
+transforms or unit conversions need the reasoning written out — the formula, what
+the variables mean, and why it's correct. A reviewer should be able to check your
+derivation without redoing it from the code.
+
+**Favor the description over verbose code comments.** Background, alternatives
+considered and history belong in the PR, not in a comment block above the function.
+Code comments should say what the next reader needs *at that line*; the story of how
+the change came about belongs in the PR, which stays reachable from `git blame`.
+
 ## Before submitting a PR
 
 Run the full check suite:
