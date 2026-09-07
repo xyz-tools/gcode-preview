@@ -79,6 +79,10 @@ export class Job {
   private filamentCrossSection = Math.PI * (DEFAULT_FILAMENT_DIAMETER / 2) ** 2;
   /** Z of the last extrusion move, from which derived layer heights are measured */
   private lastExtrusionZ: number | undefined;
+  /** Width the caller supplied through the public API; suppresses deriving one */
+  private readonly suppliedExtrusionWidth: number | undefined;
+  /** Line height the caller supplied through the public API; suppresses deriving one */
+  private readonly suppliedLineHeight: number | undefined;
   /** How many commands have been executed on this job — one per parsed line */
   private executedCommandCount = 0;
 
@@ -90,9 +94,17 @@ export class Job {
    * @param opts - Job options
    * @param opts.state - Initial state (default: State.initial)
    * @param opts.minLayerThreshold - Minimum layer height threshold (default: LayersIndexer.DEFAULT_TOLERANCE)
+   * @param opts.extrusionWidth - Width the caller supplied through the public API, if any
+   * @param opts.lineHeight - Line height the caller supplied through the public API, if any
+   * @remarks
+   * A dimension the caller supplied is not derived: asking for a width is a
+   * decision, while deriving one is an inference, and the decision wins. The
+   * slicer's own `;WIDTH:` / `;HEIGHT:` comments still outrank both.
    */
-  constructor(opts: { state?: State; minLayerThreshold?: number } = {}) {
+  constructor(opts: { state?: State; minLayerThreshold?: number; extrusionWidth?: number; lineHeight?: number } = {}) {
     this.state = opts.state || State.initial;
+    this.suppliedExtrusionWidth = opts.extrusionWidth;
+    this.suppliedLineHeight = opts.lineHeight;
     this.layersIndexer = new LayersMetadataIndexer(this._layers, [], opts.minLayerThreshold);
     this.indexers = [
       new TravelTypeIndexer({ travel: this.travelPaths, extrusion: this.extrusionPaths }),
@@ -201,24 +213,29 @@ export class Job {
     if (!this.deriveDimensions || extruded <= 0) return;
 
     if (target.z !== undefined) {
-      const step = this.lastExtrusionZ === undefined ? target.z : target.z - this.lastExtrusionZ;
-      if (step >= MIN_DERIVED_HEIGHT && step <= MAX_DERIVED_HEIGHT) {
-        // rounded so consecutive layers with equal heights compare equal
-        // despite floating-point Z subtraction noise
-        this.state.derivedLineHeight = Math.round(step * 10000) / 10000;
+      if (this.suppliedLineHeight === undefined) {
+        const step = this.lastExtrusionZ === undefined ? target.z : target.z - this.lastExtrusionZ;
+        if (step >= MIN_DERIVED_HEIGHT && step <= MAX_DERIVED_HEIGHT) {
+          // rounded so consecutive layers with equal heights compare equal
+          // despite floating-point Z subtraction noise
+          this.state.derivedLineHeight = Math.round(step * 10000) / 10000;
+        }
       }
+      // Advanced even when the height is not being derived, so the anchor is
+      // still right if a later move does derive one.
       this.lastExtrusionZ = target.z;
     }
 
-    // Nothing below is needed while the slicer announces the width itself: it
-    // would outrank the derived one anyway. Worth skipping rather than
-    // discarding -- on a file that announces every width (3DBenchy) the
-    // segment length and volume arithmetic is a third of the interpret time.
-    if (this.state.extrusionWidth !== undefined) return;
+    // Nothing below is needed while a width already outranks the derived one,
+    // whether the slicer announced it or the caller supplied it. Worth
+    // skipping rather than discarding -- on a file that announces every width
+    // (3DBenchy) the segment length and volume arithmetic is a third of the
+    // interpret time.
+    if (this.suppliedExtrusionWidth !== undefined || this.state.extrusionWidth !== undefined) return;
 
-    // The announced height still feeds the width derivation, which needs the
-    // height the material was actually laid at, not the inferred one.
-    const height = this.state.resolvedLineHeight;
+    // Whichever height the material was actually laid at, in the same order
+    // the paths resolve it: announced, then the caller's, then derived.
+    const height = this.state.lineHeight ?? this.suppliedLineHeight ?? this.state.derivedLineHeight;
     if (height === undefined) return;
 
     // Resolved exactly like the rendered geometry: an unknown axis is assumed

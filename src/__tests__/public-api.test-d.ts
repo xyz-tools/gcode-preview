@@ -261,10 +261,35 @@ describe('public API types', () => {
   });
 
   describe('Job', () => {
-    it('is constructed from optional state and layer threshold', () => {
+    it('is constructed from optional state, layer threshold and supplied dimensions', () => {
       expectTypeOf<ConstructorParameters<typeof JobClass>>().toEqualTypeOf<
-        [{ state?: Job['state']; minLayerThreshold?: number }?]
+        [{ state?: Job['state']; minLayerThreshold?: number; extrusionWidth?: number; lineHeight?: number }?]
       >();
+    });
+
+    it('exposes the print state, whose dimensions separate announced from derived', () => {
+      // Reachable as job.state, so these are public whether or not State is
+      // exported: renaming one of them breaks a consumer.
+      expectTypeOf<keyof Job['state']>().toEqualTypeOf<
+        | 'x'
+        | 'y'
+        | 'z'
+        | 'e'
+        | 'relativeExtrusion'
+        | 'positionShift'
+        | 'tool'
+        | 'extrusionWidth'
+        | 'lineHeight'
+        | 'derivedExtrusionWidth'
+        | 'derivedLineHeight'
+        | 'resolvedExtrusionWidth'
+        | 'resolvedLineHeight'
+        | 'units'
+        | 'isHomed'
+        | 'applyExtrusion'
+      >();
+      expectTypeOf<Job['state']['resolvedExtrusionWidth']>().toEqualTypeOf<number | undefined>();
+      expectTypeOf<Job['state']['resolvedLineHeight']>().toEqualTypeOf<number | undefined>();
     });
 
     it('keeps its public fields, getters and method signatures', () => {

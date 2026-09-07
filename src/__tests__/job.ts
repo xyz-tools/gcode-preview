@@ -707,6 +707,48 @@ describe('.deriveMoveDimensions', () => {
     return job;
   };
 
+  test('keeps deriving the height while a width outranks the derived one', () => {
+    // The width shortcut must not skip the height block, or the Z anchor stops
+    // advancing and a file that announces only its width loses its heights.
+    const job = derivingJob();
+    job.state.extrusionWidth = 0.45;
+
+    job.deriveMoveDimensions({ x: 10, y: 0, z: 0.2 }, eFor(0.4, 0.2, 10));
+    job.state.z = 0.2;
+    job.deriveMoveDimensions({ x: 20, y: 0, z: 0.45 }, eFor(0.4, 0.25, 10));
+
+    expect(job.state.derivedLineHeight).toEqual(0.25);
+    expect(job.state.derivedExtrusionWidth).toBeUndefined();
+    expect(job.state.resolvedExtrusionWidth).toEqual(0.45);
+  });
+
+  test('a width supplied through the public API is not derived over', () => {
+    const job = new Job({ extrusionWidth: 0.6 });
+    job.metadata = { thumbnails: {} };
+    job.state.x = 0;
+    job.state.y = 0;
+    job.state.z = 0.2;
+
+    job.deriveMoveDimensions({ x: 10, y: 0, z: 0.2 }, eFor(0.4, 0.2, 10));
+
+    // the height still derives; only the supplied dimension is left alone
+    expect(job.state.derivedLineHeight).toEqual(0.2);
+    expect(job.state.derivedExtrusionWidth).toBeUndefined();
+  });
+
+  test('a height supplied through the public API still feeds the width derivation', () => {
+    const job = new Job({ lineHeight: 0.3 });
+    job.metadata = { thumbnails: {} };
+    job.state.x = 0;
+    job.state.y = 0;
+    job.state.z = 0.3;
+
+    job.deriveMoveDimensions({ x: 10, y: 0, z: 0.3 }, eFor(0.5, 0.3, 10));
+
+    expect(job.state.derivedLineHeight).toBeUndefined();
+    expect(job.state.derivedExtrusionWidth).toEqual(0.5);
+  });
+
   test('derives by default, without the metadata asking for it', () => {
     const job = new Job();
     job.metadata = { thumbnails: {} };
