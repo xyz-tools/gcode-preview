@@ -100,4 +100,40 @@ export abstract class SlicerMetadataParser {
   parseExtrusionDimensions(commands: GCodeCommand[]): ExtrusionDimensionMetadata[] {
     return [];
   }
+
+  /**
+   * Whether per-path extrusion dimensions should be derived from the moves
+   * themselves for this gcode
+   * @param commentCommands - Array of gcode commands with comments
+   * @returns True when the job should derive dimensions volumetrically
+   * @remarks
+   * Dialects that announce no dimension comments at all (Cura) opt in here,
+   * so the job can reconstruct per-path width and height from extrusion
+   * amounts and Z changes instead. Dialects with explicit `;WIDTH:` /
+   * `;HEIGHT:` comments keep the default `false`: their announced values are
+   * exact and must not be overridden by derived approximations. Evaluated on
+   * the chunk that identified the slicer (like `detectSlicerName`), so it can
+   * inspect header comments.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  derivesExtrusionDimensions(commentCommands: GCodeCommand[]): boolean {
+    return false;
+  }
+
+  /**
+   * Reads the filament diameter announced in header comments, when any
+   * @param commentCommands - Array of gcode commands with comments
+   * @returns The filament diameter in millimeters, or undefined when unknown
+   * @remarks
+   * Feeds the volumetric dimension derivation (see
+   * `derivesExtrusionDimensions`), which converts extruded filament lengths
+   * into deposited volume. Only header-borne values may be reported here: a
+   * diameter that appears after moves (like Cura's end-of-file `;SETTING_3`
+   * blob) would reach a one-shot parse before any move executes but a
+   * streamed parse only after every move already ran, making the two disagree.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  parseFilamentDiameter(commentCommands: GCodeCommand[]): number | undefined {
+    return undefined;
+  }
 }
