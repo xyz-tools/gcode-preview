@@ -30,6 +30,33 @@ If you don't need the demo app, just run `npm run dev:watch`.
 the unit-test CI and the Firebase preview deploy only trigger for PRs targeting it.
 Merges to `develop` auto-deploy the demo to https://gcode-preview.web.app.
 
+## Pull request templates
+
+`.github/pull_request_template.md` is the default and loads automatically for
+every PR. A few specialized templates live in `.github/PULL_REQUEST_TEMPLATE/`,
+but GitHub does **not** offer a picker for them — pick one explicitly.
+
+From the CLI:
+
+```sh
+gh pr create --base develop --template bugfix.md
+```
+
+Or append a query parameter to the compare URL:
+
+```
+https://github.com/xyz-tools/gcode-preview/compare/develop...my-branch?template=bugfix.md
+```
+
+| Template           | Use for                                                          |
+| ------------------ | ---------------------------------------------------------------- |
+| `bugfix.md`        | Fixing broken behavior — Problem / Cause / Fix, before & after   |
+| `gcode-support.md` | New or updated gcode command support                             |
+| `demo-ui.md`       | Demo app and UI changes — screenshots required                   |
+| `performance.md`   | Speed or memory work — before/after numbers, output unchanged    |
+
+Anything else (docs, refactors, dependency bumps) uses the default template.
+
 ## Before submitting a PR
 
 Run the full check suite:
