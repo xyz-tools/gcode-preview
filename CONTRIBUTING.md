@@ -30,6 +30,71 @@ If you don't need the demo app, just run `npm run dev:watch`.
 the unit-test CI and the Firebase preview deploy only trigger for PRs targeting it.
 Merges to `develop` auto-deploy the demo to https://gcode-preview.web.app.
 
+## Pull request templates
+
+`.github/pull_request_template.md` is the default and loads automatically for
+every PR. A few specialized templates live in `.github/PULL_REQUEST_TEMPLATE/`,
+but GitHub does **not** offer a picker for them — pick one explicitly.
+
+From the CLI:
+
+```sh
+gh pr create --base develop --template bugfix.md
+```
+
+Or append a query parameter to the compare URL:
+
+```
+https://github.com/xyz-tools/gcode-preview/compare/develop...my-branch?template=bugfix.md
+```
+
+| Template           | Use for                                                          |
+| ------------------ | ---------------------------------------------------------------- |
+| `bugfix.md`        | Fixing broken behavior — Problem / Cause / Fix, before & after   |
+| `gcode-support.md` | New or updated gcode command support                             |
+| `demo-ui.md`       | Demo app and UI changes — screenshots required                   |
+| `performance.md`   | Speed or memory work — before/after numbers, output unchanged    |
+
+Anything else (docs, refactors, dependency bumps) uses the default template.
+
+## Writing a good PR description
+
+The diff already shows *what* changed. The description is for everything the diff
+can't show: why this change, why here, and what a reviewer would otherwise have to
+reconstruct on their own.
+
+**Don't list the changes.** A bullet per file or per function is the one thing
+GitHub already renders perfectly. Spend that space on reasoning instead — the root
+cause, the constraint that ruled out the obvious approach, the trade-off you took
+knowingly.
+
+**Draw it when it's structural.** GitHub renders Mermaid in PR descriptions. When a
+change moves data between components, reorders a pipeline or introduces a new
+lifecycle, a small diagram beats three paragraphs:
+
+```mermaid
+flowchart LR
+  gcode[G-code] --> Parser --> Interpreter --> Geometry --> Scene
+```
+
+Diagram only the part you changed; a picture of the whole app helps nobody.
+
+**Explain the math.** New geometry, projections, interpolation, coordinate
+transforms or unit conversions need the reasoning written out — the formula, what
+the variables mean, and why it's correct. A reviewer should be able to check your
+derivation without redoing it from the code.
+
+**Favor the description over verbose code comments.** Background, alternatives
+considered and history belong in the PR, not in a comment block above the function.
+Code comments should say what the next reader needs *at that line*; the story of how
+the change came about belongs in the PR, which stays reachable from `git blame`.
+
+**Delete what doesn't apply.** The templates are a starting point, not a form to
+fill in. A heading with nothing under it, or a row of "N/A", costs the reviewer a
+scroll and tells them nothing — drop the section entirely. The exception is a
+change whose *absence* is the point: a performance PR that renders identically
+should say so, because that claim is what's being reviewed.
+
 ## Before submitting a PR
 
 Run the full check suite:
