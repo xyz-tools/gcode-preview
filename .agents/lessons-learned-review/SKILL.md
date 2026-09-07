@@ -1,11 +1,11 @@
 ---
-name: review-gauntlet
-description: Reviews a branch, PR, or working-tree diff for the defect classes that have shipped real bugs in this repo — falsy-zero, NaN propagation, streaming chunk boundaries, loop/index errors, leaks and init order, public API breaks, weak tests, per-render allocations, unguarded optional config, dead demo controls, CI workflows, undisclosed behavior changes, and G-code spec conformance. Use when reviewing changes before merge, or when the user asks for a review of one specific class.
+name: lessons-learned-review
+description: Reviews a branch, PR, or working-tree diff for the mistakes this repo has already made and fixed — falsy-zero checks, NaN propagation, streaming chunk boundaries, loop/index errors, leaks and init order, public API breaks, weak tests, per-render allocations, unguarded optional config, dead demo controls, CI workflows, undisclosed behavior changes, and G-code spec conformance. Use when reviewing changes before merge, or when the user asks for a review of one specific class.
 ---
 
-# Review Gauntlet
+# Lessons-Learned Review
 
-Applies the relevant defect-class checklists to a set of changes and merges the results into one report. Each class is backed by bugs that actually shipped here, so its checklist is calibrated by real incidents rather than generic advice.
+Applies the relevant checklists to a set of changes and merges the results into one report. Every class here is a lesson this repo already paid for — each one lists the PRs where that exact mistake shipped, so severity is calibrated by real incidents rather than generic advice.
 
 ## 1. Resolve the target first
 
