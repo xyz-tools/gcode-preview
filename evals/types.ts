@@ -45,13 +45,43 @@ function validate(raw: unknown, id: string): EvalCase {
   return c as EvalCase;
 }
 
+/**
+ * Rejects a defect fixture whose reviewed diff deletes a code comment.
+ *
+ * Fixtures are inverted fixes, so the comment explaining an invariant was written by
+ * the fix the fixture undoes. A `-` line narrating the bug sitting beside the `+` line
+ * introducing it hands the run the answer, and every earlier score was collected that
+ * way. Strip such comments in `pre.patch`, which is applied to the sandbox before the
+ * agent looks, so they appear in neither the diff nor the surrounding source.
+ *
+ * Cases that expect silence are exempt: their whole point is an innocuous edit, and
+ * `clean-docs-only` legitimately rewrites a prose line containing a `//` in a URL.
+ */
+function checkNoAnswerLeak(c: EvalCase, dir: string): void {
+  if (expectsSilence(c)) return;
+  const patch = join(dir, 'diff.patch');
+  if (!existsSync(patch)) throw new Error(`cases/${c.id} has no diff.patch`);
+  const leaked = readFileSync(patch, 'utf8')
+    .split('\n')
+    .filter((l) => /^-\s*(\/\/|\/\*|\*)/.test(l));
+  if (leaked.length) {
+    throw new Error(
+      `cases/${c.id}/diff.patch deletes ${leaked.length} comment line(s), which tells the ` +
+        `review what the defect is. Move them to cases/${c.id}/pre.patch:\n  ${leaked.join('\n  ')}`
+    );
+  }
+}
+
 export function loadCases(casesDir: string, only?: string): EvalCase[] {
   return readdirSync(casesDir, { withFileTypes: true })
     .filter((e) => e.isDirectory() && (!only || e.name === only))
     .map((e) => {
-      const file = join(casesDir, e.name, 'case.json');
+      const dir = join(casesDir, e.name);
+      const file = join(dir, 'case.json');
       if (!existsSync(file)) throw new Error(`cases/${e.name} has no case.json`);
-      return validate(JSON.parse(readFileSync(file, 'utf8')), e.name);
+      const c = validate(JSON.parse(readFileSync(file, 'utf8')), e.name);
+      checkNoAnswerLeak(c, dir);
+      return c;
     })
     .sort((a, b) => a.id.localeCompare(b.id));
 }

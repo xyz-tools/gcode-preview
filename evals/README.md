@@ -12,6 +12,7 @@ subjective, to support a claim like "the skill is 87% accurate."
 types.ts                 Case schema + loader (validates every case.json)
 run.ts                   runner — one fresh `claude -p` per run
 grade.ts                 grader — tier 1, deterministic
+cases/<id>/pre.patch     optional: applied to the sandbox before the agent looks
 cases/<id>/diff.patch    frozen fixture: a proposed change to this repo
 cases/<id>/case.json     what a correct review must find, and how to grade it
 results/<date-model-mode>/   captured output — gitignored, local to your machine
@@ -23,9 +24,24 @@ patch reads like a change someone might actually propose. Sources are named in
 edit whose correct review is *no findings at all* — it guards against inventing
 problems to look useful.
 
-**Isolation.** Every run is a separate `claude -p` process, so no case can leak into
-another. `run.sh` copies `diff.patch` into a temp directory and points the agent there;
-`case.json` stays behind in the repo so the answers are never in reach.
+Because the fixtures are inverted fixes, the comment explaining an invariant was written
+by the very fix a fixture undoes. Leaving it in hands the run a hint the original reviewer
+never had, and deleting it *inside* `diff.patch` is worse still: a `-` line narrating the
+bug beside the `+` line introducing it is a louder signpost than the defect. So each
+defect case strips those comments in `pre.patch`, applied to the sandbox before the agent
+looks — they appear in neither the diff nor the surrounding source. `loadCases` refuses to
+load a defect case whose `diff.patch` deletes a comment line.
+
+**Isolation.** Every run is a separate `claude -p` process in its own sandbox, so no case
+can leak into another and no run can read the answer. The sandbox is a `git archive`
+export of `HEAD` — tracked files only and **no `.git`**, so neither the working tree nor
+the fix history is reachable — with `evals/` deleted (that is where `case.json` states the
+expected finding) and `pre.patch` applied. `.claude/skills` is a tracked symlink into
+`.agents/`, so the skill under test comes along and resolves normally. `node_modules` does
+not, which is fine: these runs review code, they do not build or test it.
+
+Inspect exactly what a run can see with `npm run evals -- --dry-run`, which builds each
+sandbox, prints its path and stops before spawning the agent.
 
 ## Running
 
@@ -56,16 +72,17 @@ has stopped working.
 must explain NaN persistence, not merely observe that a guard was deleted. Naming the
 right file for the wrong reason is not a hit.
 
-Because the fixtures are inverted fixes, some cases also delete an explanatory comment.
-That is a hint the original author would not have had. The `grading_note` exists to stop
-a run passing on the hint alone.
+`grading_note` predates the sandbox: it was added when fixtures still deleted the
+explanatory comment, to stop a run scoring a hit off that hint alone. The hint is gone
+now, but the bar it set is still the right one.
 
 ## What these cases do and don't measure
 
-A first run (2026-09-07, opus, one run per case) found **skill 5/5 detection, baseline 4/4**.
-On these fixtures the skill shows no detection advantage, and that is a fact about the
-fixtures rather than a verdict on the skill: each one plants a single obvious defect and
-removes the comment that explained it, which a capable model spots unaided.
+A first run (2026-09-07, opus, one run per case) found **skill 5/5 detection, baseline
+4/4** — but that was collected before the sandbox existed, when a run could open the file
+the fixture had un-fixed and read the corrected line straight off disk. Near-perfect scores
+are exactly what that produces, so **those numbers are withdrawn** and no skill-vs-baseline
+claim survives them. Re-baseline before comparing anything.
 
 Where the skill did differ, on real PRs, was in *coverage and discipline* — running every
 relevant class rather than the one that catches the eye, measuring claims against
@@ -93,6 +110,9 @@ count that explodes on real files. Those are harder to build and are the obvious
 1. Pick a bug from `.context/pr-bug-audit.md` with a known fix.
 2. Inject it into current code and generate the patch with
    `diff -u --label a/<path> --label b/<path>`, prefixed by a `diff --git` line.
-3. Verify it applies: `git apply --check cases/<id>/diff.patch`.
-4. Write `case.json` with `must_find`, `expected_classes`, and a `grading_note` that
+3. Move any comment that explains the invariant into `cases/<id>/pre.patch`, so the
+   reviewed diff carries the code change alone. `loadCases` enforces this.
+4. Verify both apply in order, against a sandbox rather than the worktree:
+   `npm run evals -- --dry-run --case <id>`.
+5. Write `case.json` with `must_find`, `expected_classes`, and a `grading_note` that
    names the mechanism a real hit must describe.
