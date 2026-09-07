@@ -16,8 +16,15 @@ import { resolvePosition } from './resolve-position';
 export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler => {
   const arcTessellator = new ArcTessellator(options);
   return (command, job) => {
-    const { x, y, z, e, i, j, r } = command.params;
+    const { e, i, j, r } = command.params;
     const { state } = job;
+    // The endpoint arrives in logical coordinates; translate it into physical
+    // space up front so the tessellator's derived values agree with `from`.
+    // I/J/R are relative distances and need no shift.
+    const { positionShift } = state;
+    const x = command.params.x === undefined ? undefined : command.params.x + positionShift.x;
+    const y = command.params.y === undefined ? undefined : command.params.y + positionShift.y;
+    const z = command.params.z === undefined ? undefined : command.params.z + positionShift.z;
     // Starting position for the arc, with any un-homed axis assumed at the origin.
     const from = job.resolvePosition();
     const relative = state.positioning === 'relative';
@@ -26,18 +33,18 @@ export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler
     const targetZ = resolvePosition(z, state.z, relative);
 
     const cw = command.gcode === 'g2';
-    let currentPath = job.inprogressPath;
-    // `e > 0`, matching g0/g1: a negative E is a retraction, i.e. a travel move with no
-    // material laid down. The looser `e ?` used to misclassify a retracting arc as
-    // Extrusion, so it rendered as deposited filament and stretched the bounding box.
-    const pathType = e > 0 ? PathType.Extrusion : PathType.Travel;
+    // applyExtrusion keeps the extruder position in sync for the moves that follow; the
+    // arc itself derives no dimensions (Cura only emits arcs via plugins) and
+    // simply carries the state's current width and height like any move.
+    // Classified from the extruded length, matching g0/g1: a retraction -- or an
+    // absolute-mode E that decreases -- is a travel move with no material laid
+    // down, and used to render as deposited filament and stretch the bounding box.
+    const extruded = state.applyExtrusion(e);
+    const pathType = extruded > 0 ? PathType.Extrusion : PathType.Travel;
+    const currentPath = job.continuePath(pathType);
 
-    if (currentPath === undefined || currentPath.travelType !== pathType) {
-      currentPath = job.breakPath(pathType);
-    }
-
-    if (e > 0) {
-      job.stats.extrusionDistance += e;
+    if (extruded > 0) {
+      job.stats.extrusionDistance += extruded;
     }
 
     // The tessellator runs on the resolved position and emits every point,

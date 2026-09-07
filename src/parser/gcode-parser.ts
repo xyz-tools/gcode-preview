@@ -1,5 +1,5 @@
 import { Thumbnail } from '../thumbnail';
-import { LayerMetadata, SlicerMetadataParser } from './metadata-parser-base';
+import { ExtrusionDimensionMetadata, LayerMetadata, SlicerMetadataParser } from './metadata-parser-base';
 import { detectSlicer, parseSlicerMetadata } from './slicer-detector';
 
 /**
@@ -102,10 +102,15 @@ export class GCodeCommand {
   ) {}
 }
 
+/** What a parse call returns: the commands that were read, plus everything learned about the file along the way */
 export type ParseResult = { metadata: Metadata; commands: GCodeCommand[] };
+
+/** Everything the parser picked up about the file itself, as opposed to its movements */
 export type Metadata = {
   thumbnails: Record<string, Thumbnail>;
   layerMetadata?: LayerMetadata[];
+  /** Extrusion dimension changes from `;WIDTH:` / `;HEIGHT:` comments, in line order */
+  extrusionDimensions?: ExtrusionDimensionMetadata[];
   slicerName?: string;
 };
 
@@ -160,6 +165,15 @@ export class Parser {
   lines: string[] = [];
 
   private metadataParser: SlicerMetadataParser | null = null;
+
+  /**
+   * Thumbnail currently being accumulated, between a 'thumbnail begin' comment
+   * and its 'thumbnail end'. Kept on the instance (not local to a single
+   * parseMetadata call) so a block that spans multiple parseGCode calls -- as
+   * happens when streaming cuts the file mid-thumbnail -- keeps accumulating
+   * instead of being silently dropped.
+   */
+  private thumb?: Thumbnail;
 
   /**
    * How many lines have been parsed, counting every call.
@@ -231,6 +245,17 @@ export class Parser {
       }
     }
     const slicerMetadata = parseSlicerMetadata(commands, this.metadataParser);
+
+    if (slicerMetadata.extrusionDimensions.length > 0) {
+      // Accumulate across chunks like the layers below, shifting the parsers'
+      // chunk-local line indices into whole-file coordinates.
+      const dimensions = (this.metadata.extrusionDimensions ??= []);
+      const lineOffset = this.lineCount - lines.length;
+      for (const dimension of slicerMetadata.extrusionDimensions) {
+        dimensions.push({ ...dimension, lineIndex: dimension.lineIndex + lineOffset });
+      }
+    }
+
     if (slicerMetadata.layers.length > 0) {
       // Accumulate across chunks (like thumbnails above): a streaming parse
       // hands each chunk to parseGCode separately, and the parsers report
@@ -360,6 +385,12 @@ export class Parser {
    * until it encounters the end marker. Once complete, it validates the
    * thumbnail data before storing it in the thumbnails record.
    *
+   * The in-progress thumbnail lives on the parser instance, so a block that
+   * spans multiple calls (a streaming parse hands each chunk to parseGCode
+   * separately) accumulates across them. Each call returns only the
+   * thumbnails completed during that call; a block still open at the end of
+   * a call carries into the next one.
+   *
    * @example
    * ```typescript
    * const commands = parser.parseGCode(gcode).commands;
@@ -369,8 +400,6 @@ export class Parser {
   parseMetadata(metadata: GCodeCommand[]): Metadata {
     const thumbnails: Record<string, Thumbnail> = {};
 
-    let thumb: Thumbnail | undefined;
-
     for (const cmd of metadata) {
       const comment = cmd.comment;
       if (!comment) continue;
@@ -378,15 +407,15 @@ export class Parser {
       const idxThumbEnd = comment.indexOf('thumbnail end');
 
       if (idxThumbBegin > -1) {
-        thumb = Thumbnail.parse(comment.slice(idxThumbBegin + 15).trim());
-      } else if (thumb) {
+        this.thumb = Thumbnail.parse(comment.slice(idxThumbBegin + 15).trim());
+      } else if (this.thumb) {
         if (idxThumbEnd == -1) {
-          thumb.chars += comment.trim();
+          this.thumb.chars += comment.trim();
         } else {
-          if (thumb.isValid) {
-            thumbnails[thumb.size] = thumb;
+          if (this.thumb.isValid) {
+            thumbnails[this.thumb.size] = this.thumb;
           }
-          thumb = undefined;
+          this.thumb = undefined;
         }
       }
     }

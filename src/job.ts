@@ -11,6 +11,7 @@ import {
 } from './indexers';
 import { BoundingBox } from './bounding-box';
 import { Metadata } from './parser/gcode-parser';
+import { ExtrusionDimensionMetadata } from './parser/metadata-parser-base';
 import { JobStats } from './job-stats';
 
 /**
@@ -40,6 +41,12 @@ export class Job {
   inprogressPath: Path | undefined;
   public boundingBox: BoundingBox = new BoundingBox();
   private _metadata: Metadata | undefined;
+  /** Extrusion dimension changes from slicer metadata, in line order */
+  private extrusionDimensions: ExtrusionDimensionMetadata[] = [];
+  /** Position in extrusionDimensions up to which events have been applied */
+  private dimensionCursor = 0;
+  /** How many commands have been executed on this job — one per parsed line */
+  private executedCommandCount = 0;
 
   /** Statistics accumulated while interpreting the job's G-code */
   public stats: JobStats = new JobStats();
@@ -79,6 +86,46 @@ export class Job {
   set metadata(metadata: Metadata | undefined) {
     this._metadata = metadata;
     this.layersIndexer.setLayerMetadata(metadata?.layerMetadata ?? []);
+    this.setExtrusionDimensions(metadata?.extrusionDimensions ?? []);
+  }
+
+  /**
+   * Replaces the extrusion dimension metadata consumed by `beginCommand`
+   * @param extrusionDimensions - Dimension change events, in line order
+   * @remarks
+   * Mirrors LayersMetadataIndexer.setLayerMetadata: a streaming parse re-sets
+   * the same (growing) array each chunk, which keeps the cursor; swapping in a
+   * different array rewinds it so stale positions cannot leak.
+   */
+  private setExtrusionDimensions(extrusionDimensions: ExtrusionDimensionMetadata[]): void {
+    if (extrusionDimensions === this.extrusionDimensions) return;
+    this.extrusionDimensions = extrusionDimensions;
+    this.dimensionCursor = 0;
+  }
+
+  /**
+   * Advances the job to the next command the interpreter executes
+   * @remarks
+   * Called by the interpreter once per command, in file order. Every parsed
+   * line yields exactly one command, so counting them gives the current line
+   * index — which is how line-indexed slicer metadata is mapped onto the
+   * command stream: extrusion dimension changes (`;WIDTH:` / `;HEIGHT:`
+   * comments) recorded at or before this line are folded into the state here.
+   * The in-progress path is deliberately left alone: the move handlers break
+   * it via `continuePath` when the state no longer matches, which keeps a
+   * streamed parse identical to a one-shot parse — the interpreter resumes
+   * the last path at every chunk boundary, undoing any break performed here.
+   */
+  beginCommand(): void {
+    const lineIndex = this.executedCommandCount++;
+    while (
+      this.dimensionCursor < this.extrusionDimensions.length &&
+      this.extrusionDimensions[this.dimensionCursor].lineIndex <= lineIndex
+    ) {
+      const dimension = this.extrusionDimensions[this.dimensionCursor++];
+      if (dimension.width !== undefined) this.state.extrusionWidth = dimension.width;
+      if (dimension.height !== undefined) this.state.lineHeight = dimension.height;
+    }
   }
 
   /**
@@ -162,11 +209,37 @@ export class Job {
    */
   breakPath(newType: PathType): Path {
     this.finishPath();
-    const currentPath = new Path(newType, 0.6, 0.2, this.state.tool);
+    const currentPath = new Path(newType, this.state.extrusionWidth, this.state.lineHeight, this.state.tool);
     const pos = this.resolvePosition();
     currentPath.addPoint(pos.x, pos.y, pos.z);
     this.inprogressPath = currentPath;
     return currentPath;
+  }
+
+  /**
+   * Returns the path the next move of the given type should extend
+   * @param pathType - Type of the move about to be added
+   * @returns The in-progress path when it can continue, otherwise a fresh one
+   * @remarks
+   * The in-progress path continues only while its type and its extrusion
+   * dimensions still match the state; dimension metadata that changed the
+   * state since the path was started (see `beginCommand`) breaks it here, so
+   * every path carries a single width and height. Deciding this lazily at
+   * move time (and not when the metadata is applied) keeps streamed and
+   * one-shot parses identical: the interpreter resumes the last finished path
+   * at every chunk boundary, which would undo an eager break.
+   */
+  continuePath(pathType: PathType): Path {
+    const currentPath = this.inprogressPath;
+    if (
+      currentPath !== undefined &&
+      currentPath.travelType === pathType &&
+      currentPath.extrusionWidth === this.state.extrusionWidth &&
+      currentPath.lineHeight === this.state.lineHeight
+    ) {
+      return currentPath;
+    }
+    return this.breakPath(pathType);
   }
 
   /**

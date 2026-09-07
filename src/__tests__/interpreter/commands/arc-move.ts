@@ -25,11 +25,19 @@ describe('arcMove (G2/G3)', () => {
   });
 
   test('a positive-E arc still extrudes and grows the bounding box', () => {
-    const job = run(['G1 X10 Y10 Z1 E1', 'G2 X20 Y10 I5 J0 E1'].join('\n'));
+    const job = run(['M83', 'G1 X10 Y10 Z1 E1', 'G2 X20 Y10 I5 J0 E1'].join('\n'));
 
     const lastPath = job.paths[job.paths.length - 1];
     expect(lastPath.travelType).toEqual(PathType.Extrusion);
     expect(job.boundingBox.corners?.max.x).toEqual(20);
+  });
+
+  test('keeps the extruder position in sync for the moves that follow', () => {
+    // The arc itself derives no dimensions, but a later linear move computes
+    // its extruded length against the position the arc left behind.
+    const job = run(['M82', 'G1 X10 Y10 Z1 E1', 'G2 X20 Y10 I5 J0 E1.5'].join('\n'));
+
+    expect(job.state.e).toEqual(1.5);
   });
 
   test('keeps the current Y when an arc omits it', () => {

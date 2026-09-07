@@ -5,6 +5,7 @@ import { BoundingBox } from '../bounding-box';
 import { Scene, Color, Group, BatchedMesh, LineBasicMaterial } from 'three';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { createColorMaterial } from '../helpers/colorMaterial';
 
 describe('ObjectsManager', () => {
   let scene: Scene;
@@ -34,6 +35,10 @@ describe('ObjectsManager', () => {
     test('sets line width and height', () => {
       expect(objectsManager.lineWidth).toBe(0.4);
       expect(objectsManager.lineHeight).toBe(0.2);
+    });
+
+    test('leaves lineHeight undefined when not provided, so each path uses its own', () => {
+      expect(new ObjectsManager(new Scene(), 0.4).lineHeight).toBeUndefined();
     });
 
     test('sets extrusion width', () => {
@@ -164,6 +169,61 @@ describe('ObjectsManager', () => {
         manager.renderExtrusionLines([path], new Color(0x00ff00));
 
         // y drops by 0.1, z drops by half the line height
+        const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
+        expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9]));
+      });
+
+      test('offsets each path by its own line height', () => {
+        const manager = new ObjectsManager(new Scene(), 0.4);
+        const thin = new Path(PathType.Extrusion, 0.6, 0.2, 0);
+        thin.addPoint(1, 2, 3);
+        thin.addPoint(4, 5, 6);
+        const thick = new Path(PathType.Extrusion, 0.6, 0.4, 0);
+        thick.addPoint(1, 2, 3);
+        thick.addPoint(4, 5, 6);
+
+        manager.renderExtrusionLines([thin, thick], new Color(0x00ff00));
+
+        // z drops by half of each path's own height: 0.1 and 0.2
+        const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
+        expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9, 1, 1.9, 2.8, 4, 4.9, 5.8]));
+      });
+
+      test("a path's own height wins over the global line height", () => {
+        const manager = new ObjectsManager(new Scene(), 0.4, 0.4);
+        const path = new Path(PathType.Extrusion, 0.6, 0.2, 0);
+        path.addPoint(1, 2, 3);
+        path.addPoint(4, 5, 6);
+
+        manager.renderExtrusionLines([path], new Color(0x00ff00));
+
+        // z drops by half the path's own 0.2, not the global 0.4
+        const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
+        expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9]));
+      });
+
+      test('the global line height fills in for a path without its own', () => {
+        const manager = new ObjectsManager(new Scene(), 0.4, 0.4);
+        const path = new Path(PathType.Extrusion, undefined, undefined, 0);
+        path.addPoint(1, 2, 3);
+        path.addPoint(4, 5, 6);
+
+        manager.renderExtrusionLines([path], new Color(0x00ff00));
+
+        // z drops by half the global 0.4
+        const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
+        expect(positions).toEqual(new Float32Array([1, 1.9, 2.8, 4, 4.9, 5.8]));
+      });
+
+      test('the built-in default height applies when neither the path nor a global is set', () => {
+        const manager = new ObjectsManager(new Scene(), 0.4);
+        const path = new Path(PathType.Extrusion, undefined, undefined, 0);
+        path.addPoint(1, 2, 3);
+        path.addPoint(4, 5, 6);
+
+        manager.renderExtrusionLines([path], new Color(0x00ff00));
+
+        // z drops by half the built-in 0.2
         const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
         expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9]));
       });
@@ -318,6 +378,47 @@ describe('ObjectsManager', () => {
 
       expect(second.materials[0]).not.toBe(firstMaterial);
       second.dispose();
+    });
+
+    // The per-tool isolation above only holds because createColorMaterial builds a new
+    // material every call. Callers write straight into the uniforms (recoloring, clipping),
+    // so a cached/shared instance would make one write show up on every mesh that started
+    // from the same color.
+    test('createColorMaterial returns a fresh material per call, so uniform writes do not bleed', () => {
+      const first = createColorMaterial(0x0000ff, 0.3, 0.6, 1.1);
+      const second = createColorMaterial(0x0000ff, 0.3, 0.6, 1.1);
+
+      expect(second).not.toBe(first);
+      expect(second.uniforms).not.toBe(first.uniforms);
+
+      first.uniforms.uColor.value.setHex(0x00ff00);
+      first.uniforms.clipMinY.value = 5;
+
+      expect(second.uniforms.uColor.value.getHex()).toBe(0x0000ff);
+      expect(second.uniforms.clipMinY.value).toBe(-Infinity);
+
+      first.dispose();
+      second.dispose();
+    });
+
+    // three.js only grew BatchedMesh.addInstance after the oldest version we support, so
+    // createBatchMesh calls it optionally — that `?.` is what lets webgl1 browsers still
+    // get a batched mesh. Simulate the older build by removing the method: nothing may
+    // throw, and the geometry must still land in the mesh.
+    test('batches geometry on a three.js build with no BatchedMesh.addInstance', () => {
+      const addInstance = BatchedMesh.prototype.addInstance;
+      Reflect.deleteProperty(BatchedMesh.prototype, 'addInstance');
+
+      try {
+        expect(BatchedMesh.prototype.addInstance).toBeUndefined();
+        expect(() => objectsManager.renderExtrusionTubes([createTestPath()], new Color(0x0000ff))).not.toThrow();
+
+        const mesh = objectsManager.extrusionsGroup.children[0] as BatchedMesh;
+        expect(mesh).toBeInstanceOf(BatchedMesh);
+        expect(mesh.geometry.attributes.position.count).toBeGreaterThan(0);
+      } finally {
+        BatchedMesh.prototype.addInstance = addInstance;
+      }
     });
   });
 
@@ -796,6 +897,7 @@ describe('ObjectsManager', () => {
     test.each([
       ['setLineWidth', () => manager.setLineWidth(2)],
       ['setLineHeight', () => manager.setLineHeight(0.5)],
+      ['setLineHeight back to per-path', () => manager.setLineHeight(undefined)],
       ['setExtrusionWidth', () => manager.setExtrusionWidth(1.2)],
       ['setRenderTubes', () => manager.setRenderTubes(true)]
     ])('%s asks for a rebuild', (_name, change) => {

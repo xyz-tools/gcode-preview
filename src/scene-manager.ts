@@ -47,7 +47,10 @@ export type SceneManagerOptions = {
   lastSegmentColor?: ColorRepresentation;
   /** Width of rendered lines */
   lineWidth?: number;
-  /** Height of extruded lines */
+  /**
+   * Height of extruded lines, for paths whose height the slicer metadata did
+   * not announce (`;HEIGHT:` comments always win per path; built-in default 0.2)
+   */
   lineHeight?: number;
   /** Minimum layer height threshold */
   minLayerThreshold?: number;
@@ -63,7 +66,10 @@ export type SceneManagerOptions = {
   travelColor?: ColorRepresentation;
   /** Disable color gradient between layers */
   disableGradient?: boolean;
-  /** Width of extruded material */
+  /**
+   * Width of extruded material, for paths whose width the slicer metadata did
+   * not announce (`;WIDTH:` comments always win per path; built-in default 0.6)
+   */
   extrusionWidth?: number;
   /** Render paths as 3D tubes instead of lines */
   renderTubes?: boolean;
@@ -212,7 +218,13 @@ export class SceneManager {
     this.resize();
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.target.set(this.buildVolume.x / 2, 0, -this.buildVolume.y / 2);
+    if (this.buildVolume) {
+      this.controls.target.set(this.buildVolume.x / 2, 0, -this.buildVolume.y / 2);
+    } else {
+      // without a build volume there is no plate to center on, so aim at where
+      // a print on a typical ~200x200 plate lands, as v2.8 did
+      this.controls.target.set(100, 0, -100);
+    }
     this.disposables.push(this.controls);
     this.loadCamera();
 
@@ -428,10 +440,10 @@ export class SceneManager {
     this.objectsManager.setLineWidth(value);
   }
 
-  get lineHeight(): number {
+  get lineHeight(): number | undefined {
     return this.objectsManager.lineHeight;
   }
-  set lineHeight(value: number) {
+  set lineHeight(value: number | undefined) {
     this.objectsManager.setLineHeight(value);
   }
 

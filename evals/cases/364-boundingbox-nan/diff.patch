@@ -1,0 +1,14 @@
+diff --git a/src/bounding-box.ts b/src/bounding-box.ts
+--- a/src/bounding-box.ts
++++ b/src/bounding-box.ts
+@@ -10,10 +10,6 @@
+    * @param z - The Z coordinate.
+    */
+   public update(x: number, y: number, z: number): void {
+-    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
+-      console.error(`BoundingBox.update: ignoring non-finite point (${x}, ${y}, ${z})`);
+-      return;
+-    }
+     this.min.x = Math.min(this.min.x, x);
+     this.max.x = Math.max(this.max.x, x);
+     this.min.y = Math.min(this.min.y, y);

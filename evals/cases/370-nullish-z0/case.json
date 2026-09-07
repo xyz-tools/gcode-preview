@@ -1,0 +1,19 @@
+{
+  "id": "370-nullish-z0",
+  "skill": "lessons-learned-review",
+  "source": "PR #370, defect reintroduced into current code",
+  "expected_classes": [
+    "falsy-zero",
+    "gcode-spec"
+  ],
+  "must_find": [
+    {
+      "file": "src/interpreter/commands/arc-move.ts",
+      "defect": "`||` instead of `??` on state.x/y/z: an arc ending on X0, Y0 or Z0 silently keeps the previous coordinate because 0 is falsy",
+      "min_severity": "major"
+    }
+  ],
+  "must_not_find": [],
+  "runs": 3,
+  "grading_note": "Must identify that 0 is a legitimate coordinate that `||` discards."
+}

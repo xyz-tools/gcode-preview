@@ -60,7 +60,9 @@
     "deploy:preview": "live-server demo",
     "typedoc": "typedoc",
     "typedoc:watch": "typedoc --watch",
-    "check": "npm run test && npm run typeCheck && npm run lint && echo '😅 All checks passed!'"
+    "check": "npm run test && npm run typeCheck && npm run lint && echo '😅 All checks passed!'",
+    "evals": "node --no-warnings --experimental-strip-types evals/run.ts",
+    "evals:grade": "node --no-warnings --experimental-strip-types evals/grade.ts"
   },
   "dependencies": {
     "lil-gui": "^0.20.0",

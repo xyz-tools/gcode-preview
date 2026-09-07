@@ -51,8 +51,21 @@ export class ObjectsManager {
   private warnedMissingExtrusionColorIndices = new Set<number>();
 
   lineWidth: number;
-  lineHeight: number;
-  /** Width of extruded material. Undefined means each path uses its own width. */
+  /**
+   * Height of the extruded line for paths that carry none of their own.
+   * @remarks
+   * A path's own height (from slicer `;HEIGHT:` metadata) always wins; this
+   * fills in for paths without one, and the built-in 0.2 fills in when this
+   * is unset too.
+   */
+  lineHeight?: number;
+  /**
+   * Width of extruded material for paths that carry none of their own.
+   * @remarks
+   * A path's own width (from slicer `;WIDTH:` metadata) always wins; this
+   * fills in for paths without one, and the built-in 0.6 fills in when this
+   * is unset too.
+   */
   extrusionWidth?: number;
   renderTubes = false;
 
@@ -90,7 +103,7 @@ export class ObjectsManager {
   constructor(
     scene: Scene,
     lineWidth: number,
-    lineHeight = 0.2,
+    lineHeight?: number,
     extrusionWidth?: number,
     onRebuildNeeded?: RebuildRequest
   ) {
@@ -297,7 +310,7 @@ export class ObjectsManager {
     this.requestRebuild();
   }
 
-  setLineHeight(value: number) {
+  setLineHeight(value: number | undefined) {
     if (value === this.lineHeight) return;
     this.lineHeight = value;
     this.requestRebuild();
@@ -626,11 +639,11 @@ export class ObjectsManager {
    * Lines need to be offset: the gcode specifies the nozzle height, which is the
    * top of the extrusion. The line has no constant height in world coords, so it
    * is drawn at the horizontal midplane of the extrusion layer — otherwise the
-   * clipping plane cuts it.
+   * clipping plane cuts it. The height resolves per path: the path's own value
+   * (from slicer metadata) wins, then the global lineHeight, then the built-in
+   * default.
    */
   private packLineVertices(paths: Path[]): Float32Array {
-    const offset = -this.lineHeight / 2;
-
     let segments = 0;
     for (const path of paths) {
       segments += Math.max(0, Math.ceil((path.vertices.length - 3) / 3));
@@ -640,6 +653,7 @@ export class ObjectsManager {
     let next = 0;
 
     for (const path of paths) {
+      const offset = -(path.lineHeight ?? this.lineHeight ?? Path.DEFAULT_LINE_HEIGHT) / 2;
       const vertices = path.vertices;
       for (let i = 0; i < vertices.length - 3; i += 3) {
         positions[next++] = vertices[i];
@@ -684,8 +698,8 @@ export class ObjectsManager {
 
     paths.forEach((path) => {
       const geometry = path.geometry({
-        extrusionWidthOverride: this.extrusionWidth,
-        lineHeightOverride: this.lineHeight
+        extrusionWidthFallback: this.extrusionWidth,
+        lineHeightFallback: this.lineHeight
       });
 
       if (!geometry) return;

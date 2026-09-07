@@ -1,0 +1,12 @@
+diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -203,7 +203,7 @@
+ - or just `npm run build` or `npm run build:watch`
+ 
+ ## Feedback
+-If you have found a bug or if have an idea for a feature, don't hesitate to [create an issue on GitHub](https://github.com/xyz-tools/gcode-preview/issues/new) or [talk to us on Discord](https://discord.gg/w2bsGRE6S4).
++If you have found a bug or if you have an idea for a feature, don't hesitate to [create an issue on GitHub](https://github.com/xyz-tools/gcode-preview/issues/new) or [talk to us on Discord](https://discord.gg/w2bsGRE6S4).
+ 
+ ## Contributing
+ Want to help out? We are open to your ideas and always willing to get you started! [talk to us on Discord](https://discord.gg/w2bsGRE6S4).

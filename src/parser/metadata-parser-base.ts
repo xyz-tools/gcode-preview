@@ -15,11 +15,31 @@ export interface LayerMetadata {
 }
 
 /**
+ * A change of extrusion dimensions announced by slicer comments
+ * @remarks
+ * Slicers of the PrusaSlicer family announce the width and height of the
+ * extrusions that follow with standalone `;WIDTH:` / `;HEIGHT:` comments.
+ * These change many times within a single layer (per feature type, and per
+ * layer with adaptive layer height), so they are reported as individual
+ * line-indexed events rather than folded into the per-layer metadata.
+ */
+export interface ExtrusionDimensionMetadata {
+  /** Extrusion width in millimeters, when the comment announced one */
+  width?: number;
+  /** Line height in millimeters, when the comment announced one */
+  height?: number;
+  /** Line index in the original gcode from which the change applies */
+  lineIndex: number;
+}
+
+/**
  * Result of parsing slicer metadata from gcode comments
  */
 export interface SlicerMetadataResult {
   /** Array of layer metadata extracted from comments */
   layers: LayerMetadata[];
+  /** Extrusion dimension changes extracted from comments, in line order */
+  extrusionDimensions: ExtrusionDimensionMetadata[];
   /** Name of the detected slicer */
   slicerName?: string;
 }
@@ -40,7 +60,8 @@ export abstract class SlicerMetadataParser {
 
   /**
    * Checks if this parser can handle the given gcode based on comments
-   * @param commands - Array of gcode commands with comments
+   * @param commentCommands - Array of gcode commands with comments
+   * @param maxLines - How many of those commands to sample before giving up
    * @returns True if this parser can handle the gcode
    */
   canParse(commentCommands: GCodeCommand[], maxLines = 200): boolean {
@@ -67,4 +88,17 @@ export abstract class SlicerMetadataParser {
    * @returns Layer metadata extracted from comments
    */
   abstract parseLayerMetadata(commands: GCodeCommand[]): LayerMetadata[];
+
+  /**
+   * Parses extrusion dimension changes from gcode comments
+   * @param commands - Array of gcode commands with comments
+   * @returns Dimension change events extracted from comments, in line order
+   * @remarks
+   * Only dialects that announce per-path dimensions override this; the
+   * default reports none.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  parseExtrusionDimensions(commands: GCodeCommand[]): ExtrusionDimensionMetadata[] {
+    return [];
+  }
 }

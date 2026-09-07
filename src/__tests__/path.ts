@@ -99,26 +99,40 @@ describe('.geometry', () => {
     expect(result.parameters.lineHeight).toEqual(5);
   });
 
-  test('returns an ExtrusionGeometry with the extrusionWidthOverride when passed', () => {
-    const path = new Path(PathType.Travel, 9, undefined, undefined);
+  test("the path's own dimensions win over the fallbacks", () => {
+    const path = new Path(PathType.Travel, 9, 5, undefined);
 
     path.addPoint(0, 0, 0);
     path.addPoint(1, 2, 3);
 
-    const result = path.geometry({ extrusionWidthOverride: 2 }) as ExtrusionGeometry;
+    const result = path.geometry({ extrusionWidthFallback: 2, lineHeightFallback: 7 }) as ExtrusionGeometry;
 
-    expect(result.parameters.lineWidth).toEqual(2);
+    expect(result.parameters.lineWidth).toEqual(9);
+    expect(result.parameters.lineHeight).toEqual(5);
   });
 
-  test('returns an ExtrusionGeometry with the lineHeightOverride when passed', () => {
-    const path = new Path(PathType.Travel, undefined, 5, undefined);
+  test('the fallbacks fill in when the path has no dimensions of its own', () => {
+    const path = new Path(PathType.Travel, undefined, undefined, undefined);
 
     path.addPoint(0, 0, 0);
     path.addPoint(1, 2, 3);
 
-    const result = path.geometry({ lineHeightOverride: 7 }) as ExtrusionGeometry;
+    const result = path.geometry({ extrusionWidthFallback: 2, lineHeightFallback: 7 }) as ExtrusionGeometry;
 
+    expect(result.parameters.lineWidth).toEqual(2);
     expect(result.parameters.lineHeight).toEqual(7);
+  });
+
+  test('the built-in defaults apply when neither the path nor the caller supplies dimensions', () => {
+    const path = new Path(PathType.Travel, undefined, undefined, undefined);
+
+    path.addPoint(0, 0, 0);
+    path.addPoint(1, 2, 3);
+
+    const result = path.geometry() as ExtrusionGeometry;
+
+    expect(result.parameters.lineWidth).toEqual(Path.DEFAULT_EXTRUSION_WIDTH);
+    expect(result.parameters.lineHeight).toEqual(Path.DEFAULT_LINE_HEIGHT);
   });
 
   test('returns null if there are 0 vertices', () => {
