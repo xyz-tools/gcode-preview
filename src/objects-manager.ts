@@ -51,7 +51,8 @@ export class ObjectsManager {
   private warnedMissingExtrusionColorIndices = new Set<number>();
 
   lineWidth: number;
-  lineHeight: number;
+  /** Height of the extruded line. Undefined means each path uses its own height. */
+  lineHeight?: number;
   /** Width of extruded material. Undefined means each path uses its own width. */
   extrusionWidth?: number;
   renderTubes = false;
@@ -90,7 +91,7 @@ export class ObjectsManager {
   constructor(
     scene: Scene,
     lineWidth: number,
-    lineHeight = 0.2,
+    lineHeight?: number,
     extrusionWidth?: number,
     onRebuildNeeded?: RebuildRequest
   ) {
@@ -297,7 +298,7 @@ export class ObjectsManager {
     this.requestRebuild();
   }
 
-  setLineHeight(value: number) {
+  setLineHeight(value: number | undefined) {
     if (value === this.lineHeight) return;
     this.lineHeight = value;
     this.requestRebuild();
@@ -626,11 +627,10 @@ export class ObjectsManager {
    * Lines need to be offset: the gcode specifies the nozzle height, which is the
    * top of the extrusion. The line has no constant height in world coords, so it
    * is drawn at the horizontal midplane of the extrusion layer — otherwise the
-   * clipping plane cuts it.
+   * clipping plane cuts it. An explicitly set global lineHeight overrides every
+   * path; when it is unset, each path is offset by its own height.
    */
   private packLineVertices(paths: Path[]): Float32Array {
-    const offset = -this.lineHeight / 2;
-
     let segments = 0;
     for (const path of paths) {
       segments += Math.max(0, Math.ceil((path.vertices.length - 3) / 3));
@@ -640,6 +640,7 @@ export class ObjectsManager {
     let next = 0;
 
     for (const path of paths) {
+      const offset = -(this.lineHeight ?? path.lineHeight) / 2;
       const vertices = path.vertices;
       for (let i = 0; i < vertices.length - 3; i += 3) {
         positions[next++] = vertices[i];

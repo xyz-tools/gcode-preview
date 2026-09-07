@@ -15,6 +15,7 @@ Join us on <a href="https://discord.gg/w2bsGRE6S4">discord</a>
 - build volume
 - orthographic camera
 - slicer detection (PrusaSlicer family, Cura, Simplify3D, Slic3r)
+- per-path extrusion width & line height from `;WIDTH:` / `;HEIGHT:` slicer comments (adaptive layer height)
 - drag & drop
 - examples for various frameworks
 
@@ -67,7 +68,7 @@ The main options accepted by `new GCodePreview({ ... })` (see the
 - `buildVolume` — renders the build volume (see below)
 - colors: `backgroundColor`, `extrusionColor`, `travelColor`, `topLayerColor`, `lastSegmentColor`, `boundingBoxColor`
 - render toggles: `renderExtrusion`, `renderTravel`, `renderTubes`, `disableGradient`
-- geometry: `lineWidth`, `lineHeight`, `extrusionWidth`
+- geometry: `lineWidth`, `lineHeight`, `extrusionWidth` — when `lineHeight` / `extrusionWidth` are unset, each path uses the dimensions from `;HEIGHT:` / `;WIDTH:` slicer comments (adaptive layer height renders correctly); setting them forces a single global value
 - layer range: `startLayer`, `endLayer`
 - camera: `orthographic`, `initialCameraPosition`
 - streaming: `liveRenderInterval` (throttles progressive rendering)
@@ -112,6 +113,12 @@ The interpreter currently handles:
 | `T0`–`T7` | tool selection |
 
 Commands without a handler are parsed but ignored by the interpreter.
+
+Standalone `;WIDTH:<mm>` and `;HEIGHT:<mm>` comments (emitted by PrusaSlicer,
+SuperSlicer, OrcaSlicer and Bambu Studio) set the extrusion width and line
+height of the paths that follow, so prints sliced with adaptive layer height
+render with the true dimensions of each path. A global `lineHeight` or
+`extrusionWidth` option overrides them.
 
 ### Multi-color support
 

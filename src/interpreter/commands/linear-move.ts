@@ -31,12 +31,8 @@ export const linearMove: CommandHandler = (command, job) => {
   job.stats.points++;
 
   const { state } = job;
-  let currentPath = job.inprogressPath;
   const pathType = e > 0 ? PathType.Extrusion : PathType.Travel;
-
-  if (currentPath === undefined || currentPath.travelType !== pathType) {
-    currentPath = job.breakPath(pathType);
-  }
+  const currentPath = job.continuePath(pathType);
 
   if (e > 0) {
     job.stats.extrusionDistance += e;

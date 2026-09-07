@@ -28,15 +28,11 @@ export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler
     const from = job.resolvePosition();
 
     const cw = command.gcode === 'g2';
-    let currentPath = job.inprogressPath;
     // `e > 0`, matching g0/g1: a negative E is a retraction, i.e. a travel move with no
     // material laid down. The looser `e ?` used to misclassify a retracting arc as
     // Extrusion, so it rendered as deposited filament and stretched the bounding box.
     const pathType = e > 0 ? PathType.Extrusion : PathType.Travel;
-
-    if (currentPath === undefined || currentPath.travelType !== pathType) {
-      currentPath = job.breakPath(pathType);
-    }
+    const currentPath = job.continuePath(pathType);
 
     if (e > 0) {
       job.stats.extrusionDistance += e;

@@ -586,6 +586,82 @@ describe('.finishPath', () => {
   });
 });
 
+describe('.breakPath', () => {
+  test('creates a path carrying the state dimensions and tool', () => {
+    const job = new Job();
+    job.state.extrusionWidth = 0.45;
+    job.state.lineHeight = 0.16;
+    job.state.tool = 2;
+
+    const path = job.breakPath(PathType.Extrusion);
+
+    expect(path.extrusionWidth).toEqual(0.45);
+    expect(path.lineHeight).toEqual(0.16);
+    expect(path.tool).toEqual(2);
+  });
+
+  test('defaults to 0.6 width and 0.2 height on a fresh state', () => {
+    const path = new Job().breakPath(PathType.Extrusion);
+
+    expect(path.extrusionWidth).toEqual(0.6);
+    expect(path.lineHeight).toEqual(0.2);
+  });
+});
+
+describe('.continuePath', () => {
+  test('breaks a new path when none is in progress', () => {
+    const job = new Job();
+
+    const path = job.continuePath(PathType.Extrusion);
+
+    expect(path).toBe(job.inprogressPath);
+    expect(path.travelType).toEqual(PathType.Extrusion);
+  });
+
+  test('continues the in-progress path while type and dimensions match', () => {
+    const job = new Job();
+    const path = job.breakPath(PathType.Extrusion);
+
+    expect(job.continuePath(PathType.Extrusion)).toBe(path);
+  });
+
+  test('breaks on a path type change', () => {
+    const job = new Job();
+    const path = job.breakPath(PathType.Extrusion);
+    path.addPoint(1, 1, 0);
+
+    const next = job.continuePath(PathType.Travel);
+
+    expect(next).not.toBe(path);
+    expect(next.travelType).toEqual(PathType.Travel);
+  });
+
+  test('breaks when the state extrusion width changed', () => {
+    const job = new Job();
+    const path = job.breakPath(PathType.Extrusion);
+    path.addPoint(1, 1, 0);
+    job.state.extrusionWidth = 0.45;
+
+    const next = job.continuePath(PathType.Extrusion);
+
+    expect(next).not.toBe(path);
+    expect(next.extrusionWidth).toEqual(0.45);
+    expect(job.paths).toEqual([path]);
+  });
+
+  test('breaks when the state line height changed', () => {
+    const job = new Job();
+    const path = job.breakPath(PathType.Extrusion);
+    path.addPoint(1, 1, 0);
+    job.state.lineHeight = 0.3;
+
+    const next = job.continuePath(PathType.Extrusion);
+
+    expect(next).not.toBe(path);
+    expect(next.lineHeight).toEqual(0.3);
+  });
+});
+
 describe('.resumeLastPath', () => {
   test('pops the last path and makes it in progress', () => {
     const job = new Job();
