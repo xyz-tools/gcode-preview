@@ -114,6 +114,10 @@ The interpreter currently handles:
 
 Commands without a handler are parsed but ignored by the interpreter.
 
+`G92` stores offsets for X, Y, Z, and extrusion (E); `G92.1` clears them without moving.
+`state.e` tracks cumulative physical extrusion, with logical position `state.e - state.positionShift.e`.
+Extrusion moves still use relative E values; `M82`/`M83` mode switching is not yet implemented.
+
 ### Multi-color support
 
 GCode files that were sliced for a multi-tool system can be previewed as such. Pass an array of colors as the `extrusionColor` constructor option (or assign `preview.sceneManager.extrusionColor` at runtime), where the index in the array corresponds to the index of the tool: T0..T7. 

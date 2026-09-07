@@ -20,8 +20,8 @@ describe('setPosition (G92)', () => {
     expect(job.state.x).toEqual(10);
     expect(job.state.y).toEqual(20);
     expect(job.state.z).toEqual(5);
-    expect(job.state.positionShift).toEqual({ x: 10, y: 15, z: 4 });
-    expect(job.state.e).toEqual(2);
+    expect(job.state.positionShift).toEqual({ x: 10, y: 15, z: 4, e: -2 });
+    expect(job.state.e).toEqual(0);
   });
 
   test('keeps the shift of the axes a partial G92 omits', () => {
@@ -29,10 +29,11 @@ describe('setPosition (G92)', () => {
     const job = new Job();
     job.state.y = 7;
     job.state.e = 3;
+    job.state.positionShift.e = 1;
 
     setPosition(command, job);
 
-    expect(job.state.positionShift).toEqual({ x: 0, y: 2, z: 0 });
+    expect(job.state.positionShift).toEqual({ x: 0, y: 2, z: 0, e: 1 });
     expect(job.state.e).toEqual(3);
   });
 
@@ -43,7 +44,7 @@ describe('setPosition (G92)', () => {
 
     setPosition(command, job);
 
-    expect(job.state.positionShift).toEqual({ x: 0, y: 0, z: 2 });
+    expect(job.state.positionShift).toEqual({ x: 0, y: 0, z: 2, e: 0 });
   });
 
   test('a bare G92 makes the current position the origin of every axis', () => {
@@ -56,8 +57,8 @@ describe('setPosition (G92)', () => {
 
     setPosition(command, job);
 
-    expect(job.state.positionShift).toEqual({ x: 1, y: 2, z: 3 });
-    expect(job.state.e).toEqual(0);
+    expect(job.state.positionShift).toEqual({ x: 1, y: 2, z: 3, e: 4 });
+    expect(job.state.e).toEqual(4);
   });
 
   test('a G92 with only non-axis words is not treated as a bare reset', () => {
@@ -65,10 +66,11 @@ describe('setPosition (G92)', () => {
     const job = new Job();
     job.state.x = 1;
     job.state.e = 4;
+    job.state.positionShift.e = 2;
 
     setPosition(command, job);
 
-    expect(job.state.positionShift).toEqual({ x: 0, y: 0, z: 0 });
+    expect(job.state.positionShift).toEqual({ x: 0, y: 0, z: 0, e: 2 });
     expect(job.state.e).toEqual(4);
   });
 
@@ -78,7 +80,7 @@ describe('setPosition (G92)', () => {
 
     setPosition(command, job);
 
-    expect(job.state.positionShift).toEqual({ x: -5, y: 0, z: 0 });
+    expect(job.state.positionShift).toEqual({ x: -5, y: 0, z: 0, e: 0 });
     expect(job.state.x).toBeUndefined();
   });
 
@@ -114,7 +116,18 @@ describe('setPosition (G92)', () => {
 
     expect(job.paths.length).toEqual(1);
     expect(job.paths[0].vertices).toEqual([0, 0, 0, 10, 0, 0, 20, 0, 0]);
-    expect(job.state.e).toEqual(0);
+    expect(job.state.e).toEqual(2);
+    expect(job.state.positionShift.e).toEqual(1);
+  });
+
+  test('repeated E rebasing replaces the offset without moving the extruder', () => {
+    const job = run(['G1 X10 E10', 'G92 E2', 'G1 X20 E3', 'G92 E-1'].join('\n'));
+
+    expect(job.state.e).toEqual(13);
+    expect(job.state.positionShift.e).toEqual(14);
+    expect(job.paths.length).toEqual(1);
+    expect(job.paths[0].vertices).toEqual([0, 0, 0, 10, 0, 0, 20, 0, 0]);
+    expect(job.stats.extrusionDistance).toEqual(13);
   });
 
   test('a Z re-zero translates the following Z moves', () => {
