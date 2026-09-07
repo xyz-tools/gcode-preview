@@ -89,6 +89,12 @@ considered and history belong in the PR, not in a comment block above the functi
 Code comments should say what the next reader needs *at that line*; the story of how
 the change came about belongs in the PR, which stays reachable from `git blame`.
 
+**Delete what doesn't apply.** The templates are a starting point, not a form to
+fill in. A heading with nothing under it, or a row of "N/A", costs the reviewer a
+scroll and tells them nothing — drop the section entirely. The exception is a
+change whose *absence* is the point: a performance PR that renders identically
+should say so, because that claim is what's being reviewed.
+
 ## Before submitting a PR
 
 Run the full check suite:

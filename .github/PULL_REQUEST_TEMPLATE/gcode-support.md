@@ -1,3 +1,5 @@
+<!-- Delete any section that doesn't apply. -->
+
 ## Command(s)
 
 <!--
@@ -41,7 +43,7 @@ becoming known can shift layer detection or travel/extrusion classification.
 
 ## Screenshots
 
-<!-- If the command has a visible effect, before/after from the demo. Otherwise "N/A". -->
+<!-- If the command has a visible effect, before/after from the demo. Delete this section otherwise. -->
 
 ## Checks
 

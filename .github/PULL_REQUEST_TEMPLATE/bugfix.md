@@ -1,3 +1,5 @@
+<!-- Delete any section that doesn't apply. -->
+
 ## Problem
 
 <!--
@@ -30,7 +32,7 @@ differently for files that already worked, so it isn't buried in the diff.
 
 ## Public API changes
 
-<!-- New, changed, removed or deprecated exports, options, methods or types. Usually "None". -->
+<!-- New, changed, removed or deprecated exports, options, methods or types. Delete if none. -->
 
 ## Before / After
 

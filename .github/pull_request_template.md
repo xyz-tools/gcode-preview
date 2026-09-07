@@ -1,3 +1,5 @@
+<!-- Delete any section that doesn't apply. -->
+
 ## Summary
 
 <!--
@@ -14,21 +16,23 @@ See "Writing a good PR description" in CONTRIBUTING.md.
 
 <!--
 Anything that renders, parses or outputs differently for gcode that already
-worked before — including side effects of a bug fix. "None" is a valid answer,
-but say it explicitly rather than leaving this blank.
+worked before — including side effects of a bug fix. If nothing changes for
+existing files, delete this section.
 -->
 
 ## Public API changes
 
 <!--
 New, changed, removed or deprecated exports, options, methods or types.
-Renames must keep the old name as a @deprecated alias. "None" is fine.
+Renames must keep the old name as a @deprecated alias. Delete this section if
+the public surface is untouched.
 -->
 
 ## Screenshots
 
 <!--
-Required for anything with a visible effect. Before/after side by side helps:
+Required for anything with a visible effect; delete this section otherwise.
+Before/after side by side helps:
 
 | Before | After |
 | ------ | ----- |

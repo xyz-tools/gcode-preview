@@ -1,3 +1,5 @@
+<!-- Delete any section that doesn't apply. -->
+
 ## Summary
 
 <!--
@@ -42,7 +44,7 @@ If output does change, describe exactly how.
 
 ## Public API changes
 
-<!-- New or changed options/methods. Renames keep a @deprecated alias. Usually "None". -->
+<!-- New or changed options/methods. Renames keep a @deprecated alias. Delete if none. -->
 
 ## Screenshots
 

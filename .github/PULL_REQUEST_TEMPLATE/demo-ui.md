@@ -1,3 +1,5 @@
+<!-- Delete any section that doesn't apply. -->
+
 ## Summary
 
 <!--
@@ -33,11 +35,11 @@ Which presets/files were actually loaded and what you saw. For example:
 
 ## Behavior changes
 
-<!-- Library-side effects, if any. Demo-only changes can say "None (demo only)". -->
+<!-- Library-side effects, if any. Delete this section for demo-only changes. -->
 
 ## Public API changes
 
-<!-- New or changed options/methods the demo relies on. Usually "None". -->
+<!-- New or changed options/methods the demo relies on. Delete if none. -->
 
 ## Checks
 
