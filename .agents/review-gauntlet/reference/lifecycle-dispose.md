@@ -1,13 +1,6 @@
----
-name: review-lifecycle-dispose
-description: Reviews changes for lifecycle, disposal, and init-order bugs (leaked three.js resources/GUI/listeners/rAF, disposables growth, constructor order, throwing init). Use when reviewing changes touching constructors, dispose/clear, SceneManager, ObjectsManager, devgui, or event/rAF setup.
----
-
 # Lifecycle & Disposal Review
 
-Focused code review of the current changes for ONE class of defect: resource lifecycle — missing disposal, unbounded disposable growth, initialization-order hazards, and constructors that throw. Report findings only for this class — no general style feedback.
-
-**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
+Defect class: resource lifecycle — missing disposal, unbounded disposable growth, initialization-order hazards, and constructors that throw.
 
 ## What to hunt
 - Every `new` three.js resource (geometry, material, texture, BatchedMesh, LineBox), lil-gui/Stats panel, event listener, and rAF loop added in the diff must have a matching `dispose()`/`removeEventListener`/`cancelAnimationFrame` path reachable from the preview's `dispose()`.

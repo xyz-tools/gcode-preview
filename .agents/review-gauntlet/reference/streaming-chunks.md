@@ -1,13 +1,6 @@
----
-name: review-streaming-chunks
-description: Reviews changes for streaming/chunk-boundary bugs in the parser and stream readers. Use when reviewing changes touching parseGCode/parseStream, readStream/splitChunk, chunked input, or any parser instance state.
----
-
 # Streaming Chunk-Boundary Review
 
-Focused code review of the current changes for ONE class of defect: state and data lost or corrupted at streamed-chunk boundaries. Report findings only for this class — no general style feedback.
-
-**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
+Defect class: state and data lost or corrupted at streamed-chunk boundaries.
 
 ## What to hunt
 - Parser/interpreter state held in a local variable inside a per-chunk function instead of instance state — anything half-built when a chunk ends (thumbnail blocks, multi-line comments, partial lines) is silently lost.

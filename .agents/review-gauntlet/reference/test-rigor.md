@@ -1,13 +1,6 @@
----
-name: review-test-rigor
-description: Reviews changes for weak or misleading tests (no red-first regression, mocked shortcuts, asserting execution instead of behavior). Use when reviewing any change that fixes a bug or touches files under src/__tests__ or test tooling.
----
-
 # Test Rigor Review
 
-Focused code review of the current changes for ONE class of defect: tests that don't actually protect against the bug they claim to cover. Report findings only for this class — no general style feedback.
-
-**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
+Defect class: tests that don't actually protect against the bug they claim to cover.
 
 ## What to hunt
 - Bug fixes without a red-first regression test: the test must fail on the pre-fix code. If it can't be shown to go red, it proves nothing.

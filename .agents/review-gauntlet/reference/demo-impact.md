@@ -1,13 +1,6 @@
----
-name: review-demo-impact
-description: Reviews changes for options, controls, and presets that are silently turned into no-ops — accepted by the API but read by nothing, or overridden by a new value source. Use when reviewing changes to option resolution, defaults, precedence, or anything the demo/dev-gui drives.
----
-
 # Demo & Option Impact Review
 
-Focused code review of the current changes for ONE class of defect: a public option, demo control, or preset value that still *looks* wired but no longer does anything. Report findings only for this class — no general style feedback.
-
-**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
+Defect class: a public option, demo control, or preset value that still *looks* wired but no longer does anything.
 
 ## What to hunt
 - **Demoted options.** An option that used to win now loses — e.g. changed from override to fallback behind a per-path/per-layer value, so it is never consulted on real files. Trace every changed default or precedence chain to the value that actually reaches the geometry.

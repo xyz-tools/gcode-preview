@@ -1,13 +1,6 @@
----
-name: review-public-api
-description: Reviews changes for public API surface discipline (new exports need rationale, no accidental internals, deprecated aliases on renames, v2.x contracts). Use when reviewing changes touching exports, index.ts, class member visibility, or the GCodePreview/WebGLPreview options.
----
-
 # Public API Surface Review
 
-Focused code review of the current changes for ONE class of defect: unjustified or accidental growth/breakage of the public API surface. Report findings only for this class — no general style feedback. Maintainer's literal words: "the public api is expanded and this is never taken lightly. Please add your rationale."
-
-**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
+Defect class: unjustified or accidental growth/breakage of the public API surface. Maintainer's literal words: "the public api is expanded and this is never taken lightly. Please add your rationale."
 
 ## What to hunt
 - List EVERY newly public/exported symbol in the diff: new `export`s (index.ts and per-file), class members that gained `public` (or lost `private`/`#`), new options on the preview constructor, new exported types. Each one needs an explicit rationale — if the PR body doesn't give one, that is a finding.

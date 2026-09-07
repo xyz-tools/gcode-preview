@@ -1,13 +1,6 @@
----
-name: review-gcode-spec
-description: Reviews new or changed G-code command handlers against documented firmware semantics (Marlin/Smoothieware/RepRapFirmware). Use when reviewing changes touching the interpreter, command dispatch, or offset/position state.
----
-
 # G-code Spec Conformance Review
 
-Focused code review of the current changes for ONE class of defect: command handlers that don't match documented firmware semantics. Report findings only for this class — no general style feedback.
-
-**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
+Defect class: command handlers that don't match documented firmware semantics.
 
 ## What to hunt
 - Every new/changed handler in the interpreter must be checked against the firmware docs it claims to implement (Marlin, Smoothieware, RepRapFirmware). Cite the doc; don't trust the PR body's paraphrase.

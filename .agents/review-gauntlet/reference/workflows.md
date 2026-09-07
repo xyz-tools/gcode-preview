@@ -1,13 +1,6 @@
----
-name: review-workflows
-description: Reviews changes for CI/workflow correctness (wrong ref checked out, wasted runs, missing permissions, publish/provenance config). Use when reviewing changes touching .github/workflows, release config, or package.json publish fields.
----
-
 # Workflow Correctness Review
 
-Focused code review of the current changes for ONE class of defect: CI/CD workflows that test the wrong thing, waste runs, over-privilege, or break publishing. Report findings only for this class — no general style feedback.
-
-**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
+Defect class: CI/CD workflows that test the wrong thing, waste runs, over-privilege, or break publishing.
 
 ## What to hunt
 - Checkout ref: PR-triggered workflows must build/test/deploy the PR head, not `develop`. Check `actions/checkout` `ref:` (or its absence) against the trigger (`pull_request` vs `pull_request_target` vs `push`). This shipped twice (#162 previews, #163 tests — PRs were effectively untested).

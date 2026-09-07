@@ -1,13 +1,6 @@
----
-name: review-behavior-changes
-description: Reviews changes for undisclosed behavior changes — same input, different output — and missing rationale/doc updates. Use when reviewing any change to parser, interpreter, rendering, or public API semantics before the PR body is finalized.
----
-
 # Behavior-Change Disclosure Review
 
-Focused code review of the current changes for ONE class of defect: output changes for the same input that are not explicitly called out, and design choices without stated rationale. Maintainer rule (PR #345): "Every change, intended or not, must be documented and visible." Report findings only for this class — no general style feedback.
-
-**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
+Defect class: output changes for the same input that are not explicitly called out, and design choices without stated rationale. Maintainer rule (PR #345): "Every change, intended or not, must be documented and visible."
 
 ## What to hunt
 - Any change that alters what a given G-code file renders as: vertex positions, layer boundaries, colors, clipping, arc tessellation, travel-vs-extrusion classification, bounding box, stats (`lineCount`, layer counts). If the same input now produces different output, the PR body must say so — intended *or* incidental.

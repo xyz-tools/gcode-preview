@@ -1,13 +1,6 @@
----
-name: review-nan-guards
-description: Reviews changes for NaN/non-finite propagation into state, buffers, bounding boxes, or camera math. Use when reviewing changes touching parsing of numbers, geometry generation, BoundingBox, or camera/frustum code.
----
-
 # NaN Guard Review
 
-Focused code review of the current changes for ONE class of defect: NaN/Infinity values entering and silently poisoning state, vertex buffers, bounding boxes, or camera math. Report findings only for this class — no general style feedback.
-
-**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
+Defect class: NaN/Infinity values entering and silently poisoning state, vertex buffers, bounding boxes, or camera math.
 
 ## What to hunt
 - `parseFloat`/`Number()` results used without an `isFinite`/`Number.isFinite` check — malformed words like `G1 Xabc` yield NaN, and `??` does NOT catch NaN (NaN is not nullish).

@@ -1,13 +1,6 @@
----
-name: review-render-allocations
-description: Reviews changes for per-render allocations, repeated derived-data calls, and hidden buffer copies. Use when reviewing changes touching rendering, ObjectsManager, SceneManager, Job, geometry construction, or the animation loop.
----
-
 # Render Allocation Review
 
-Focused code review of the current changes for ONE class of defect: per-render allocations and hidden copies — work re-done or memory re-allocated on every frame/pass that should happen once. Report findings only for this class — no general style feedback.
-
-**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
+Defect class: per-render allocations and hidden copies — work re-done or memory re-allocated on every frame/pass that should happen once.
 
 ## What to hunt
 - `filter`/`map`/`slice`/`concat`/spread or object/array construction inside `render()`, `animate()`, the rAF loop, `renderAnimated`, or anything called per frame or per path in ObjectsManager/SceneManager.

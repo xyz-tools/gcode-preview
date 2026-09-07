@@ -1,13 +1,6 @@
----
-name: review-optional-guards
-description: Reviews changes for unguarded access on optional public config (buildVolume, extrusionColor arrays, devgui state). Use when reviewing changes touching GCodePreview options, SceneManager, BuildVolume, DevGUI, or tool/color lookups.
----
-
 # Optional-Config Guard Review
 
-Focused code review of the current changes for ONE class of defect: member access on values the public API allows to be undefined or absent. This class has crashed the whole library repeatedly. Report findings only for this class — no general style feedback.
-
-**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
+Defect class: member access on values the public API allows to be undefined or absent. This class has crashed the whole library repeatedly.
 
 ## What to hunt
 - `buildVolume` is optional in the public constructor options and can also be unset/cleared at runtime. Any `this.buildVolume.x`, `_buildVolume.*`, camera/`controls.target` centering math, or LineBox construction from it needs an undefined guard *and* a sensible fallback (approximate centering, not a throw — v2.8 contract, restored in #455).

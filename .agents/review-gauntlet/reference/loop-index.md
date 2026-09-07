@@ -1,13 +1,6 @@
----
-name: review-loop-index
-description: Reviews changes for loop and index hygiene bugs (splice-in-loop, shared cursors across index spaces, off-by-one bounds, double-indexing on re-entry). Use when reviewing changes touching Job indexers, render loops, path/array iteration, or resume logic.
----
-
 # Loop & Index Hygiene Review
 
-Focused code review of the current changes for ONE class of defect: loop and index errors — mutation during iteration, cursors spanning multiple index spaces, boundary off-by-ones, and re-entrant double-indexing. Report findings only for this class — no general style feedback.
-
-**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
+Defect class: loop and index errors — mutation during iteration, cursors spanning multiple index spaces, boundary off-by-ones, and re-entrant double-indexing.
 
 ## What to hunt
 - Mutating an array while iterating it: `splice` inside `for`/`forEach` over the same array skips the next element (Job's `indexPath` did exactly this to its indexer list). Iterate a copy, iterate backwards, or collect-then-remove.

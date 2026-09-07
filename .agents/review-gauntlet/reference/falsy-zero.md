@@ -1,13 +1,6 @@
----
-name: review-falsy-zero
-description: Reviews changes for falsy-zero bugs (`x || fallback` / truthy checks on values where 0 is legitimate). Use when reviewing changes touching the parser, interpreter, state, coordinates, extrusion, indices, or counts.
----
-
 # Falsy-Zero Review
 
-Focused code review of the current changes for ONE class of defect: `x || fallback` or truthy `if (x)` on values where `0` is a legitimate value. Report findings only for this class — no general style feedback. This is the #1 shipped-bug source in this repo.
-
-**Before reporting, read `.claude/skills/review-checklist/SKILL.md`** — it defines target resolution, empirical verification, severity tags, the Problem/Example/Recommendation format, and the confirm-before-posting protocol.
+Defect class: `x || fallback` or truthy `if (x)` on values where `0` is a legitimate value. This is the #1 shipped-bug source in this repo.
 
 ## What to hunt
 - `|| fallback` on coordinates X/Y/Z, extrusion E, arc offsets I/J/K/R, feedrate F — `Z0`, `E0`, `X0` are all valid G-code. Must be `??` or explicit `!== undefined`.
