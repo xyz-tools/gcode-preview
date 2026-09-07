@@ -109,6 +109,7 @@ The interpreter currently handles:
 | `G31` | straight probe |
 | `G38.2`–`G38.5` | probe family |
 | `G92` | set position |
+| `G92.1` | reset coordinate system offsets |
 | `T0`–`T7` | tool selection |
 
 Commands without a handler are parsed but ignored by the interpreter.
