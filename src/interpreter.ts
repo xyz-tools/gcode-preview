@@ -10,9 +10,11 @@ import {
   resetPositionShift,
   selectTool,
   setAbsolutePositioning,
-  setRelativePositioning
+  setRelativePositioning,
+  setAbsoluteExtrusion,
+  setRelativeExtrusion,
   setPosition,
-  probe,
+  probe
 } from './interpreter/commands';
 
 /** Options for the {@link Interpreter} */

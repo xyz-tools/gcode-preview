@@ -1,7 +1,6 @@
 import { PathType } from '../../path';
 import { ArcTessellator, ArcTessellatorOptions } from '../../arc-tessellator';
 import type { CommandHandler } from '../../interpreter';
-import { resolvePosition } from './resolve-position';
 
 /**
  * Builds an arc move handler (G2/G3) around its own tessellator
@@ -16,21 +15,10 @@ import { resolvePosition } from './resolve-position';
 export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler => {
   const arcTessellator = new ArcTessellator(options);
   return (command, job) => {
-    const { e, i, j, r } = command.params;
+    const { x, y, z, e, i, j, r } = command.params;
     const { state } = job;
-    // The endpoint arrives in logical coordinates; translate it into physical
-    // space up front so the tessellator's derived values agree with `from`.
-    // I/J/R are relative distances and need no shift.
-    const { positionShift } = state;
-    const x = command.params.x === undefined ? undefined : command.params.x + positionShift.x;
-    const y = command.params.y === undefined ? undefined : command.params.y + positionShift.y;
-    const z = command.params.z === undefined ? undefined : command.params.z + positionShift.z;
     // Starting position for the arc, with any un-homed axis assumed at the origin.
     const from = job.resolvePosition();
-    const relative = state.positioning === 'relative';
-    const targetX = resolvePosition(x, state.x, relative);
-    const targetY = resolvePosition(y, state.y, relative);
-    const targetZ = resolvePosition(z, state.z, relative);
 
     const cw = command.gcode === 'g2';
     // applyExtrusion keeps the extruder position in sync for the moves that follow; the
@@ -47,12 +35,19 @@ export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler
       job.stats.extrusionDistance += extruded;
     }
 
-    // The tessellator runs on the resolved position and emits every point,
-    // ending with the exact endpoint -- which equals resolvePosition() after
-    // the state update below, so no separate endpoint emission is needed.
+    // Start the path before moving the state so it retains the arc's origin.
+    // Only absolute endpoints receive the G92 shift; I/J/R remain offsets.
+    if (state.positioning === 'relative') {
+      state.moveBy(x, y, z);
+    } else {
+      state.moveTo(x, y, z);
+    }
+
+    // The tessellator emits the exact endpoint; omitted axes retain their
+    // previous (possibly unknown) coordinates in the state.
     arcTessellator.tessellate(
       from,
-      { cw, x: targetX, y: targetY, z: targetZ, i, j, r },
+      { cw, x: state.x, y: state.y, z: state.z, i, j, r },
       (px, py, pz) => {
         currentPath.addPoint(px, py, pz);
         if (pathType === PathType.Extrusion) {
@@ -61,13 +56,6 @@ export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler
       },
       state.units
     );
-
-    // An axis the command omits keeps its previous (possibly unknown) value,
-    // preserving isHomed semantics: resolvePosition returns the current
-    // coordinate untouched when the command carries no value for the axis.
-    state.x = targetX;
-    state.y = targetY;
-    state.z = targetZ;
   };
 };
 

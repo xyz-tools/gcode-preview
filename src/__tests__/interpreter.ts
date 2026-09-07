@@ -171,9 +171,19 @@ describe('positioning modes through the whole pipeline', () => {
       expect(point.every((value) => Number.isFinite(value))).toBe(true);
       expect(distanceTo(point, 15, 20)).toBeCloseTo(5);
     });
-    // A partial arc would stay on one side of the centre; a full circle spans both.
-    expect(Math.min(...arc.map((point) => point[0]))).toBeCloseTo(10);
-    expect(Math.max(...arc.map((point) => point[0]))).toBeCloseTo(20);
+    // Sum the signed angles instead of requiring a tessellation vertex at
+    // every cardinal point: adaptive chord counts need not be divisible by four.
+    let previous = [10, 20];
+    let sweep = 0;
+    for (const point of arc) {
+      const ax = previous[0] - 15;
+      const ay = previous[1] - 20;
+      const bx = point[0] - 15;
+      const by = point[1] - 20;
+      sweep += Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
+      previous = point;
+    }
+    expect(sweep).toBeCloseTo(-2 * Math.PI);
   });
 
   test('I/J offsets stay relative to the arc start in relative mode', () => {
@@ -184,6 +194,9 @@ describe('positioning modes through the whole pipeline', () => {
 
     expect(relative.arc).toEqual(absolute.arc);
     relative.arc.forEach((point) => expect(distanceTo(point, 15, 20)).toBeCloseTo(5));
+  });
+});
+
 describe('extrusion dimension metadata (;WIDTH: / ;HEIGHT:)', () => {
   // The real wiring, in miniature: parse, hand the metadata to the job, then
   // execute the same commands against it (see GCodePreview.processGCode).

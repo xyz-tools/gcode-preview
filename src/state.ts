@@ -74,6 +74,20 @@ export class State {
    */
   isHomed = false;
 
+  /** Moves to logical coordinates, applying the G92 shift only to supplied axes. */
+  moveTo(x: number | undefined, y: number | undefined, z: number | undefined): void {
+    if (x !== undefined) this.x = x + this.positionShift.x;
+    if (y !== undefined) this.y = y + this.positionShift.y;
+    if (z !== undefined) this.z = z + this.positionShift.z;
+  }
+
+  /** Moves by physical offsets, assuming zero only for supplied, unknown axes. */
+  moveBy(x: number | undefined, y: number | undefined, z: number | undefined): void {
+    if (x !== undefined) this.x = (this.x ?? 0) + x;
+    if (y !== undefined) this.y = (this.y ?? 0) + y;
+    if (z !== undefined) this.z = (this.z ?? 0) + z;
+  }
+
   /**
    * Applies a move's E parameter to the extruder position
    * @param e - The move's E parameter, or undefined when the move has none
