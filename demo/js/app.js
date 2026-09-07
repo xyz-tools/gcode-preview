@@ -92,6 +92,15 @@ export const app = (window.app = createApp({
       if (options.initialCameraPosition) {
         preview.sceneManager.camera.position.fromArray(options.initialCameraPosition);
       }
+      // re-aim the camera at the preset's plate center; the preview instance is
+      // reused across presets, so the constructor's centering never re-runs
+      const buildVolume = options.buildVolume;
+      if (buildVolume) {
+        preview.sceneManager.controls.target.set(buildVolume.x / 2, 0, -buildVolume.y / 2);
+      } else {
+        preview.sceneManager.controls.target.set(100, 0, -100);
+      }
+      preview.sceneManager.controls.update();
 
       console.debug('Applying preset', presetName, options);
 
