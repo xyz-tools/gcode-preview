@@ -163,7 +163,7 @@ export class Job {
    * folds them into the state, best-effort
    * @param target - The move's physical endpoint; an axis the move leaves
    * unchanged carries the current (possibly unknown) state value
-   * @param deltaE - The filament length the move extrudes (see `State.trackE`)
+   * @param extruded - The filament length the move extrudes (see `State.applyExtrusion`)
    * @remarks
    * Active only when the slicer metadata asked for it (Cura, whose files
    * announce no dimension comments); paths then carry these derived values as
@@ -189,9 +189,9 @@ export class Job {
    */
   deriveMoveDimensions(
     target: { x: number | undefined; y: number | undefined; z: number | undefined },
-    deltaE: number
+    extruded: number
   ): void {
-    if (!this.deriveDimensions || deltaE <= 0) return;
+    if (!this.deriveDimensions || extruded <= 0) return;
 
     if (target.z !== undefined) {
       const step = this.lastExtrusionZ === undefined ? target.z : target.z - this.lastExtrusionZ;
@@ -214,7 +214,7 @@ export class Job {
     // make hypot Infinity — or NaN via Inf - Inf — and both pass a plain `<`
     if (!Number.isFinite(length) || length < MIN_DERIVED_SEGMENT_LENGTH) return;
 
-    const width = (deltaE * this.filamentCrossSection) / (length * height);
+    const width = (extruded * this.filamentCrossSection) / (length * height);
     // inclusive form so NaN (e.g. from an Infinity/Infinity overflow) is
     // rejected rather than latched into the state and every path after it
     if (!(width >= MIN_DERIVED_WIDTH && width <= MAX_DERIVED_WIDTH)) return;

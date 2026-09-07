@@ -850,7 +850,7 @@ describe('.deriveMoveDimensions', () => {
   test('overflowing coordinates and E values never latch NaN into the width', () => {
     // Individually finite params survive the parser, but 1.7e308-scale
     // values overflow the length (hypot -> Infinity) and the volume
-    // (deltaE x area -> Infinity), whose ratio is NaN — which a plain
+    // (extruded x area -> Infinity), whose ratio is NaN — which a plain
     // range check would wave through and stamp on every path after it.
     const job = derivingJob();
     job.deriveMoveDimensions({ x: 10, y: 0, z: 0.2 }, eFor(0.4, 0.2, 10));
