@@ -114,7 +114,8 @@ describe('setPosition (G92)', () => {
 
     expect(job.paths.length).toEqual(1);
     expect(job.paths[0].vertices).toEqual([0, 0, 0, 10, 0, 0, 20, 0, 0]);
-    expect(job.state.e).toEqual(0);
+    // the reset took: the final move extrudes from 0 to its absolute E of 1
+    expect(job.state.e).toEqual(1);
   });
 
   test('a Z re-zero translates the following Z moves', () => {

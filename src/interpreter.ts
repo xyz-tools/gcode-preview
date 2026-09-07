@@ -8,6 +8,8 @@ import {
   setMillimeterUnits,
   home,
   setPosition,
+  setAbsoluteExtrusion,
+  setRelativeExtrusion,
   probe,
   selectTool
 } from './interpreter/commands';
@@ -55,6 +57,8 @@ export const handlers: ReadonlyMap<string, CommandHandler> = new Map<string, Com
   ['g38.4', probe],
   ['g38.5', probe],
   ['g92', setPosition],
+  ['m82', setAbsoluteExtrusion],
+  ['m83', setRelativeExtrusion],
   ['t0', selectTool],
   ['t1', selectTool],
   ['t2', selectTool],
