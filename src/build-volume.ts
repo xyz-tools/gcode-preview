@@ -3,7 +3,10 @@ import { AxesHelper, Color, Group, Vector3, Scene } from 'three';
 import { LineBox } from './helpers/line-box';
 import { type Disposable } from './helpers/three-utils';
 
-/** The dimensions a caller supplies to describe a build volume */
+/**
+ * The dimensions a caller supplies to describe a build volume
+ * @interface
+ */
 export type BuildVolumeDef = Pick<BuildVolume, 'x' | 'y' | 'z' | 'smallGrid'>;
 
 /**
@@ -16,6 +19,8 @@ export class BuildVolume {
   private _y: number;
   /** Height of the build volume in mm */
   private _z: number;
+  /** Whether the finer secondary grid is drawn */
+  private _smallGrid: boolean | undefined;
   /** Color used for the grid */
   private gridColor: Color = new Color(0x888888); // Default grid color
   private smallGridColor: Color = new Color(0x444444); // Default small grid color
@@ -35,15 +40,17 @@ export class BuildVolume {
     x: number,
     y: number,
     z: number,
-    private _smallGrid: boolean | undefined,
+    smallGrid: boolean | undefined,
     private scene: Scene
   ) {
     // Negative dimensions clamp to 0, like the setters
     this._x = Math.max(0, x);
     this._y = Math.max(0, y);
     this._z = Math.max(0, z);
+    this._smallGrid = smallGrid;
   }
 
+  /** Width of the build volume in mm */
   get x(): number {
     return this._x;
   }
@@ -54,6 +61,7 @@ export class BuildVolume {
     }
     this.update(); // Update the build volume when x changes
   }
+  /** Depth of the build volume in mm */
   get y(): number {
     return this._y;
   }
@@ -64,6 +72,7 @@ export class BuildVolume {
     }
     this.update(); // Update the build volume when y changes
   }
+  /** Height of the build volume in mm */
   get z(): number {
     return this._z;
   }
@@ -74,6 +83,7 @@ export class BuildVolume {
     }
     this.update(); // Update the build volume when z changes
   }
+  /** Whether the finer secondary grid is drawn on the build plate */
   get smallGrid(): boolean | undefined {
     return this._smallGrid;
   }

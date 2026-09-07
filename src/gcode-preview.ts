@@ -11,7 +11,7 @@ import { splitChunk } from './helpers/split-chunk';
 const LIVE_RENDER_INTERVAL_MS = 250;
 
 /**
- * Options for configuring the G-code preview
+ * Preview-level options, merged into {@link GCodePreviewOptions}.
  */
 type LibOptions = {
   /** Enable developer mode with additional controls */
@@ -43,6 +43,10 @@ type LibOptions = {
   arcChordTolerance?: number;
 };
 
+/**
+ * Options for configuring the G-code preview
+ * @interface
+ */
 export type GCodePreviewOptions = LibOptions & SceneManagerOptions;
 
 /**

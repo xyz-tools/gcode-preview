@@ -1,0 +1,12 @@
+diff --git a/src/interpreter/commands/arc-move.ts b/src/interpreter/commands/arc-move.ts
+--- a/src/interpreter/commands/arc-move.ts
++++ b/src/interpreter/commands/arc-move.ts
+@@ -29,7 +29,7 @@
+ 
+     const cw = command.gcode === 'g2';
+     let currentPath = job.inprogressPath;
+-    const pathType = e > 0 ? PathType.Extrusion : PathType.Travel;
++    const pathType = e ? PathType.Extrusion : PathType.Travel;
+ 
+     if (currentPath === undefined || currentPath.travelType !== pathType) {
+       currentPath = job.breakPath(pathType);
