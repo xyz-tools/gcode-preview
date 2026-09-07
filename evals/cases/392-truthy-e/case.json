@@ -1,0 +1,18 @@
+{
+  "id": "392-truthy-e",
+  "skill": "lessons-learned-review",
+  "source": "PR #392, defect reintroduced into current code",
+  "expected_classes": [
+    "falsy-zero"
+  ],
+  "must_find": [
+    {
+      "file": "src/interpreter/commands/arc-move.ts",
+      "defect": "pathType uses truthy `e` instead of `e > 0`, so a retracting arc (negative E) is classified as Extrusion — rendered as deposited filament and stretches the bounding box",
+      "min_severity": "major"
+    }
+  ],
+  "must_not_find": [],
+  "runs": 3,
+  "grading_note": "The finding must name the retraction/negative-E mechanism. Flagging only that a comment was deleted does not count as a hit."
+}
