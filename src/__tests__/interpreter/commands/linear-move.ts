@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'vitest';
-import { GCodeCommand } from '../../../parser/gcode-parser';
+import { GCodeCommand, Parser } from '../../../parser/gcode-parser';
 import { Interpreter } from '../../../interpreter';
 import { linearMove } from '../../../interpreter/commands';
 import { Job } from '../../../job';
@@ -124,6 +124,33 @@ describe('linearMove (G0/G1)', () => {
     expect(job.inprogressPath?.travelType).toEqual(PathType.Extrusion);
   });
 
+  test('tracks the extruder position of moves and of zero-length retractions', () => {
+    const job = new Job();
+    job.state.relativeExtrusion = false;
+
+    // absolute mode (M82): E parameters are positions
+    linearMove(new GCodeCommand('G1 X10 E2', 'g1', { x: 10, e: 2 }), job);
+    expect(job.state.e).toEqual(2);
+
+    // a zero-length prime still moves the extruder; losing it here would
+    // misattribute the difference to the next extruding move
+    linearMove(new GCodeCommand('G1 E3', 'g1', { e: 3 }), job);
+    expect(job.state.e).toEqual(3);
+
+    linearMove(new GCodeCommand('G1 X20 E4', 'g1', { x: 20, e: 4 }), job);
+    expect(job.state.e).toEqual(4);
+  });
+
+  test('accumulates the extruder position in relative mode', () => {
+    const job = new Job();
+    job.state.relativeExtrusion = true;
+
+    linearMove(new GCodeCommand('G1 X10 E2', 'g1', { x: 10, e: 2 }), job);
+    linearMove(new GCodeCommand('G1 X20 E3', 'g1', { x: 20, e: 3 }), job);
+
+    expect(job.state.e).toEqual(5);
+  });
+
   test('starts a new path if the travel type changes from Extrusion to Travel', () => {
     const command1 = new GCodeCommand('G1 X1 Y2 E3', 'g1', { x: 1, y: 2, e: 3 });
     const command2 = new GCodeCommand('G0 X3 Y4', 'g0', { x: 3, y: 4 });
@@ -135,6 +162,44 @@ describe('linearMove (G0/G1)', () => {
 
     expect(job.paths.length).toEqual(1);
     expect(job.inprogressPath?.travelType).toEqual(PathType.Travel);
+  });
+
+  test('classifies an absolute-mode wipe as travel even though its E stays positive', () => {
+    // A wipe retracts while moving in X/Y: the E parameter is still a positive
+    // absolute position, but it is lower than the previous one, so no material
+    // is laid down. Classifying on the raw parameter drew a bead across the model.
+    const job = new Job();
+    const interpreter = new Interpreter();
+    interpreter.execute(new Parser().parseGCode(['M82', 'G1 X10 Y10 E5'].join('\n')).commands, job);
+
+    linearMove(new GCodeCommand('G1 X20 Y20 E2.5', 'g1', { x: 20, y: 20, e: 2.5 }), job);
+
+    expect(job.inprogressPath?.travelType).toEqual(PathType.Travel);
+    expect(job.state.e).toEqual(2.5);
+  });
+
+  test('counts only the filament an absolute-mode move actually extrudes', () => {
+    const job = new Job();
+    job.state.relativeExtrusion = false;
+
+    linearMove(new GCodeCommand('G1 X10 E2', 'g1', { x: 10, e: 2 }), job);
+    linearMove(new GCodeCommand('G1 X20 E5', 'g1', { x: 20, e: 5 }), job);
+
+    // 2 then 3, not the raw parameters 2 and 5
+    expect(job.stats.extrusionDistance).toEqual(5);
+  });
+
+  test('in relative mode every positive parameter still extrudes', () => {
+    const job = new Job();
+    job.state.relativeExtrusion = true;
+
+    linearMove(new GCodeCommand('G1 X10 E2', 'g1', { x: 10, e: 2 }), job);
+    linearMove(new GCodeCommand('G1 X20 E2', 'g1', { x: 20, e: 2 }), job);
+
+    // the parameter is the extruded length itself, so a repeated value is a
+    // second extrusion rather than the zero step it would be in absolute mode
+    expect(job.inprogressPath?.travelType).toEqual(PathType.Extrusion);
+    expect(job.stats.extrusionDistance).toEqual(4);
   });
 });
 
