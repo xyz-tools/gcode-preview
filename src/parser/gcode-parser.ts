@@ -1,106 +1,25 @@
+import { parseLine, toGCodeCommand, GCodeCommand, type GCodeParameters } from 'gcode-ast';
 import { Thumbnail } from '../thumbnail';
 import { LayerMetadata, SlicerMetadataParser } from './metadata-parser-base';
 import { detectSlicer, parseSlicerMetadata } from './slicer-detector';
 
 /**
- * Parameters for G-code commands used in 3D printing.
- *
+ * Parameters for G-code commands, keyed by lower-case address letter.
  * @remarks
- * This interface defines the common parameters used in G-code commands for 3D printing.
- * While additional parameters may exist in G-code files, only the parameters listed here
- * are actively used in this library. Other parameters are still parsed and preserved
- * through the index signature.
- *
- * @example
- * ```typescript
- * const params: GCodeParameters = {
- *   y: 100,    // Move to Y position 100
- *   z: 0.2,    // Set layer height to 0.2
- *   f: 1200,   // Set feed rate to 1200mm/min
- *   e: 123.45  // Extrude filament
- * };
- * ```
+ * Re-exported from `gcode-ast`. The index signature is retained there for the
+ * same reason it exists here: a consumer may read a word this library does not
+ * name, and non-finite values are dropped rather than stored.
  */
-export interface GCodeParameters {
-  /**
-   * X-axis position in millimeters.
-   * Used for positioning the print head along the X axis.
-   */
-  x?: number;
-
-  /**
-   * Y-axis position in millimeters.
-   * Used for positioning the print head along the Y axis.
-   */
-  y?: number;
-
-  /**
-   * Z-axis position in millimeters.
-   * Typically used for layer height control and vertical positioning.
-   */
-  z?: number;
-
-  /**
-   * Extruder position/length in millimeters.
-   * Controls the amount of filament to extrude.
-   */
-  e?: number;
-
-  /**
-   * Feed rate (speed) in millimeters per minute.
-   * Determines how fast the print head moves.
-   */
-  f?: number;
-
-  /**
-   * X offset from current position to arc center in millimeters.
-   * Used in G2/G3 arc movement commands.
-   */
-  i?: number;
-
-  /**
-   * Y offset from current position to arc center in millimeters.
-   * Used in G2/G3 arc movement commands.
-   */
-  j?: number;
-
-  /**
-   * Radius of arc in millimeters.
-   * Alternative way to specify arc movement in G2/G3 commands.
-   */
-  r?: number;
-
-  /**
-   * Tool number for multi-tool setups.
-   * Used to select between different extruders or tools.
-   */
-  t?: number;
-
-  /**
-   * Index signature for additional G-code parameters.
-   * Allows parsing and storing of parameters not explicitly defined above.
-   */
-  [key: string]: number | undefined;
-}
+export type { GCodeParameters };
 
 /**
- * Represents a parsed G-code command
+ * Represents a parsed G-code command.
+ * @remarks
+ * Re-exported from `gcode-ast`'s compat view: the same four-argument shape
+ * (`src`, `gcode`, `params`, `comment`) this library has always exported, plus
+ * a `node` back-reference to the typed AST node it was derived from.
  */
-export class GCodeCommand {
-  /**
-   * Creates a new GCodeCommand instance
-   * @param src - The original G-code line
-   * @param gcode - The parsed G-code command (e.g., 'g0', 'g1')
-   * @param params - The parsed parameters
-   * @param comment - Optional comment from the G-code line
-   */
-  constructor(
-    public src: string,
-    public gcode: string,
-    public params: GCodeParameters,
-    public comment?: string
-  ) {}
-}
+export { GCodeCommand };
 
 /** What a parse call returns: the commands that were read, plus everything learned about the file along the way */
 export type ParseResult = { metadata: Metadata; commands: GCodeCommand[] };
@@ -111,14 +30,6 @@ export type Metadata = {
   layerMetadata?: LayerMetadata[];
   slicerName?: string;
 };
-
-/**
- * Whether a character code is an ASCII letter, which is what opens a G-code word.
- * @param code - Result of charCodeAt
- */
-function isAlphaCode(code: number): boolean {
-  return (code >= 97 && code <= 122) || (code >= 65 && code <= 90);
-}
 
 /**
  * Options for configuring the parser
@@ -303,57 +214,20 @@ export class Parser {
    * ```
    */
   parseCommand(line: string, keepComments = true): GCodeCommand | null {
-    const input = line.trim();
-    const firstSemicolon = input.indexOf(';');
-    const cmd = firstSemicolon < 0 ? input : input.slice(0, firstSemicolon);
+    const { line: parsed } = parseLine(line, {
+      // A preview renders what it can and ignores the rest, so diagnostics are
+      // noise here. Off entirely rather than capped: nothing reads them yet.
+      maxDiagnostics: 0,
+      // `spans: false` / `raw: false` would cut most of what tokenizing
+      // allocates, but neither is reachable yet: `GCodeCommand.src` is public
+      // API and reads `line.raw`, and `toGCodeCommand` is typed to require a
+      // `span`. See the PR body -- this is the remaining perf headroom.
+      strictness: 'lenient'
+    });
 
-    let comment: string | undefined;
-    if (keepComments && firstSemicolon >= 0) {
-      // only the span up to the next semicolon, matching the previous split(';')[1]
-      const nextSemicolon = input.indexOf(';', firstSemicolon + 1);
-      const text = nextSemicolon < 0 ? input.slice(firstSemicolon + 1) : input.slice(firstSemicolon + 1, nextSemicolon);
-      // Normalized once here so every consumer sees '; layer 1' and ';layer 1'
-      // identically -- the slicer metadata parsers anchor their patterns with ^.
-      comment = text.trim() || undefined;
-    }
-
-    let gcode = '';
-    const params: GCodeParameters = {};
-    let isFirstWord = true;
-
-    // Walk the line once. Each letter opens a word whose value runs to the next
-    // letter, which is the same split the previous regex produced -- without
-    // building an array of every fragment and a trimmed copy of each one.
-    let i = 0;
-    while (i < cmd.length) {
-      if (!isAlphaCode(cmd.charCodeAt(i))) {
-        i++;
-        continue;
-      }
-
-      const letter = cmd[i];
-      let end = i + 1;
-      while (end < cmd.length && !isAlphaCode(cmd.charCodeAt(end))) end++;
-      const value = cmd.slice(i + 1, end).trim();
-
-      if (isFirstWord) {
-        gcode = letter.toLowerCase() + Number(value);
-        isFirstWord = false;
-      } else {
-        // Validate at the boundary: `X`, `Xabc` and overflowing digit runs parse to
-        // NaN/Infinity. Drop the param instead of storing a poisoned value -- an absent
-        // param is handled everywhere downstream (`x ?? state.x`), a NaN is not: it would
-        // latch into the job state and from there into every later vertex.
-        const parsed = parseFloat(value);
-        if (Number.isFinite(parsed)) {
-          params[letter.toLowerCase()] = parsed;
-        }
-      }
-
-      i = end;
-    }
-
-    return new GCodeCommand(line, gcode, params, comment);
+    const command = toGCodeCommand(parsed, { keepSource: true });
+    if (!keepComments) command.comment = undefined;
+    return command;
   }
 
   /**
