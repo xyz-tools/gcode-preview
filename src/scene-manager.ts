@@ -123,6 +123,8 @@ export class SceneManager {
   static readonly defaultExtrusionColor = ObjectsManager.defaultExtrusionColor;
   /** Animation frame ID */
   private animationFrameId?: number;
+  /** Frame ID of the incremental render loop, distinct from the continuous one */
+  private frameLoopId?: number;
   /** Previous start layer before single layer mode */
   private prevStartLayer = 0;
   // colors
@@ -718,6 +720,7 @@ export class SceneManager {
    * @remarks
    * The cursor walks the job's combined path list; the ObjectsManager routes
    * each prefix by category and skips what it has already drawn.
+   * dispose() cancels the queued frame, leaving the promise unsettled.
    */
   private renderFrameLoop(pathCount: number): Promise<void> {
     return new Promise((resolve) => {
@@ -729,7 +732,7 @@ export class SceneManager {
         } else {
           drawnUpTo = Math.min(drawnUpTo + pathCount, this.job.paths.length);
           this.renderFrame(drawnUpTo);
-          requestAnimationFrame(loop);
+          this.frameLoopId = requestAnimationFrame(loop);
         }
       };
       loop();
@@ -823,6 +826,8 @@ export class SceneManager {
   private cancelAnimation(): void {
     if (this.animationFrameId !== undefined) cancelAnimationFrame(this.animationFrameId);
     this.animationFrameId = undefined;
+    if (this.frameLoopId !== undefined) cancelAnimationFrame(this.frameLoopId);
+    this.frameLoopId = undefined;
   }
 
   /**

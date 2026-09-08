@@ -67,6 +67,48 @@ test('cancelAnimation should cancel the render loop', async () => {
   expect(callCountAfterDestroy).toBe(callCountAfterDestroy2);
 });
 
+test('disposing cancels pending incremental render frames', () => {
+  let nextId = 0;
+  const frames = new Map<number, FrameRequestCallback>();
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    frames.set(++nextId, callback);
+    return nextId;
+  });
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id));
+  try {
+    const proto = SceneManager.prototype as unknown as Record<string, (...args: unknown[]) => unknown>;
+    const mock = createMockSceneManager() as ReturnType<typeof createMockSceneManager> & {
+      job?: { paths: number[] };
+      renderPaths: ReturnType<typeof vi.fn>;
+      renderBoundingBox: ReturnType<typeof vi.fn>;
+      renderFrameLoop: unknown;
+      renderFrame: unknown;
+    };
+    mock.job = { paths: [1, 2, 3, 4] };
+    mock.renderPaths = vi.fn();
+    mock.renderBoundingBox = vi.fn();
+    // the loop under test is private, so borrow it from the prototype like cancelAnimation above
+    mock.renderFrameLoop = proto.renderFrameLoop;
+    mock.renderFrame = proto.renderFrame;
+
+    // the promise never settles once disposal cancels the loop, so don't await it
+    void SceneManager.prototype.renderAnimated.call(mock, 1);
+    expect(frames.size).toBeGreaterThan(0);
+
+    SceneManager.prototype.dispose.call(mock);
+    const callsAtDisposal = mock.renderer.render.mock.calls.length;
+
+    // deliver the frames still queued after disposal, as the browser would
+    for (const [id, callback] of [...frames.entries()]) {
+      frames.delete(id);
+      callback(16);
+    }
+    expect(mock.renderer.render.mock.calls.length).toBe(callsAtDisposal);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
 test('renderProgressive draws the paths parsed so far, holding back the still-growing last one', () => {
   const mock = createMockSceneManager() as ReturnType<typeof createMockSceneManager> & {
     job?: { paths: number[] };
