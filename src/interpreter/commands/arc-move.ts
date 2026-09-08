@@ -1,6 +1,7 @@
 import { PathType } from '../../path';
 import { ArcTessellator, ArcTessellatorOptions } from '../../arc-tessellator';
-import type { CommandHandler } from '../../interpreter';
+import type { CommandOf } from 'gcode-ast';
+import type { Job } from '../../job';
 
 /**
  * Builds an arc move handler (G2/G3) around its own tessellator
@@ -12,22 +13,22 @@ import type { CommandHandler } from '../../interpreter';
  * resulting points into the current path and updates the job state.
  * G2 is for clockwise arcs, G3 is for counter-clockwise arcs.
  */
-export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler => {
+export const makeArcMove = (options: ArcTessellatorOptions = {}) => {
   const arcTessellator = new ArcTessellator(options);
-  return (command, job) => {
-    const { e, i, j, r } = command.params;
+  return (command: CommandOf<'G2' | 'G3'>, job: Job): void => {
+    const { e, i, j, r } = command;
     const { state } = job;
     // The endpoint arrives in logical coordinates; translate it into physical
     // space up front so the tessellator's derived values agree with `from`.
     // I/J/R are relative distances and need no shift.
     const { positionShift } = state;
-    const x = command.params.x === undefined ? undefined : command.params.x + positionShift.x;
-    const y = command.params.y === undefined ? undefined : command.params.y + positionShift.y;
-    const z = command.params.z === undefined ? undefined : command.params.z + positionShift.z;
+    const x = command.x === undefined ? undefined : command.x + positionShift.x;
+    const y = command.y === undefined ? undefined : command.y + positionShift.y;
+    const z = command.z === undefined ? undefined : command.z + positionShift.z;
     // Starting position for the arc, with any un-homed axis assumed at the origin.
     const from = job.resolvePosition();
 
-    const cw = command.gcode === 'g2';
+    const cw = command.type === 'G2';
     let currentPath = job.inprogressPath;
     // `e > 0`, matching g0/g1: a negative E is a retraction, i.e. a travel move with no
     // material laid down. The looser `e ?` used to misclassify a retracting arc as
@@ -68,4 +69,4 @@ export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler
 };
 
 /** Executes an arc move command (G2/G3) with the default chord tolerance */
-export const arcMove: CommandHandler = makeArcMove();
+export const arcMove = makeArcMove();

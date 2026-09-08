@@ -1,11 +1,11 @@
+import type { Command, CommandOf, CommandType } from 'gcode-ast';
 import { GCodeCommand } from './parser/gcode-parser';
 import { Job } from './job';
 import {
   linearMove,
   arcMove,
   makeArcMove,
-  setInchUnits,
-  setMillimeterUnits,
+  setUnits,
   home,
   setPosition,
   probe,
@@ -23,60 +23,59 @@ export interface InterpreterOptions {
 }
 
 /**
- * Executes a single G-code command against a job
- * @param command - GCodeCommand to execute
- * @param job - Job instance to update
+ * Maps a command type to the handler that executes it.
+ *
  * @remarks
- * Everything a handler needs — state, stats, and path bookkeeping like
- * `breakPath`/`resolvePosition` — lives on the job. Handlers import this type
- * with a type-only import, so registering them here does not create a circular
- * runtime dependency.
+ * The value type is written out per key rather than through an aliased generic
+ * on purpose: TypeScript measures variance on the alias and then rejects a
+ * handler covering `'G0' | 'G1'` in the `G0` slot, even though it accepts
+ * strictly more. Spelled inline, the check is structural and a handler may
+ * cover as many types as it likes.
+ *
+ * A type without an entry is ignored, which is how everything from `M104` to a
+ * Klipper macro passes through without a handler for it.
  */
-export type CommandHandler = (command: GCodeCommand, job: Job) => void;
+export type HandlerRegistry = {
+  [K in CommandType]?: (command: CommandOf<K>, job: Job) => void;
+};
 
 /**
- * Maps a lowercase gcode (e.g. `g1`) to the handler that executes it
+ * The handlers this interpreter executes, keyed by the AST's command type.
  * @remarks
- * Commands without an entry here are ignored by the interpreter. To support a
- * new command, add its handler under `interpreter/commands/` and register it
- * in this map.
+ * To support a new command, add its handler under `interpreter/commands/` and
+ * register it here. The key is checked against the AST's union, so a typo or a
+ * command the parser does not produce is a compile error rather than a handler
+ * that silently never runs.
  */
-export const handlers: ReadonlyMap<string, CommandHandler> = new Map<string, CommandHandler>([
-  ['g0', linearMove],
-  ['g1', linearMove],
-  ['g2', arcMove],
-  ['g3', arcMove],
-  ['g20', setInchUnits],
-  ['g21', setMillimeterUnits],
-  ['g28', home],
-  ['g31', probe],
-  ['g38.2', probe],
-  ['g38.3', probe],
-  ['g38.4', probe],
-  ['g38.5', probe],
-  ['g92', setPosition],
-  ['t0', selectTool],
-  ['t1', selectTool],
-  ['t2', selectTool],
-  ['t3', selectTool],
-  ['t4', selectTool],
-  ['t5', selectTool],
-  ['t6', selectTool],
-  ['t7', selectTool]
-]);
+export const handlers: HandlerRegistry = {
+  G0: linearMove,
+  G1: linearMove,
+  G2: arcMove,
+  G3: arcMove,
+  G20: setUnits,
+  G21: setUnits,
+  G28: home,
+  G31: probe,
+  'G38.2': probe,
+  'G38.3': probe,
+  'G38.4': probe,
+  'G38.5': probe,
+  G92: setPosition,
+  T: selectTool
+};
 
 /**
  * Interprets and executes G-code commands, updating the job state accordingly
  *
  * @remarks
- * This class looks up each command in the handler registry and executes it,
- * translating commands into movements and state changes in the print job. It
- * supports common G-code commands including linear moves (G0/G1), arcs (G2/G3),
- * unit changes (G20/G21), homing (G28), position setting (G92), and tool
- * selection. Commands without a registered handler are ignored.
+ * This class looks up each command's AST node in the handler registry and
+ * executes it, translating commands into movements and state changes in the
+ * print job. It supports linear moves (G0/G1), arcs (G2/G3), unit changes
+ * (G20/G21), homing (G28), probing (G31, G38.2-G38.5), position setting (G92)
+ * and tool selection (T). Commands without a registered handler are ignored.
  */
 export class Interpreter {
-  private handlers: ReadonlyMap<string, CommandHandler>;
+  private handlers: HandlerRegistry;
 
   /**
    * Creates an interpreter, optionally with custom arc tessellation
@@ -90,7 +89,7 @@ export class Interpreter {
       this.handlers = handlers;
     } else {
       const customArcMove = makeArcMove({ chordTolerance: options.arcChordTolerance });
-      this.handlers = new Map([...handlers, ['g2', customArcMove], ['g3', customArcMove]]);
+      this.handlers = { ...handlers, G2: customArcMove, G3: customArcMove };
     }
   }
 
@@ -99,12 +98,21 @@ export class Interpreter {
    * @param commands - Array of GCodeCommand objects to execute
    * @param job - Job instance to update (default: new Job)
    * @returns The updated job instance
+   * @remarks
+   * Dispatch reads the typed AST node the parser attached, so a command the
+   * parser could not type (and a blank or comment-only line, which has no node
+   * at all) is skipped here.
    */
   execute(commands: GCodeCommand[], job = new Job()): Job {
     job.resumeLastPath();
     commands.forEach((command) => {
-      const handler = this.handlers.get(command.gcode);
-      handler?.(command, job);
+      const node = command.node;
+      if (node === undefined) return;
+      // One lookup, then a call the registry's mapped type cannot express to
+      // the compiler: the key and the argument are the same node, but that
+      // correlation is only knowable at runtime.
+      const handler = this.handlers[node.type] as ((command: Command, job: Job) => void) | undefined;
+      handler?.(node, job);
     });
     job.finishPath();
 

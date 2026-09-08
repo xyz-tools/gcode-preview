@@ -1,9 +1,13 @@
+import type { CommandOf } from 'gcode-ast';
 import { PathType } from '../../path';
-import type { CommandHandler } from '../../interpreter';
+import type { Job } from '../../job';
+
+/** Every probing command this handler covers. */
+type ProbeCommand = CommandOf<'G31' | 'G38.2' | 'G38.3' | 'G38.4' | 'G38.5'>;
 
 /**
  * Executes a straight probe command (G31, G38.2-G38.5)
- * @param command - GCodeCommand containing the probe target
+ * @param command - The typed probe node
  * @param job - Job instance to update
  * @remarks
  * A probe moves toward its target and stops on contact, at a point a previewer
@@ -13,26 +17,28 @@ import type { CommandHandler } from '../../interpreter';
  * exactly like on a real machine, and keeps a repeated probe without a lift
  * sitting on the plane instead of diving through it (see #437). Other probes —
  * including from an un-homed Z, whose real position is unknown — render as a
- * plain travel to the commanded target. The trigger is assumed on the Z axis only; X/Y targets
- * are kept as commanded. A G31 carrying a P word is RepRapFirmware's
- * set-trigger-values form, not a move, and is ignored; one without any axis
- * words (e.g. Marlin's dock-sled G31) is also ignored. The G38 variants only
- * differ in probe direction and error semantics (G38.4/G38.5 probe away from
- * the workpiece; the odd variants tolerate a missed trigger), neither of which
- * a preview can observe, so all of them share this behavior.
+ * plain travel to the commanded target. The trigger is assumed on the Z axis
+ * only; X/Y targets are kept as commanded. The G38 variants only differ in
+ * probe direction and error semantics (G38.4/G38.5 probe away from the
+ * workpiece; the odd variants tolerate a missed trigger), neither of which a
+ * preview can observe, so all of them share this behavior.
+ *
+ * Which of the three G31s a line is comes off the node's `form` rather than
+ * being re-derived here: RepRapFirmware's set-trigger-values form (a `P` word)
+ * and Marlin's dock-sled form (no axis words) are both configuration, not
+ * motion, and are ignored.
  */
-export const probe: CommandHandler = (command, job) => {
+export const probe = (command: ProbeCommand, job: Job): void => {
   const { state } = job;
-  const { params } = command;
 
-  if (params.p !== undefined) {
+  if (command.type === 'G31' && command.form !== 'move') {
     return;
   }
 
   const { positionShift } = state;
-  const x = params.x === undefined ? undefined : params.x + positionShift.x;
-  const y = params.y === undefined ? undefined : params.y + positionShift.y;
-  let z = params.z === undefined ? undefined : params.z + positionShift.z;
+  const x = command.x === undefined ? undefined : command.x + positionShift.x;
+  const y = command.y === undefined ? undefined : command.y + positionShift.y;
+  let z = command.z === undefined ? undefined : command.z + positionShift.z;
 
   if (x === undefined && y === undefined && z === undefined) {
     return;

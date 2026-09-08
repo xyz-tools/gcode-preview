@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'vitest';
-import { GCodeCommand } from '../../../parser/gcode-parser';
+import { cmd, parsed } from '../command-fixtures';
 import { Interpreter } from '../../../interpreter';
 import { linearMove } from '../../../interpreter/commands';
 import { Job } from '../../../job';
@@ -7,7 +7,7 @@ import { PathType } from '../../../path';
 
 describe('linearMove (G0/G1)', () => {
   test('starts a path if the job has none, starting at the job current state', () => {
-    const command = new GCodeCommand('G0 X1 Y2', 'g0', { x: 1, y: 2 });
+    const command = cmd('G0 X1 Y2');
     const job = new Job();
     job.state.x = 3;
     job.state.y = 4;
@@ -24,8 +24,8 @@ describe('linearMove (G0/G1)', () => {
   });
 
   test('continues the path if the job has one', () => {
-    const command1 = new GCodeCommand('G0 X1 Y2', 'g0', { x: 1, y: 2 });
-    const command2 = new GCodeCommand('G0 X3 Y4', 'g0', { x: 3, y: 4 });
+    const command1 = cmd('G0 X1 Y2');
+    const command2 = cmd('G0 X3 Y4');
     const job = new Job();
 
     job.state.z = 5;
@@ -35,13 +35,13 @@ describe('linearMove (G0/G1)', () => {
 
     expect(job.paths.length).toEqual(0);
     expect(job.inprogressPath?.vertices.length).toEqual(9);
-    expect(job.inprogressPath?.vertices[6]).toEqual(command2.params.x);
-    expect(job.inprogressPath?.vertices[7]).toEqual(command2.params.y);
+    expect(job.inprogressPath?.vertices[6]).toEqual(command2.x);
+    expect(job.inprogressPath?.vertices[7]).toEqual(command2.y);
     expect(job.inprogressPath?.vertices[8]).toEqual(job.state.z);
   });
 
   test("assigns the travel type if there's no extrusion", () => {
-    const command = new GCodeCommand('G0 X1 Y2', 'g0', { x: 1, y: 2 });
+    const command = cmd('G0 X1 Y2');
     const job = new Job();
 
     linearMove(command, job);
@@ -51,7 +51,7 @@ describe('linearMove (G0/G1)', () => {
   });
 
   test("assigns the extrusion type if there's extrusion", () => {
-    const command = new GCodeCommand('G1 X1 Y2 E3', 'g1', { x: 1, y: 2, e: 3 });
+    const command = cmd('G1 X1 Y2 E3');
     const job = new Job();
 
     linearMove(command, job);
@@ -61,7 +61,7 @@ describe('linearMove (G0/G1)', () => {
   });
 
   test('will not result in a path when there is no movement (retraction)', () => {
-    const command = new GCodeCommand('G0 E-2', 'g0', { e: -2 });
+    const command = cmd('G0 E-2');
     const job = new Job();
 
     linearMove(command, job);
@@ -70,7 +70,7 @@ describe('linearMove (G0/G1)', () => {
   });
 
   test('will not result in a path when there is no movement (deretraction)', () => {
-    const command = new GCodeCommand('G0 E4', 'g0', { e: 4 });
+    const command = cmd('G0 E4');
     const job = new Job();
 
     linearMove(command, job);
@@ -79,7 +79,7 @@ describe('linearMove (G0/G1)', () => {
   });
 
   test('keeps the current Y when a move omits it', () => {
-    const command = new GCodeCommand('G0 X5', 'g0', { x: 5 });
+    const command = cmd('G0 X5');
     const job = new Job();
     job.state.y = 7;
 
@@ -90,7 +90,7 @@ describe('linearMove (G0/G1)', () => {
   });
 
   test('counts a bare feedrate change as a feedrate change, not a move', () => {
-    const command = new GCodeCommand('G0 F3000', 'g0', { f: 3000 });
+    const command = cmd('G0 F3000');
     const job = new Job();
 
     linearMove(command, job);
@@ -101,7 +101,7 @@ describe('linearMove (G0/G1)', () => {
   });
 
   test('counts a zero-length move with no parameters as "other"', () => {
-    const command = new GCodeCommand('G0', 'g0', {});
+    const command = cmd('G0');
     const job = new Job();
 
     linearMove(command, job);
@@ -112,8 +112,8 @@ describe('linearMove (G0/G1)', () => {
   });
 
   test('starts a new path if the travel type changes from Travel to Extrusion', () => {
-    const command1 = new GCodeCommand('G0 X1 Y2', 'g0', { x: 1, y: 2 });
-    const command2 = new GCodeCommand('G1 X3 Y4 E5', 'g1', { x: 3, y: 4, e: 5 });
+    const command1 = parsed('G0 X1 Y2');
+    const command2 = cmd('G1 X3 Y4 E5');
     const interpreter = new Interpreter();
     const job = new Job();
     interpreter.execute([command1], job);
@@ -125,8 +125,8 @@ describe('linearMove (G0/G1)', () => {
   });
 
   test('starts a new path if the travel type changes from Extrusion to Travel', () => {
-    const command1 = new GCodeCommand('G1 X1 Y2 E3', 'g1', { x: 1, y: 2, e: 3 });
-    const command2 = new GCodeCommand('G0 X3 Y4', 'g0', { x: 3, y: 4 });
+    const command1 = parsed('G1 X1 Y2 E3');
+    const command2 = cmd('G0 X3 Y4');
     const interpreter = new Interpreter();
     const job = new Job();
     interpreter.execute([command1], job);
@@ -141,7 +141,7 @@ describe('linearMove (G0/G1)', () => {
 test('an un-homed state assumes the origin so a move can still render', () => {
   // Before G28 the position is unknown; we assume (0,0,0) to render best-effort
   // (see #361) while isHomed stays false so callers can tell it is assumed.
-  const command = new GCodeCommand('G1 Y5 E1', 'g1', { y: 5, e: 1 });
+  const command = cmd('G1 Y5 E1');
   const job = new Job();
 
   linearMove(command, job);

@@ -1,15 +1,15 @@
-import type { CommandHandler } from '../../interpreter';
+import type { CommandOf } from 'gcode-ast';
+import type { Job } from '../../job';
 
 /**
- * Executes a tool selection command (T0-T7)
- * @param command - GCodeCommand containing the command
+ * Executes a tool selection command
+ * @param command - The typed tool-change node
  * @param job - Job instance to update
  * @remarks
- * Updates the job state to use the tool numbered in the command's gcode
- * (e.g. `t3` selects tool 3). Tools are typically used for multi-extruder
- * setups or different print heads. The registry decides which tool numbers
- * are supported; this handler assumes a `t<number>` gcode.
+ * Reads the tool number off the node rather than off the mnemonic, so every
+ * tool index works. The previous registry enumerated `t0`-`t7`, which silently
+ * ignored `T8` and above on machines that have them.
  */
-export const selectTool: CommandHandler = (command, job) => {
-  job.state.tool = parseInt(command.gcode.slice(1), 10);
+export const selectTool = (command: CommandOf<'T'>, job: Job): void => {
+  job.state.tool = command.index;
 };

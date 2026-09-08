@@ -1,13 +1,14 @@
 import { test, expect, describe } from 'vitest';
 import { Parser } from '../../../parser/gcode-parser';
 import { Interpreter, handlers } from '../../../interpreter';
+import type { CommandType } from 'gcode-ast';
 import { PathType } from '../../../path';
 
 describe('probe (G38.2-G38.5)', () => {
   const run = (gcode: string) => new Interpreter().execute(new Parser().parseGCode(gcode).commands);
 
   test.each(['G38.2', 'G38.3', 'G38.4', 'G38.5'])('%s is handled by the same handler as G31', (gcode) => {
-    expect(handlers.get(gcode.toLowerCase())).toBe(handlers.get('g31'));
+    expect(handlers[gcode as CommandType]).toBe(handlers.G31);
   });
 
   test.each(['G38.2', 'G38.3', 'G38.4', 'G38.5'])(
