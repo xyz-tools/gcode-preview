@@ -140,7 +140,6 @@ export class BuildVolume {
    */
   createGrid(size = 1, color: Color): Grid {
     const grid = new Grid(this.x, size, this.y, size, color);
-    // const grid = new GridHelper(200,10, color, color);
     return grid;
   }
 

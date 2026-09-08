@@ -104,8 +104,6 @@ export class SceneManager {
   private _singleLayerMode = false;
   /** Initial camera position [x, y, z] */
   private initialCameraPosition = [-100, 400, 450];
-  /** Whether to use inches instead of millimeters */
-  private _inches = false;
   /** Disable color gradient between layers */
   private _disableGradient = false;
   job: Job;
@@ -132,8 +130,6 @@ export class SceneManager {
   private _highlightedLastPath?: Path;
   /** Last render time in milliseconds */
   lastRenderTime = 0;
-  /** Whether to render in wireframe mode */
-  private _wireframe = false;
   /** Whether to preserve drawing buffer */
   private preserveDrawingBuffer = false;
   /**
@@ -963,7 +959,6 @@ export class SceneManager {
       this.camera.rotation.y = rotation.y;
       this.camera.rotation.z = rotation.z;
       this.camera.zoom = zoom;
-      // this.camera.updateProjectionMatrix();
       this.controls.target.x = target.x;
       this.controls.target.y = target.y;
       this.controls.target.z = target.z;

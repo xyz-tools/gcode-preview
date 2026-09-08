@@ -250,12 +250,6 @@ class DevGUI {
     devHelpers.onOpenClose(() => {
       this.saveOpenFolders();
     });
-    // devHelpers
-    //   .add(this.renderer, '_wireframe')
-    //   .listen()
-    //   .onChange(() => {
-    //     this.renderer.render();
-    //   });
     devHelpers.add(this.gcodePreview.sceneManager, 'render').listen();
     devHelpers.add(this.gcodePreview, 'clear').listen();
     devHelpers.add(this.gcodePreview, 'dispose').listen();

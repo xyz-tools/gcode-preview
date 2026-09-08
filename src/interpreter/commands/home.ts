@@ -3,7 +3,7 @@ import type { Job } from '../../job';
 
 /**
  * Executes a G28 homing command
- * @param command - The typed G28 node
+ * @param _command - The typed G28 node, unused: G28 homes every axis regardless
  * @param job - Job instance to update
  * @remarks
  * Moves all axes to their home positions (0,0,0) and marks the state as homed,
@@ -11,8 +11,7 @@ import type { Job } from '../../job';
  * are deliberately ignored: a partial `G28 X` still homes everything here, as
  * it always has.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export const home = (command: CommandOf<'G28'>, job: Job): void => {
+export const home = (_command: CommandOf<'G28'>, job: Job): void => {
   job.state.x = 0;
   job.state.y = 0;
   job.state.z = 0;
