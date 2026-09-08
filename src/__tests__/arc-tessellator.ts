@@ -139,6 +139,30 @@ describe('ArcTessellator', () => {
     expect(points.length).toBeGreaterThanOrEqual(16);
   });
 
+  test('treats an omitted J as a zero offset', () => {
+    const start = { x: 0, y: 0, z: 0.2 };
+    const explicit = tessellate(start, { cw: true, x: 10, y: 0, i: 5, j: 0 });
+    const omitted = tessellate(start, { cw: true, x: 10, y: 0, i: 5 });
+
+    expect(omitted).toEqual(explicit);
+    expect(omitted.length).toBeGreaterThan(1);
+  });
+
+  test('treats an omitted axis word as unchanged rather than unknown', () => {
+    const start = { x: 0, y: 0, z: 0.2 };
+    const explicit = tessellate(start, { cw: true, x: 10, y: 0, i: 5, j: 0 });
+    const omitted = tessellate(start, { cw: true, x: 10, i: 5, j: 0 });
+
+    expect(omitted).toEqual(explicit);
+    expect(omitted.length).toBeGreaterThan(1);
+  });
+
+  test('emits only the endpoint for an arc with no offsets at all', () => {
+    const points = tessellate({ x: 0, y: 0, z: 0 }, { cw: true, x: 10, y: 0 });
+
+    expect(points).toEqual([{ x: 10, y: 0, z: 0 }]);
+  });
+
   test('emits more segments for the same arc in inches', () => {
     const start = { x: 1, y: 0, z: 0 };
     const move = { cw: false, x: 0, y: 1, i: -1, j: 0 };

@@ -79,8 +79,18 @@ export class ArcTessellator {
    * least the endpoint, even for degenerate arcs.
    */
   tessellate(start: ArcPoint, move: ArcMove, emit: EmitPoint, units: Units = 'mm'): ArcPoint {
-    const { cw, x, y, z } = move;
+    const { cw } = move;
     let { i, j, r } = move;
+    // Omitted words are defaults, not "unset": G-code reads a missing I/J as a zero
+    // offset and a missing axis word as unchanged. Left undefined they poisoned
+    // centerX/centerY and finalTheta with NaN, so totalSegments came out NaN, the
+    // loop below emitted no intermediate points, and `G2 X10 I5 E1` rendered as a
+    // straight line from the start point to the endpoint instead of an arc.
+    const x = move.x ?? start.x;
+    const y = move.y ?? start.y;
+    const z = move.z ?? start.z;
+    i ??= 0;
+    j ??= 0;
     // Set when the arc cannot be described at all, so only the endpoint is emitted.
     let arcIsDegenerate = false;
 
@@ -155,11 +165,9 @@ export class ArcTessellator {
     // Z1 -> Z3 walked its intermediate points down to Z-0.97 and only landed on Z3 at
     // the endpoint, leaving a visible spike in the rendered path.
     //
-    // `??` not `||`: Z0 is a legitimate target, and `|| start.z` turned a descent to
-    // Z0 into a flat arc at the old height. This matches the endpoint below, and is
-    // only safe because the parser now drops non-finite params -- `||` was rejecting
-    // NaN here by accident, and `??` does not.
-    const zDist = (z ?? start.z) - start.z;
+    // Z defaults to start.z above rather than `|| start.z`: Z0 is a legitimate
+    // target, and `||` turned a descent to Z0 into a flat arc at the old height.
+    const zDist = z - start.z;
     const zStep = zDist / totalSegments;
 
     let pz = start.z;
@@ -171,7 +179,10 @@ export class ArcTessellator {
     // fails the condition), but Infinity ran until the vertex array hit its length
     // limit and threw, aborting the whole job. Emit no intermediate points in either
     // case and fall through to the endpoint below.
-    if (!arcIsDegenerate && Number.isFinite(totalSegments)) {
+    // A zero radius is degenerate too, now that a missing I/J defaults to 0: without
+    // this an arc carrying no offsets at all would stack every intermediate point on
+    // the start position before jumping to the endpoint.
+    if (!arcIsDegenerate && arcRadius > 0 && Number.isFinite(totalSegments)) {
       for (let moveIdx = 0; moveIdx < totalSegments - 1; moveIdx++) {
         currentAngle += arcAngleIncrement;
         pz += zStep;
@@ -179,10 +190,9 @@ export class ArcTessellator {
       }
     }
 
-    // `??` not `||`: an arc ending on X0, Y0 or Z0 used to silently keep the previous
-    // coordinate. Safe now that the parser drops non-finite params -- `||` was also
-    // rejecting NaN here by accident, which `??` does not do.
-    const endPoint = { x: x ?? start.x, y: y ?? start.y, z: z ?? start.z };
+    // An arc ending on X0, Y0 or Z0 used to silently keep the previous coordinate,
+    // back when the defaults above were applied with `||`.
+    const endPoint = { x, y, z };
     emit(endPoint.x, endPoint.y, endPoint.z);
 
     return endPoint;
