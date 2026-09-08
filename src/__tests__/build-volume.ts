@@ -1,5 +1,5 @@
 import { test, describe, expect, vi } from 'vitest';
-import { BuildVolume } from '../build-volume';
+import { BuildVolume, type BuildVolumeDef } from '../build-volume';
 import { AxesHelper, Color, Object3D, Scene } from 'three';
 import { Grid } from '../helpers/grid';
 import { LineBox } from '../helpers/line-box';
@@ -306,6 +306,43 @@ describe('BuildVolume', () => {
       const scene = new Scene();
       const sceneAddSpy = vi.spyOn(scene, 'add');
       const buildVolume = new BuildVolume(10, 20, 30, false, scene);
+
+      buildVolume.smallGrid = false;
+
+      expect(sceneAddSpy).toHaveBeenCalledTimes(0);
+    });
+
+    test('an omitted value defaults to false rather than undefined', () => {
+      const buildVolume = new BuildVolume(10, 20, 30, undefined, mockScene);
+
+      expect(buildVolume.smallGrid).toBe(false);
+    });
+
+    // BuildVolumeDef is spelled out by hand rather than derived from this class,
+    // so this pins the two against drifting apart: a def has to remain something
+    // the constructor accepts.
+    test('a BuildVolumeDef without smallGrid can construct a BuildVolume', () => {
+      const def: BuildVolumeDef = { x: 10, y: 20, z: 30 };
+
+      const buildVolume = new BuildVolume(def.x, def.y, def.z, def.smallGrid, mockScene);
+
+      expect([buildVolume.x, buildVolume.y, buildVolume.z]).toEqual([10, 20, 30]);
+      expect(buildVolume.smallGrid).toBe(false);
+    });
+
+    test('setting it back to undefined reads as false', () => {
+      const scene = new Scene();
+      const buildVolume = new BuildVolume(10, 20, 30, true, scene);
+
+      buildVolume.smallGrid = undefined;
+
+      expect(buildVolume.smallGrid).toBe(false);
+    });
+
+    test('going from undefined to false does not trigger an update', () => {
+      const scene = new Scene();
+      const sceneAddSpy = vi.spyOn(scene, 'add');
+      const buildVolume = new BuildVolume(10, 20, 30, undefined, scene);
 
       buildVolume.smallGrid = false;
 
