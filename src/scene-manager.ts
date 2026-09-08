@@ -497,6 +497,16 @@ export class SceneManager {
     const maxZ = topLayer?.z;
 
     this.objectsManager.updateClippingPlanes(minZ, maxZ);
+
+    // the highlight tracks the top of the *visible* range, so when a range change
+    // moves that top the overlay has to move with it — otherwise it stays floating
+    // above the clipped stack while the newly visible top keeps its tool color.
+    // The incremental path machinery only moves the highlight onto not-yet-drawn
+    // paths (streaming always advances), so landing on an already-drawn layer
+    // needs the full rebuild, which draws the highlight before the tool batches
+    if (this._topLayerColor === undefined && this._lastSegmentColor === undefined) return;
+    const topLayerIndex = (this._endLayer ?? this.job.layers.length) - 1;
+    if (topLayerIndex !== this._highlightedLayerIndex) this.render();
   }
 
   /**

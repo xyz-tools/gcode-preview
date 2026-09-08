@@ -449,6 +449,72 @@ describe('SceneManager properties', () => {
       fresh.dispose();
     });
 
+    test('lowering the end layer moves the highlight onto the new visible top', () => {
+      const fresh = createSceneManager({ job: threeLayerJob(), topLayerColor: '#00ff00' });
+
+      fresh.endLayer = 2;
+
+      const highlights = highlights_(fresh);
+      expect(highlights.length).toBe(1);
+      // the second layer sits at z 0.2 and lines draw at the layer midplane
+      expect(highlightZ(highlights[0])).toBeCloseTo(0.1);
+
+      fresh.dispose();
+    });
+
+    test('single layer mode shows its lone visible layer in the top layer color', () => {
+      // tube mode: the singleLayerMode setter does not rebuild for the gradient
+      // there, so the highlight move has to come from the range change itself
+      const fresh = createSceneManager({ job: threeLayerJob(), renderTubes: true, topLayerColor: '#00ff00' });
+
+      fresh.endLayer = 2;
+      fresh.singleLayerMode = true;
+
+      const highlights = highlights_(fresh);
+      expect(highlights.length).toBe(1);
+      const material = (highlights[0] as { material: ShaderMaterial }).material;
+      expect(material.uniforms.uColor.value.getHex()).toBe(0x00ff00);
+      // clipped to the lone visible layer, whose top sits at z 0.2
+      expect(material.uniforms.clipMaxY.value).toBeCloseTo(0.2);
+
+      fresh.dispose();
+    });
+
+    test('lowering the end layer re-clips the rebuilt tube highlight', () => {
+      const fresh = createSceneManager({ job: threeLayerJob(), renderTubes: true, topLayerColor: '#00ff00' });
+
+      fresh.endLayer = 2;
+
+      const material = (highlights_(fresh)[0] as { material: ShaderMaterial }).material;
+      expect(material.uniforms.clipMaxY.value).toBeCloseTo(0.2);
+
+      fresh.dispose();
+    });
+
+    test('a start layer change with an open end keeps the highlight on the last layer', () => {
+      const fresh = createSceneManager({ job: threeLayerJob(), topLayerColor: '#00ff00' });
+      const render = vi.spyOn(fresh, 'render');
+
+      fresh.startLayer = 2;
+
+      expect(render).not.toHaveBeenCalled();
+      // the third layer sits at z 0.4 and lines draw at the layer midplane
+      expect(highlightZ(highlights_(fresh)[0])).toBeCloseTo(0.3);
+
+      fresh.dispose();
+    });
+
+    test('an end layer change that keeps the same top layer skips the rebuild', () => {
+      const fresh = createSceneManager({ job: threeLayerJob(), topLayerColor: '#00ff00' });
+      const render = vi.spyOn(fresh, 'render');
+
+      fresh.endLayer = fresh.job.countLayers;
+
+      expect(render).not.toHaveBeenCalled();
+
+      fresh.dispose();
+    });
+
     test('a scalar extrusionColor leaves the highlight color untouched', () => {
       const fresh = createSceneManager({ topLayerColor: '#00ff00' });
 
@@ -1440,6 +1506,12 @@ function highlights_(sceneManager: SceneManager): Object3D[] {
 /** The hex color of a highlight line overlay. */
 function lineColor(object: Object3D): number {
   return ((object as LineSegments2).material as LineMaterial).color.getHex();
+}
+
+/** The z of a highlight line overlay's first vertex, identifying its layer. */
+function highlightZ(object: Object3D): number {
+  const geometry = (object as LineSegments2).geometry;
+  return (geometry.attributes.instanceStart as { getZ(index: number): number }).getZ(0);
 }
 
 /** A two layer job whose top layer holds two extrusion paths. */
