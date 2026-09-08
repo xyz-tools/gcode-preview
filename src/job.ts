@@ -221,13 +221,14 @@ export class Job {
    * @param pathType - Type of the move about to be added
    * @returns The in-progress path when it can continue, otherwise a fresh one
    * @remarks
-   * The in-progress path continues only while its type and its extrusion
-   * dimensions still match the state; dimension metadata that changed the
-   * state since the path was started (see `beginCommand`) breaks it here, so
-   * every path carries a single width and height. Deciding this lazily at
-   * move time (and not when the metadata is applied) keeps streamed and
-   * one-shot parses identical: the interpreter resumes the last finished path
-   * at every chunk boundary, which would undo an eager break.
+   * The in-progress path continues only while its type, its extrusion
+   * dimensions and its tool still match the state; dimension metadata (see
+   * `beginCommand`) or a tool change that altered the state since the path
+   * was started breaks it here, so every path carries a single width, height
+   * and tool. Deciding this lazily at move time (and not when the metadata or
+   * tool is applied) keeps streamed and one-shot parses identical: the
+   * interpreter resumes the last finished path at every chunk boundary, which
+   * would undo an eager break.
    */
   continuePath(pathType: PathType): Path {
     const currentPath = this.inprogressPath;
@@ -235,7 +236,8 @@ export class Job {
       currentPath !== undefined &&
       currentPath.travelType === pathType &&
       currentPath.extrusionWidth === this.state.extrusionWidth &&
-      currentPath.lineHeight === this.state.lineHeight
+      currentPath.lineHeight === this.state.lineHeight &&
+      currentPath.tool === this.state.tool
     ) {
       return currentPath;
     }
