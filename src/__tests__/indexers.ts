@@ -488,3 +488,64 @@ test('LayersMetadataIndexer.setLayerMetadata keeps the layer pointer for the sam
 
   expect(afterSwap.layerIndex).toBe(0);
 });
+
+describe('LayersMetadataIndexer strategy selection', () => {
+  test('takes up metadata as soon as it arrives, not only on the first path', () => {
+    const layers: Layer[] = [];
+    const indexer = new LayersMetadataIndexer(layers, []);
+
+    // A slicer states its layers after its start G-code, so a streamed parse
+    // reaches the prime line before any of them have been read. Settling the
+    // strategy here would leave the whole file on tolerance detection.
+    const prime = createPath(0.28);
+    indexer.sortIn(prime);
+    expect(layers).toHaveLength(1);
+
+    indexer.setLayerMetadata([
+      { layerIndex: 0, z: 0.3, height: 0.3, lineIndex: 0 },
+      { layerIndex: 1, z: 0.6, height: 0.3, lineIndex: 9 }
+    ]);
+    indexer.sortIn(createPath(0.3));
+    indexer.sortIn(createPath(0.6));
+
+    expect(layers).toHaveLength(2);
+    // the prime line's layer is restated by the slicer's own values, so the
+    // layers match what a parse holding the whole file produces
+    expect(layers[0].z).toBe(0.3);
+    expect(layers[0].height).toBe(0.3);
+    expect(layers[0].paths).toHaveLength(2);
+    expect(layers[1].z).toBe(0.6);
+  });
+
+  test('keeps using metadata once it has, even if the array is replaced', () => {
+    const layers: Layer[] = [];
+    const indexer = new LayersMetadataIndexer(layers, [{ layerIndex: 0, z: 0.2, height: 0.2, lineIndex: 0 }]);
+
+    indexer.sortIn(createPath(0.2));
+    // Swapping in an empty array must not send the file back to tolerance
+    // detection: the layers already filed are metadata positions.
+    indexer.setLayerMetadata([]);
+    indexer.sortIn(createPath(0.2));
+
+    expect(layers).toHaveLength(1);
+    expect(layers[0].paths).toHaveLength(2);
+  });
+
+  test('leaves the observed values in place where the metadata states none', () => {
+    const layers: Layer[] = [];
+    const indexer = new LayersMetadataIndexer(layers, []);
+
+    indexer.sortIn(createPath(0.28));
+    // A layer entry the slicer left incomplete has nothing better to offer, so
+    // what the move observed stands.
+    indexer.setLayerMetadata([
+      { layerIndex: 0, lineIndex: 0 },
+      { layerIndex: 1, z: 0.6, lineIndex: 9 }
+    ]);
+    indexer.sortIn(createPath(0.28));
+
+    expect(layers).toHaveLength(1);
+    expect(layers[0].z).toBe(0.28);
+    expect(layers[0].height).toBe(0.28);
+  });
+});
