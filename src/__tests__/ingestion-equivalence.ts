@@ -14,8 +14,8 @@
  * from the fixture line by line) so every mode must independently reproduce
  * them — comparing modes against each other would let a shared bug slip by.
  *
- * Streaming-only behaviors (render throttling, onJobUpdated cadence, …)
- * belong in the gcode-preview.ts tests, not here.
+ * Streaming-only behaviors belong in gcode-preview.ts unless they need this
+ * real-pipeline harness.
  *
  * All helpers live in this file on purpose: the vitest config collects every
  * .ts file under src/__tests__ as a test suite, so a separate helper module
@@ -109,11 +109,11 @@ const MODES: [name: string, ingest: Ingest][] = [
   ['stream chunk=64k', streamIngest(64 * 1024)]
 ];
 
-function createPreview(): GCodePreview {
+function createPreview(keepLines = false): GCodePreview {
   const canvas = document.createElement('canvas');
   Object.defineProperty(canvas, 'offsetWidth', { value: 800, configurable: true });
   Object.defineProperty(canvas, 'offsetHeight', { value: 600, configurable: true });
-  return new GCodePreview({ canvas, buildVolume: { x: 200, y: 200, z: 200 } });
+  return new GCodePreview({ canvas, buildVolume: { x: 200, y: 200, z: 200 }, keepLines });
 }
 
 describe.each(MODES)('ingestion via %s', (_name, ingest) => {
@@ -378,5 +378,59 @@ describe.each(MODES)('ingestion via %s', (_name, ingest) => {
       min: expect.objectContaining({ x: 10, y: 10, z: 1 }),
       max: expect.objectContaining({ x: 30, y: 25, z: 1 })
     });
+  });
+});
+
+describe('stream lifecycle', () => {
+  let preview: GCodePreview;
+
+  beforeEach(() => {
+    preview = createPreview(true);
+    vi.spyOn(console, 'debug').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    preview.dispose();
+    vi.restoreAllMocks();
+  });
+
+  test('clearing an active stream keeps delayed chunks out of the replacement job', async () => {
+    let controller!: ReadableStreamDefaultController<string>;
+    let cancelled = false;
+    const stream = new ReadableStream<string>({
+      start(value) {
+        controller = value;
+        controller.enqueue('G0 X0 Y0 Z0.2\nG1 X10 E1\n');
+      },
+      cancel() {
+        cancelled = true;
+      }
+    });
+    let firstChunkRead!: () => void;
+    const firstChunk = new Promise<void>((resolve) => {
+      firstChunkRead = resolve;
+    });
+    preview.onJobUpdated = firstChunkRead;
+    const loading = preview.processGCodeStream(stream, { render: false }).catch((error: unknown) => {
+      if (!(error instanceof Error) || error.name !== 'AbortError') throw error;
+    });
+
+    await firstChunk;
+    preview.clear();
+    await preview.processGCodeStream('G0 X0 Y0 Z0.2\nG1 X100 E1', { render: false });
+    const replacement = preview.job;
+    const expectedLines = [...preview.parser.lines];
+    const expectedPaths = replacement.paths.map((path) => [...path.vertices]);
+
+    if (!cancelled) {
+      controller.enqueue('G1 X999 E1\n');
+      controller.close();
+    }
+    await loading;
+
+    expect(preview.job).toBe(replacement);
+    expect(preview.job.state.x).toBe(100);
+    expect(preview.parser.lines).toEqual(expectedLines);
+    expect(preview.job.paths.map((path) => path.vertices)).toEqual(expectedPaths);
   });
 });

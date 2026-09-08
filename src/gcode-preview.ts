@@ -92,6 +92,7 @@ export class GCodePreview {
   private opts: GCodePreviewOptions | null;
 
   private interpreter: Interpreter;
+  private activeStreamReader?: ReadableStreamDefaultReader;
 
   // dev mode
   /** Developer mode configuration */
@@ -173,6 +174,7 @@ export class GCodePreview {
    * Clears the preview and resets the parser, sceneManager, gui and job
    */
   clear(): void {
+    this.cancelActiveStream();
     this._parser = this.createParser();
     this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
     this.sceneManager.clear();
@@ -229,7 +231,9 @@ export class GCodePreview {
   }
 
   async readStream(stream: ReadableStream, options: { render?: boolean } = {}): Promise<void> {
+    this.cancelActiveStream();
     const reader = stream.getReader();
+    this.activeStreamReader = reader;
     let result;
     let tail = '';
     let size = 0;
@@ -237,6 +241,9 @@ export class GCodePreview {
 
     do {
       result = await reader.read();
+      if (this.activeStreamReader !== reader) {
+        throw new DOMException('Stream cancelled', 'AbortError');
+      }
       const length = result.value?.length ?? 0;
       if (length === 0) {
         // TextDecoderStream can legitimately emit an empty chunk (e.g. one
@@ -284,7 +291,14 @@ export class GCodePreview {
     }
 
     console.debug('total read from stream', Math.floor(size / 1024), 'kB');
+    this.activeStreamReader = undefined;
     this.onStreamEnd?.();
+  }
+
+  private cancelActiveStream(): void {
+    const reader = this.activeStreamReader;
+    this.activeStreamReader = undefined;
+    if (reader) void reader.cancel().catch(console.debug);
   }
 
   /**
@@ -300,6 +314,7 @@ export class GCodePreview {
    * Disposes of all resources and cleans up
    */
   dispose(): void {
+    this.cancelActiveStream();
     this.devGui?.destroy();
     this.devGui = undefined;
 
