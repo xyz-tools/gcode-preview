@@ -212,6 +212,12 @@ export class Job {
     const currentPath = new Path(newType, this.state.extrusionWidth, this.state.lineHeight, this.state.tool);
     const pos = this.resolvePosition();
     currentPath.addPoint(pos.x, pos.y, pos.z);
+    // The seed point is the extrusion's starting position, which the move
+    // handlers never see as a destination; without it a path entered by a
+    // travel move would be missing its first end from the bounds (see #451).
+    if (newType === PathType.Extrusion) {
+      this.boundingBox.update(pos.x, pos.y, pos.z);
+    }
     this.inprogressPath = currentPath;
     return currentPath;
   }

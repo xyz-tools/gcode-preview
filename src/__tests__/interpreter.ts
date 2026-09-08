@@ -215,7 +215,7 @@ describe('malformed coordinates through the whole pipeline', () => {
   });
 
   test('a malformed coordinate does not poison the bounding box', () => {
-    const job = run(['M83', 'G1 X10 Y10 Z1 E1', 'G1 Xabc Y20 E1', 'G1 X30 Y30 E1'].join('\n'));
+    const job = run(['M83', 'G0 X10 Y10 Z1', 'G1 Xabc Y20 E1', 'G1 X30 Y30 E1'].join('\n'));
 
     expect(job.boundingBox.isValid).toBe(true);
     expect(job.boundingBox.corners).toEqual({
@@ -226,7 +226,7 @@ describe('malformed coordinates through the whole pipeline', () => {
 
   test('an overflowing coordinate does not stretch the bounding box to Infinity', () => {
     const huge = '1' + '0'.repeat(400);
-    const job = run(['M83', 'G1 X10 Y10 Z1 E1', `G1 X${huge} E1`, 'G1 X30 Y30 E1'].join('\n'));
+    const job = run(['M83', 'G0 X10 Y10 Z1', `G1 X${huge} E1`, 'G1 X30 Y30 E1'].join('\n'));
 
     expect(job.boundingBox.size).toEqual(expect.objectContaining({ x: 20, y: 20, z: 0 }));
   });
@@ -353,5 +353,29 @@ describe('malformed coordinates through the whole pipeline', () => {
     expect(points.every((value) => Number.isFinite(value))).toBe(true);
     expect(job.boundingBox.isValid).toBe(true);
     expect(job.boundingBox.corners?.min.x).not.toBeNaN();
+  });
+});
+
+describe('extrusion bounding box', () => {
+  const run = (gcode: string) => new Interpreter().execute(new Parser().parseGCode(gcode).commands);
+
+  test('includes the starting point of an extrusion entered by a travel move', () => {
+    // A path's seed point is never a move destination, so it used to be missing
+    // from the bounds: a travel to X0 followed by a single extrusion to X10
+    // reported a zero-width box pinned at X10 (#451).
+    const job = run(['M83', 'G0 X0 Y0 Z0.2', 'G1 X10 E1'].join('\n'));
+
+    expect(job.boundingBox.corners?.min.x).toEqual(0);
+    expect(job.boundingBox.corners?.max.x).toEqual(10);
+    expect(job.boundingBox.size?.x).toEqual(10);
+    expect(job.boundingBox.center?.x).toEqual(5);
+  });
+
+  test('a travel move does not stretch the bounds', () => {
+    // Only the extrusion's own start counts; the travel lead-up beyond it stays out.
+    const job = run(['M83', 'G0 X-50 Y0 Z0.2', 'G0 X0', 'G1 X10 E1'].join('\n'));
+
+    expect(job.boundingBox.corners?.min.x).toEqual(0);
+    expect(job.boundingBox.corners?.max.x).toEqual(10);
   });
 });
