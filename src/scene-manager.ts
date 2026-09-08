@@ -519,7 +519,7 @@ export class SceneManager {
     }
 
     if (this._singleLayerMode === true) {
-      this.startLayer = this._endLayer - 1;
+      this.startLayer = this._endLayer;
     }
 
     this.updateClippingPlanes();
@@ -546,7 +546,7 @@ export class SceneManager {
 
     if (this._singleLayerMode) {
       this.prevStartLayer = this._startLayer;
-      this._startLayer = Math.max(this._endLayer - 1, 1);
+      this._startLayer = Math.max(this._endLayer, 1);
     } else {
       this._startLayer = this.prevStartLayer;
     }

@@ -774,7 +774,18 @@ describe('SceneManager properties', () => {
       sceneManager.singleLayerMode = true;
 
       expect(sceneManager.singleLayerMode).toBe(true);
-      expect(sceneManager.startLayer).toBe(1);
+      expect(sceneManager.startLayer).toBe(2);
+    });
+
+    test('singleLayerMode clips away the layer below the end layer', () => {
+      sceneManager.endLayer = 2;
+
+      sceneManager.singleLayerMode = true;
+
+      const layer = sceneManager.job.layers[1];
+      const planes = objectsManager(sceneManager).clippingPlanes;
+      expect(planes).toHaveLength(1);
+      expect(planes[0].constant).toBe(-(layer.z - layer.height));
     });
 
     test('singleLayerMode restores the previous start layer when turned off', () => {
@@ -825,10 +836,14 @@ describe('SceneManager properties', () => {
       fresh.dispose();
     });
 
-    test('endLayer follows the end layer while single layer mode is on', () => {
+    test('startLayer follows the end layer while single layer mode is on', () => {
       sceneManager.singleLayerMode = true;
 
       sceneManager.endLayer = 2;
+
+      expect(sceneManager.startLayer).toBe(2);
+
+      sceneManager.endLayer = 1;
 
       expect(sceneManager.startLayer).toBe(1);
     });
