@@ -63,18 +63,24 @@ grep -rn "0\.1[0-9][0-9]" --include="*.json" --include="*.yml" --include="*.ts" 
 
 Files that need updating (as of this writing):
 
-1. **`package.json`** — the supported range in `dependencies`:
+1. **`package.json`** — the supported range in `peerDependencies`:
    ```json
    "three": ">=0.166.0 <0.186.0"
    ```
    Raise the upper bound so the new version is included. The bound is
    **exclusive**, so for new version `0.186.x` set it to `<0.187.0`.
 
-2. **`package.json`** — the `@types/three` devDependency:
+   `three` is a **peer** dependency, not a regular one, so that consumers keep a
+   single copy of it. Don't move it back into `dependencies`; the guard tests in
+   `src/__tests__/three-version.ts` will fail if you do.
+
+2. **`package.json`** — the `three` and `@types/three` devDependencies:
    ```json
+   "three": "^0.185.1",
    "@types/three": "^0.185.4"
    ```
-   Bump to the `@types/three` release that matches the new `three` version.
+   A peer dependency is not installed for local development, so `three` is also
+   a devDependency; bump both to the new release.
 
 3. **`.github/workflows/run-tests.yml`** — the test matrix under
    `strategy.matrix.include`. Add a new entry pairing the new `three-version`

@@ -22,7 +22,9 @@ const config = [
         }
       }
     ],
-    external: [...Object.keys(pkg.dependencies || {})],
+    // peer dependencies are externals too: bundling three would ship a second
+    // copy of it to every consumer that already has its own
+    external: [...Object.keys(pkg.dependencies || {}), ...Object.keys(pkg.peerDependencies || {})],
     plugins: [
       nodeResolve(),
       esbuild({

@@ -33,9 +33,9 @@ Click to see the [full-fledged demo](https://gcode-preview.web.app/):
 
 ## Installation
 
-`npm install gcode-preview`
+`npm install gcode-preview three`
 
-GCode Preview depends on [three.js](https://threejs.org/) and supports `three` `>=0.166.0 <0.186.0`.
+[three.js](https://threejs.org/) is a peer dependency; GCode Preview supports `three` `>=0.166.0 <0.186.0`. npm 7 and later install it for you, but naming it in your own `package.json` keeps your app and the library on the same copy of three. That matters: two copies of three in one bundle are two different sets of classes, so `instanceof` checks fail across the boundary and helpers like `STLExporter` reject objects from the other copy.
 
 ### Quick start
 

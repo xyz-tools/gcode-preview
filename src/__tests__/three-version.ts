@@ -18,8 +18,28 @@ function parseVersion(version: string): number {
 const minMinor = Number(MIN_VERSION.split('.')[1]);
 const maxMinorExclusive = Number(MAX_EXCLUSIVE_VERSION.split('.')[1]);
 
-test('three.js dependency is declared as the supported range', () => {
-  expect(pkg.dependencies.three).toBe(SUPPORTED_RANGE);
+test('three.js is declared as a peer dependency with the supported range', () => {
+  expect(pkg.peerDependencies.three).toBe(SUPPORTED_RANGE);
+});
+
+test('three.js is not also a regular dependency', () => {
+  // shipping three as a regular dependency lets a consumer end up with a
+  // second copy of it, and two copies are two different sets of classes:
+  // instanceof fails across the boundary and helpers like STLExporter reject
+  // objects built by the other copy
+  expect((pkg.dependencies as Record<string, string>).three).toBeUndefined();
+});
+
+test('rollup treats every peer dependency as external', async () => {
+  // the bundle must import three rather than inline it -- otherwise moving it
+  // to peerDependencies achieves nothing, because every consumer still gets
+  // the library's own copy baked into the dist
+  const { default: config } = await import('../../rollup.config.mjs');
+  const external = (config as { external?: string[] }[])[0].external ?? [];
+
+  for (const name of Object.keys(pkg.peerDependencies)) {
+    expect(external).toContain(name);
+  }
 });
 
 test('installed three.js version is within the supported range', () => {
