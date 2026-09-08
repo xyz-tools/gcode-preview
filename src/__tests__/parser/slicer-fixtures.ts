@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Parser } from '../../parser/gcode-parser';
+import { splitChunk } from '../../helpers/split-chunk';
 
 // Realistic mini gcode files, formatted exactly like real slicer output:
 // prose comments carry the leading '; ' real slicers emit, while structured
@@ -344,5 +345,47 @@ describe('chunked parsing', () => {
     expect(chunked.layerMetadata![2].height).toBeCloseTo(0.2);
     // Layers wholly inside one chunk keep their heights.
     expect(chunked.layerMetadata![1].height).toBeCloseTo(0.2);
+  });
+
+  // The splits above all land *between* layers, on a marker line, which is the
+  // one boundary where no dialect has a half-read layer in hand. Issue #445 was
+  // a chunk ending inside a ;LAYER_CHANGE / ;Z: / ;HEIGHT: block, so sweep
+  // every byte boundary instead of trusting a hand-picked one.
+  //
+  // Fed through splitChunk, as a stream is: it is what decides where a chunk
+  // may end, and holding a trailing comment run is what keeps these blocks
+  // whole. Cura is absent on purpose -- it reads a layer's Z from the move
+  // that follows the marker rather than from a comment, so a boundary between
+  // the two is not something splitChunk can close.
+  describe.each([
+    ['PrusaSlicer', PRUSA_LINES],
+    ['OrcaSlicer', ORCA_LINES],
+    ['Simplify3D', SIMPLIFY3D_LINES],
+    ['Slic3r', SLIC3R_LINES]
+  ])('%s cut at every byte boundary', (_name, lines) => {
+    const text = lines.join('\n');
+    const single = new Parser().parseGCode(text).metadata.layerMetadata;
+
+    /** Feeds the two parts through splitChunk, as readStream would. */
+    const streamed = (cut: number): typeof single => {
+      const parser = new Parser();
+      let tail = '';
+      for (const part of [text.slice(0, cut), text.slice(cut)]) {
+        const split = splitChunk(tail, part);
+        tail = split.tail;
+        if (split.complete !== '') parser.parseGCode(split.complete);
+      }
+      if (tail !== '') parser.parseGCode(tail);
+      return parser.metadata.layerMetadata;
+    };
+
+    it('agrees with the single-shot parse wherever it is cut', () => {
+      const disagreed = [];
+      for (let cut = 1; cut < text.length; cut++) {
+        if (JSON.stringify(streamed(cut)) !== JSON.stringify(single)) disagreed.push(cut);
+      }
+
+      expect(disagreed).toEqual([]);
+    });
   });
 });

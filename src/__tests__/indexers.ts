@@ -349,6 +349,30 @@ test('LayersMetadataIndexer handles missing Z values in metadata', () => {
   expect(layers[0].height).toBe(0.3);
 });
 
+test('LayersMetadataIndexer advances past a layer whose metadata has no Z', () => {
+  const layers: Layer[] = [];
+  const metadata: LayerMetadata[] = [
+    { layerIndex: 0, height: 0.2, lineIndex: 0 }, // Missing Z
+    { layerIndex: 1, z: 0.4, height: 0.2, lineIndex: 4 }
+  ];
+
+  const indexer = new LayersMetadataIndexer(layers, metadata);
+
+  // The Z-less entry takes its Z from the first path, so the second path at
+  // that same Z joins it and only the third, higher, path moves on. Matching
+  // on layer order alone kept returning index 0 here and swallowed all three.
+  const first = createPath(0.2);
+  const second = createPath(0.2);
+  const third = createPath(0.4);
+  [first, second, third].forEach((path) => indexer.sortIn(path));
+
+  expect(layers).toHaveLength(2);
+  expect(layers[0].z).toBe(0.2);
+  expect(layers[0].paths).toEqual([first, second]);
+  expect(layers[1].z).toBe(0.4);
+  expect(layers[1].paths).toEqual([third]);
+});
+
 test('LayersMetadataIndexer handles missing height values in metadata', () => {
   const layers: Layer[] = [];
   const metadata: LayerMetadata[] = [
