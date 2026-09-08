@@ -230,6 +230,8 @@ export class GCodePreview {
 
   async readStream(stream: ReadableStream, options: { render?: boolean } = {}): Promise<void> {
     const reader = stream.getReader();
+    // the job this stream feeds; clear() swaps in a replacement
+    const job = this.job;
     let result;
     let tail = '';
     let size = 0;
@@ -237,6 +239,12 @@ export class GCodePreview {
 
     do {
       result = await reader.read();
+      // clear() ran while this chunk was in flight: the stream belongs to the
+      // discarded job, so cancel it rather than corrupt the replacement
+      if (this.job !== job) {
+        await reader.cancel();
+        return;
+      }
       const length = result.value?.length ?? 0;
       if (length === 0) {
         // TextDecoderStream can legitimately emit an empty chunk (e.g. one

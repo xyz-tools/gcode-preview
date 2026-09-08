@@ -568,6 +568,54 @@ describe('GCodePreview', () => {
       expect(preview.parser.parseGCode).toHaveBeenLastCalledWith('G1 X10 Y10');
       expect(mockInterpreter.execute).toHaveBeenCalledTimes(2);
     });
+
+    it('cancels the stream when clear() replaces the job mid-stream', async () => {
+      preview = new GCodePreview({ canvas: mockCanvas });
+      const onStreamEnd = vi.fn();
+      preview.onStreamEnd = onStreamEnd;
+
+      let controller!: ReadableStreamDefaultController<string>;
+      let cancelled = false;
+      const stream = new ReadableStream<string>({
+        start(streamController) {
+          controller = streamController;
+          controller.enqueue('G0 X0 Y0\n');
+        },
+        cancel() {
+          cancelled = true;
+        }
+      });
+
+      let firstChunkProcessed!: () => void;
+      const firstChunk = new Promise<void>((resolve) => (firstChunkProcessed = resolve));
+      preview.onJobUpdated = () => firstChunkProcessed();
+
+      const consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+      const reading = preview.readStream(stream);
+      await firstChunk;
+      const oldParseGCode = preview.parser.parseGCode;
+
+      // clear() builds a fresh Job; the shared mock would hand back the same
+      // object, which would hide the identity change the fix relies on
+      vi.mocked(Job).mockImplementationOnce(function () {
+        return { ...mockJob };
+      } as never);
+      preview.clear();
+
+      // simulate a delayed chunk from the old stream arriving after clear()
+      controller.enqueue('G1 X999 E1\n');
+      await reading;
+
+      // only the pre-clear chunk was parsed and executed; the delayed chunk
+      // was dropped and the old reader cancelled without signalling stream end
+      expect(oldParseGCode).toHaveBeenCalledTimes(1);
+      expect(preview.parser.parseGCode).not.toHaveBeenCalled();
+      expect(mockInterpreter.execute).toHaveBeenCalledTimes(1);
+      expect(cancelled).toBe(true);
+      expect(onStreamEnd).not.toHaveBeenCalled();
+
+      consoleDebugSpy.mockRestore();
+    });
   });
 
   describe('initStats method', () => {
