@@ -561,12 +561,12 @@ describe('GCodePreview', () => {
 
       await preview.readStream(stream);
 
-      // chunk 1 completes 'G0 X0 Y0', chunk 2 has no newline so it completes
-      // nothing (''), and the leftover tail is flushed after the stream ends
-      expect(preview.parser.parseGCode).toHaveBeenCalledTimes(3);
+      // chunk 2 has no newline, so it completes nothing and is skipped rather
+      // than parsed as an empty line; the tail is flushed after the stream ends
+      expect(preview.parser.parseGCode).toHaveBeenCalledTimes(2);
       expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(1, 'G0 X0 Y0');
       expect(preview.parser.parseGCode).toHaveBeenLastCalledWith('G1 X10 Y10');
-      expect(mockInterpreter.execute).toHaveBeenCalledTimes(3);
+      expect(mockInterpreter.execute).toHaveBeenCalledTimes(2);
     });
   });
 
