@@ -191,6 +191,36 @@ describe('extrusion dimension metadata (;WIDTH: / ;HEIGHT:)', () => {
   });
 });
 
+describe('tool changes (T0-T7)', () => {
+  const run = (lines: string[]) => new Interpreter().execute(new Parser().parseGCode(lines).commands);
+  const summary = (job: Job) => job.extrusions.map((path) => ({ tool: path.tool, vertices: path.vertices }));
+
+  test('a tool change between two extrusions breaks the path and assigns the new tool', () => {
+    const job = run(['G0 X0 Y0 Z0.2', 'G1 X10 E1', 'T1', 'G1 X20 E2']);
+
+    expect(job.state.tool).toEqual(1);
+    expect(summary(job)).toEqual([
+      { tool: 0, vertices: [0, 0, 0.2, 10, 0, 0.2] },
+      { tool: 1, vertices: [10, 0, 0.2, 20, 0, 0.2] }
+    ]);
+  });
+
+  test('a tool change followed by a travel assigns the next extrusion to the new tool', () => {
+    const job = run(['G0 X0 Y0 Z0.2', 'G1 X10 E1', 'T1', 'G0 X10 Y0 Z0.2', 'G1 X20 E2']);
+
+    expect(summary(job)).toEqual([
+      { tool: 0, vertices: [0, 0, 0.2, 10, 0, 0.2] },
+      { tool: 1, vertices: [10, 0, 0.2, 20, 0, 0.2] }
+    ]);
+  });
+
+  test('re-selecting the current tool does not break the path', () => {
+    const job = run(['G0 X0 Y0 Z0.2', 'G1 X10 E1', 'T0', 'G1 X20 E2']);
+
+    expect(summary(job)).toEqual([{ tool: 0, vertices: [0, 0, 0.2, 10, 0, 0.2, 20, 0, 0.2] }]);
+  });
+});
+
 describe('malformed coordinates through the whole pipeline', () => {
   const run = (gcode: string) => new Interpreter().execute(new Parser().parseGCode(gcode).commands);
   const allVertices = (job: Job) => job.paths.flatMap((path) => path.vertices);
