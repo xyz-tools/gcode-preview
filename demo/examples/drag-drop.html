@@ -1,0 +1,60 @@
+<!doctype html>
+<!--
+  Drag & drop: `droppable: true` wires drag/drop handling on the canvas itself.
+  The library clears the previous job and parses the dropped file for us, then
+  dispatches an `update` event on the canvas — so all this example does is hide a hint.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Drag &amp; drop — gcode-preview</title>
+    <style>
+      body { margin: 0; background: #eee; font: 14px/1.5 system-ui, sans-serif; }
+      canvas { display: block; width: 100vw; height: 100vh; }
+      canvas.dragging { opacity: 0.7; }
+      #hint {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        color: #fff;
+        font-size: 20px;
+        text-shadow: 0 1px 3px #000;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas></canvas>
+    <div id="hint">Drop a .gcode file here</div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../lib/three/build/three.module.min.js",
+          "lil-gui": "../lib/lil-gui/dist/lil-gui.esm.min.js",
+          "gcode-preview": "../dist/gcode-preview.es.js"
+        }
+      }
+    </script>
+    <script type="module">
+      import { GCodePreview } from 'gcode-preview';
+
+      const canvas = document.querySelector('canvas');
+      const hint = document.querySelector('#hint');
+
+      new GCodePreview({
+        canvas,
+        droppable: true,
+        buildVolume: { x: 220, y: 220, z: 250 },
+        backgroundColor: '#1a1a2e'
+      });
+
+      // makeDroppable() dispatches this on the canvas once the dropped file has been read.
+      canvas.addEventListener('update', (evt) => {
+        hint.remove();
+        console.log('loaded', evt.detail);
+      });
+    </script>
+  </body>
+</html>

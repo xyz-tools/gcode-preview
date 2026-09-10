@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Thumbnail — gcode-preview</title>
+    <style>
+      body { margin: 0; background: #eee; font: 14px/1.5 system-ui, sans-serif; }
+      canvas { display: block; width: 100vw; height: 100vh; }
+      #info {
+        position: fixed; top: 12px; left: 12px; padding: 8px;
+        background: #fff; border-radius: 4px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+      }
+      #info img { display: block; max-width: 220px; border-radius: 2px; }
+    </style>
+  </head>
+  <body>
+    <!--
+      Thumbnail: slicers embed preview images as base64 in G-code comments.
+      The parser collects them (plus the detected slicer name) in its metadata.
+    -->
+    <canvas></canvas>
+    <div id="info"></div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../lib/three/build/three.module.min.js",
+          "lil-gui": "../lib/lil-gui/dist/lil-gui.esm.min.js",
+          "gcode-preview": "../dist/gcode-preview.es.js"
+        }
+      }
+    </script>
+    <script type="module">
+      import { GCodePreview } from 'gcode-preview';
+
+      const preview = new GCodePreview({
+        canvas: document.querySelector('canvas'),
+        extrusionColor: '#95dfa1',
+        travelColor: 'red',
+        extrusionWidth: 0.5,
+        lineHeight: 0.3,
+        buildVolume: { x: 130, y: 150, z: 0, smallGrid: true }
+      });
+
+      const response = await fetch('../gcodes/screw.gcode');
+      // Metadata is filled in while the G-code is parsed, so it is only
+      // complete once processGCode() has resolved.
+      await preview.processGCode(await response.text());
+
+      // preview.parser.metadata.thumbnails is keyed by size, as the "WxH"
+      // string the slicer wrote (e.g. '16x16', '220x124'), so pick the widest
+      // key rather than hard-coding one. Each value is a Thumbnail with a
+      // ready-made `src` data URL and an `isValid` check.
+      const { thumbnails, slicerName } = preview.parser.metadata;
+      const largest = Object.values(thumbnails)
+        .filter((thumbnail) => thumbnail.isValid)
+        .sort((a, b) => b.width - a.width)[0];
+
+      const info = document.querySelector('#info');
+      if (largest) {
+        const img = document.createElement('img');
+        img.src = largest.src;
+        img.alt = `${largest.size} slicer thumbnail`;
+        info.append(img);
+      }
+      info.append(`${slicerName ?? 'unknown slicer'} — ${largest ? largest.size : 'no thumbnail'}`);
+    </script>
+  </body>
+</html>

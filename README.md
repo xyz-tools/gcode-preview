@@ -26,6 +26,12 @@ Join us on <a href="https://discord.gg/w2bsGRE6S4">discord</a>
 
 try it out: https://codepen.io/remcoder/pen/PwYVXBg
 
+### One page per feature
+[gcode-preview.web.app/examples/](https://gcode-preview.web.app/examples/) — a small standalone page for each
+feature: streaming, build volume, layer range, tube geometry, multi-color, arcs, thumbnails, orthographic camera and
+drag & drop. Plain HTML with an inline module script, no build step, meant to be copy-pasted. They live in
+[`demo/examples`](demo/examples) and are served by `npm run dev` at http://localhost:8080/examples/.
+
 ### Batteries included
 Click to see the [full-fledged demo](https://gcode-preview.web.app/):
 
@@ -52,12 +58,17 @@ GCode Preview depends on [three.js](https://threejs.org/) and supports `three` `
   preview.processGCode(gcode);
 ```
 
+That snippet is also a runnable page: [`demo/examples/minimal.html`](demo/examples/minimal.html).
+
 G-code can also be streamed in and rendered progressively:
 
 ```js
   const response = await fetch('benchy.gcode');
-  await preview.processGCodeStream(response.body);
+  await preview.processGCodeStream(response.body.pipeThrough(new TextDecoderStream()));
 ```
+
+`processGCodeStream` reads text chunks, so decode a `fetch` byte stream first — see
+[`demo/examples/streaming.html`](demo/examples/streaming.html).
 
 ### Constructor options
 

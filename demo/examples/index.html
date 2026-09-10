@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Examples — gcode-preview</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        margin: 0 auto;
+        padding: 32px 20px 64px;
+        max-width: 46rem;
+        font: 16px/1.6 system-ui, sans-serif;
+      }
+      h1 {
+        margin-bottom: 0.25em;
+      }
+      .lede {
+        margin-top: 0;
+        color: #666;
+      }
+      ul {
+        list-style: none;
+        margin: 32px 0;
+        padding: 0;
+      }
+      li {
+        padding: 12px 0;
+        border-top: 1px solid #ddd;
+      }
+      li a {
+        font-weight: 600;
+        text-decoration: none;
+      }
+      li a:hover {
+        text-decoration: underline;
+      }
+      li p {
+        margin: 2px 0 0;
+        color: #666;
+      }
+      footer {
+        border-top: 1px solid #ddd;
+        padding-top: 16px;
+        color: #666;
+        font-size: 14px;
+      }
+      @media (prefers-color-scheme: dark) {
+        .lede,
+        li p,
+        footer {
+          color: #aaa;
+        }
+        li,
+        footer {
+          border-color: #333;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>gcode-preview examples</h1>
+    <p class="lede">
+      One page per feature — plain HTML, no build step, no framework. View source on any of them: the whole example is
+      the inline <code>&lt;script type="module"&gt;</code>, so it is meant to be copy-pasted.
+    </p>
+
+    <ul>
+      <li>
+        <a href="minimal.html">Minimal</a>
+        <p>The smallest thing that renders: a canvas, a color, and two lines of G-code.</p>
+      </li>
+      <li>
+        <a href="streaming.html">Streaming</a>
+        <p>Pass a <code>fetch</code> stream to <code>processGCodeStream</code> and watch the model grow as it loads.</p>
+      </li>
+      <li>
+        <a href="build-volume.html">Build volume</a>
+        <p>The bed grid and volume outline, and what every <code>buildVolume</code> field does.</p>
+      </li>
+      <li>
+        <a href="layer-range.html">Layer range</a>
+        <p>Scrub the visible layers with a slider, the way a slicer's layer view does.</p>
+      </li>
+      <li>
+        <a href="tubes.html">Tube geometry</a>
+        <p>Extrusions as solid tubes with real width and height instead of flat lines.</p>
+      </li>
+      <li>
+        <a href="multi-color.html">Multi-color</a>
+        <p>One color per tool, so a multi-material print renders as it was printed.</p>
+      </li>
+      <li>
+        <a href="arcs.html">Arcs (G2/G3)</a>
+        <p>Arc moves, and the tolerance that controls how finely they are tessellated.</p>
+      </li>
+      <li>
+        <a href="thumbnail.html">Thumbnail</a>
+        <p>The preview image and slicer name that slicers embed in G-code comments.</p>
+      </li>
+      <li>
+        <a href="orthographic.html">Orthographic camera</a>
+        <p>Parallel projection for a technical top or front view, plus travel moves.</p>
+      </li>
+      <li>
+        <a href="drag-drop.html">Drag &amp; drop</a>
+        <p>Drop a <code>.gcode</code> file on the canvas — the library handles the rest.</p>
+      </li>
+    </ul>
+
+    <footer>
+      <a href="../index.html">Full demo app</a> · <a href="../docs/index.html">API docs</a> ·
+      <a href="https://github.com/xyz-tools/gcode-preview">GitHub</a>
+    </footer>
+  </body>
+</html>

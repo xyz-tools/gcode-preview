@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Layer range — gcode-preview</title>
+    <style>
+      body { margin: 0; background: #eee; font: 14px/1.5 system-ui, sans-serif; }
+      canvas { display: block; width: 100vw; height: 100vh; }
+      .controls {
+        position: fixed; left: 0; right: 0; bottom: 0;
+        display: flex; gap: 12px; align-items: center;
+        padding: 10px 16px; background: rgba(255, 255, 255, 0.85);
+      }
+      .controls input { flex: 1; }
+      .controls output { min-width: 8em; text-align: right; font-variant-numeric: tabular-nums; }
+    </style>
+  </head>
+  <body>
+    <!--
+      Layer range: scrub the visible top layer with sceneManager.startLayer /
+      endLayer, the way a slicer's layer slider does.
+    -->
+    <canvas></canvas>
+    <div class="controls">
+      <label for="top">Top layer</label>
+      <input id="top" type="range" min="1" max="1" value="1" disabled />
+      <output id="readout">…</output>
+    </div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../lib/three/build/three.module.min.js",
+          "lil-gui": "../lib/lil-gui/dist/lil-gui.esm.min.js",
+          "gcode-preview": "../dist/gcode-preview.es.js"
+        }
+      }
+    </script>
+    <script type="module">
+      import { GCodePreview } from 'gcode-preview';
+
+      const preview = new GCodePreview({
+        canvas: document.querySelector('canvas'),
+        extrusionColor: '#95dfa1',
+        travelColor: 'red',
+        extrusionWidth: 0.45,
+        lineHeight: 0.2,
+        buildVolume: { x: 180, y: 180, z: 0 },
+        // The highlight follows the top of the *visible* range: topLayerColor
+        // recolors the whole layer at endLayer, lastSegmentColor just that
+        // layer's final segment. So both move down/up with the slider — moving
+        // the range triggers a rebuild so the newly visible top gets highlighted
+        // and the layer left behind falls back to its normal tool color.
+        topLayerColor: 'white',
+        lastSegmentColor: '#000'
+      });
+
+      const slider = document.querySelector('#top');
+      const readout = document.querySelector('#readout');
+
+      const gcode = await fetch('../gcodes/3DBenchy.gcode').then((response) => response.text());
+      await preview.processGCode(gcode);
+
+      // countLayers is only known once the G-code has been processed
+      const total = preview.countLayers;
+      slider.max = total;
+      slider.value = total;
+      slider.disabled = false;
+      update();
+
+      slider.addEventListener('input', update);
+
+      function update() {
+        const top = Number(slider.value);
+        // 1-based, inclusive. startLayer stays at 1 here; set both to the same
+        // value (or use sceneManager.singleLayerMode) to show one layer only.
+        preview.sceneManager.startLayer = 1;
+        preview.sceneManager.endLayer = top;
+        // No manual redraw needed: the setters call updateClippingPlanes(), which
+        // re-renders when the highlight has to move, and the scene manager's own
+        // animate() loop paints every frame. preview.sceneManager.render() is the
+        // full scene rebuild if you ever do need to force one.
+        readout.textContent = `layer ${top} / ${total}`;
+      }
+    </script>
+  </body>
+</html>

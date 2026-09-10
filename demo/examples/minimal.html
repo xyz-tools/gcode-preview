@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Minimal — gcode-preview</title>
+    <style>
+      body { margin: 0; background: #eee; font: 14px/1.5 system-ui, sans-serif; }
+      canvas { display: block; width: 100vw; height: 100vh; }
+    </style>
+  </head>
+  <body>
+    <!--
+      Minimal: the smallest gcode-preview setup — a canvas, an extrusion color
+      and a short inline G-code string drawing a diagonal line.
+    -->
+    <canvas></canvas>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../lib/three/build/three.module.min.js",
+          "lil-gui": "../lib/lil-gui/dist/lil-gui.esm.min.js",
+          "gcode-preview": "../dist/gcode-preview.es.js"
+        }
+      }
+    </script>
+    <script type="module">
+      import { GCodePreview } from 'gcode-preview';
+
+      const preview = new GCodePreview({
+        canvas: document.querySelector('canvas'),
+        extrusionColor: 'hotpink'
+      });
+
+      // draw a diagonal line
+      const gcode = 'G0 X0 Y0 Z0.2\nG1 X42 Y42 E10';
+      preview.processGCode(gcode);
+    </script>
+  </body>
+</html>
