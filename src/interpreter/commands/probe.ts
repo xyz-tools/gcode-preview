@@ -30,9 +30,9 @@ export const probe: CommandHandler = (command, job) => {
   }
 
   const { positionShift } = state;
-  const x = params.x === undefined ? undefined : params.x + positionShift.x;
-  const y = params.y === undefined ? undefined : params.y + positionShift.y;
-  let z = params.z === undefined ? undefined : params.z + positionShift.z;
+  const x = params.x === undefined ? undefined : state.toMillimeters(params.x)! + positionShift.x;
+  const y = params.y === undefined ? undefined : state.toMillimeters(params.y)! + positionShift.y;
+  let z = params.z === undefined ? undefined : state.toMillimeters(params.z)! + positionShift.z;
 
   if (x === undefined && y === undefined && z === undefined) {
     return;

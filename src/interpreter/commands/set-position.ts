@@ -15,8 +15,11 @@ import type { CommandHandler } from '../../interpreter';
  * the axes.
  */
 export const setPosition: CommandHandler = (command, job) => {
-  const { x, y, z, e } = command.params;
   const { state } = job;
+  const x = state.toMillimeters(command.params.x);
+  const y = state.toMillimeters(command.params.y);
+  const z = state.toMillimeters(command.params.z);
+  const e = state.toMillimeters(command.params.e);
   const { positionShift } = state;
   const physical = job.resolvePosition();
 

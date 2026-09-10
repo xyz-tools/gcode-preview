@@ -1,4 +1,4 @@
-import { Units } from './units';
+import { Units, MM_PER_INCH } from './units';
 
 /**
  * Represents the current state of the print job
@@ -6,13 +6,13 @@ import { Units } from './units';
  * Tracks the current position, extrusion state, active tool, and units
  */
 export class State {
-  /** Current X position, or `undefined` until the axis is homed (G28) */
+  /** Current X position in millimeters, or `undefined` until the axis is homed (G28) */
   x: number | undefined = undefined;
-  /** Current Y position, or `undefined` until the axis is homed (G28) */
+  /** Current Y position in millimeters, or `undefined` until the axis is homed (G28) */
   y: number | undefined = undefined;
-  /** Current Z position, or `undefined` until the axis is homed (G28) */
+  /** Current Z position in millimeters, or `undefined` until the axis is homed (G28) */
   z: number | undefined = undefined;
-  /** Current extruder position, tracked by `applyExtrusion` and reset by G92 */
+  /** Current extruder position in millimeters, tracked by `applyExtrusion` and reset by G92 */
   e = 0;
   /**
    * Whether E parameters are relative distances (M83) rather than absolute
@@ -71,6 +71,11 @@ export class State {
    * the job's decision (see `Job.resolvePosition`), not the state's.
    */
   isHomed = false;
+
+  /** Converts a command distance to millimeters, preserving omitted words. */
+  toMillimeters(value: number | undefined): number | undefined {
+    return value === undefined ? undefined : value * (this.units === 'in' ? MM_PER_INCH : 1);
+  }
 
   /**
    * Applies a move's E parameter to the extruder position

@@ -11,8 +11,12 @@ import type { CommandHandler } from '../../interpreter';
  * G0 is for rapid moves (non-extrusion), G1 is for linear moves (with optional extrusion).
  */
 export const linearMove: CommandHandler = (command, job) => {
-  const { x, y, z, e, f } = command.params;
   const { state } = job;
+  const x = state.toMillimeters(command.params.x);
+  const y = state.toMillimeters(command.params.y);
+  const z = state.toMillimeters(command.params.z);
+  const e = state.toMillimeters(command.params.e);
+  const f = command.params.f;
 
   // discard zero length moves
   if (x === undefined && y === undefined && z === undefined) {
