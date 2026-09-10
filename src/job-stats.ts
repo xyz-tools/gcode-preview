@@ -16,6 +16,20 @@ export class JobStats {
   public others = 0;
   /** For reference, how many points were added to the job */
   public points = 0;
-  /** Total extrusion distance over all extrusion moves */
+  /**
+   * Cumulative newly advanced filament length in millimeters, including E-only
+   * purges and primes. Recovery of previously retracted filament is excluded;
+   * retracting never subtracts filament already consumed.
+   */
   public extrusionDistance = 0;
+}
+
+// Keep accounting state private without adding fields to the public stats shape.
+const outstandingRetraction = new WeakMap<JobStats, number>();
+
+/** Accounts a signed filament delta without changing rendering classification. */
+export function recordExtrusion(stats: JobStats, delta: number): void {
+  const retracted = outstandingRetraction.get(stats) ?? 0;
+  stats.extrusionDistance += Math.max(0, delta - retracted);
+  outstandingRetraction.set(stats, Math.max(0, retracted - delta));
 }
