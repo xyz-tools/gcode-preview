@@ -18,14 +18,15 @@
     "@rollup/plugin-node-resolve": "^16.0.1",
     "@types/node": "^24.0.10",
     "@types/three": "^0.185.4",
-    "@webgpu/types": "^0.1.64",
     "@typescript-eslint/eslint-plugin": "^8.36.0",
     "@typescript-eslint/parser": "^8.36.0",
     "@vitest/coverage-v8": "^4.1.11",
+    "@webgpu/types": "^0.1.64",
     "concurrently": "^9.2.0",
     "copyfiles": "^2.4.1",
     "eslint": "^8.57.1",
     "happy-dom": "^20.0.0",
+    "lil-gui": "^0.20.0",
     "live-server": "^1.2.1 <1.2.2",
     "prettier": "^3.6.2",
     "rollup": "^4.44.2",
@@ -43,9 +44,9 @@
     "demo": "npm run build && npm run live-server",
     "live-server": "live-server demo --watch=.,js,../dist --mount=/lib:node_modules --mount=/dist:dist",
     "typeCheck": "tsc --noEmit",
-    "lint": "prettier --check . && eslint -c .eslintrc.js .",
+    "lint": "prettier --check . && eslint -c .eslintrc.cjs .",
     "lint:fix": "npm run prettier:fix && npm run eslint:fix",
-    "eslint:fix": "eslint -c .eslintrc.js . --fix",
+    "eslint:fix": "eslint -c .eslintrc.cjs . --fix",
     "prettier:fix": "prettier --plugin-search-dir . --write .",
     "test": "vitest run",
     "test:watch": "vitest --watch",
@@ -55,17 +56,26 @@
     "version:minor": "npm version minor",
     "version:alpha": "npm version prerelease --preid=alpha",
     "predeploy": "npm run build && npm run copy-deps && npm run copy-dist",
-    "copy-deps": "copyfiles -f node_modules/three/build/three.module.min.js demo/lib/three/build && copyfiles -f node_modules/three/build/three.core.min.js demo/lib/three/build && copyfiles -f node_modules/lil-gui/dist/lil-gui.esm.min.js demo/lib/lil-gui/dist",
-    "copy-dist": "copyfiles -f dist/gcode-preview.es.js demo/dist",
+    "copy-deps": "copyfiles -f node_modules/three/build/three.module.min.js demo/lib/three/build && copyfiles -f node_modules/three/build/three.core.min.js demo/lib/three/build",
+    "copy-dist": "copyfiles -u 1 \"dist/**/*.js\" demo/dist",
     "deploy:preview": "live-server demo",
     "typedoc": "typedoc",
     "typedoc:watch": "typedoc --watch",
     "check": "npm run test && npm run typeCheck && npm run lint && echo '😅 All checks passed!'",
     "evals": "node --no-warnings --experimental-strip-types evals/run.ts",
-    "evals:grade": "node --no-warnings --experimental-strip-types evals/grade.ts"
+    "evals:grade": "node --no-warnings --experimental-strip-types evals/grade.ts",
+    "test:packaging": "npm run build && node scripts/test-packaging.mjs"
   },
   "dependencies": {
-    "lil-gui": "^0.20.0",
     "three": ">=0.166.0 <0.186.0"
-  }
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/gcode-preview.d.ts",
+      "import": "./dist/gcode-preview.es.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "sideEffects": false
 }
