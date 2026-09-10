@@ -1,4 +1,5 @@
 import { test, expect, describe, vi, afterEach } from 'vitest';
+import { GCodeCommand } from '../parser/gcode-parser';
 import { Job } from '../job';
 import { PathType, Path } from '../path';
 import { State } from '../state';
@@ -620,7 +621,7 @@ describe('.beginCommand', () => {
     const job = new Job();
     job.metadata = metadataWith([{ width: 0.45, lineIndex: 0 }]);
 
-    job.beginCommand();
+    job.beginCommand(new GCodeCommand(0, '', '', {}));
 
     expect(job.state.extrusionWidth).toEqual(0.45);
   });
@@ -629,12 +630,12 @@ describe('.beginCommand', () => {
     const job = new Job();
     job.metadata = metadataWith([{ height: 0.3, lineIndex: 2 }]);
 
-    job.beginCommand();
+    job.beginCommand(new GCodeCommand(0, '', '', {}));
 
     expect(job.state.lineHeight).toBeUndefined();
 
-    job.beginCommand();
-    job.beginCommand();
+    job.beginCommand(new GCodeCommand(1, '', '', {}));
+    job.beginCommand(new GCodeCommand(2, '', '', {}));
 
     expect(job.state.lineHeight).toEqual(0.3);
   });
@@ -646,7 +647,7 @@ describe('.beginCommand', () => {
       { width: 0.5, height: 0.25, lineIndex: 0 }
     ]);
 
-    job.beginCommand();
+    job.beginCommand(new GCodeCommand(0, '', '', {}));
 
     expect(job.state.extrusionWidth).toEqual(0.5);
     expect(job.state.lineHeight).toEqual(0.25);
@@ -658,12 +659,12 @@ describe('.beginCommand', () => {
     const job = new Job();
     const extrusionDimensions = [{ width: 0.4, lineIndex: 0 }];
     job.metadata = metadataWith(extrusionDimensions);
-    job.beginCommand();
+    job.beginCommand(new GCodeCommand(0, '', '', {}));
     job.state.extrusionWidth = 0.9; // marker: a rewind would overwrite this
 
     extrusionDimensions.push({ width: 0.5, lineIndex: 2 });
     job.metadata = metadataWith(extrusionDimensions);
-    job.beginCommand();
+    job.beginCommand(new GCodeCommand(1, '', '', {}));
 
     expect(job.state.extrusionWidth).toEqual(0.9);
   });
@@ -671,10 +672,10 @@ describe('.beginCommand', () => {
   test('rewinds when a different metadata array is swapped in', () => {
     const job = new Job();
     job.metadata = metadataWith([{ width: 0.4, lineIndex: 0 }]);
-    job.beginCommand();
+    job.beginCommand(new GCodeCommand(0, '', '', {}));
 
     job.metadata = metadataWith([{ width: 0.55, lineIndex: 0 }]);
-    job.beginCommand();
+    job.beginCommand(new GCodeCommand(1, '', '', {}));
 
     expect(job.state.extrusionWidth).toEqual(0.55);
   });
@@ -683,7 +684,7 @@ describe('.beginCommand', () => {
     const job = new Job();
     job.metadata = { thumbnails: {} };
 
-    job.beginCommand();
+    job.beginCommand(new GCodeCommand(0, '', '', {}));
 
     expect(job.state.extrusionWidth).toBeUndefined();
     expect(job.state.lineHeight).toBeUndefined();

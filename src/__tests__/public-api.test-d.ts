@@ -231,13 +231,15 @@ describe('public API types', () => {
       expectTypeOf<Parameters<Parser['parseGCode']>>().toEqualTypeOf<[string | string[]]>();
       expectTypeOf<keyof ReturnType<Parser['parseGCode']>>().toEqualTypeOf<'metadata' | 'commands'>();
       expectTypeOf<ReturnType<Parser['parseGCode']>['commands']>().toEqualTypeOf<GCodeCommand[]>();
-      expectTypeOf<Parameters<Parser['parseCommand']>>().toEqualTypeOf<[string, boolean?]>();
-      expectTypeOf<ReturnType<Parser['parseCommand']>>().toEqualTypeOf<GCodeCommand | null>();
+      expectTypeOf<Parameters<Parser['parseCommand']>>().toEqualTypeOf<[string, boolean?, number?]>();
+      expectTypeOf<ReturnType<Parser['parseCommand']>>().toEqualTypeOf<GCodeCommand>();
     });
   });
 
   describe('GCodeCommand', () => {
     it('keeps its public fields', () => {
+      expectTypeOf<Job['beginCommand']>().toEqualTypeOf<(command: GCodeCommand) => void>();
+      expectTypeOf<GCodeCommand['lineIndex']>().toEqualTypeOf<number>();
       expectTypeOf<GCodeCommand['src']>().toEqualTypeOf<string>();
       expectTypeOf<GCodeCommand['gcode']>().toEqualTypeOf<string>();
       expectTypeOf<GCodeCommand['comment']>().toEqualTypeOf<string | undefined>();
@@ -248,9 +250,9 @@ describe('public API types', () => {
       expectTypeOf<GCodeCommand['params']['customWord']>().toEqualTypeOf<number | undefined>();
     });
 
-    it('is constructed from src, gcode, params and optional comment', () => {
+    it('is constructed from lineIndex, src, gcode, params and optional comment', () => {
       expectTypeOf<ConstructorParameters<typeof GCodeCommandClass>>().toEqualTypeOf<
-        [string, string, GCodeCommand['params'], string?]
+        [number, string, string, GCodeCommand['params'], string?]
       >();
     });
   });

@@ -292,9 +292,9 @@ test('parseGCode accepts an array of lines', () => {
 test('parseMetadata skips commands without a comment', () => {
   const parser = new Parser();
   const commands = [
-    new GCodeCommand('G1 X1', 'g1', { x: 1 }), // comment undefined
-    new GCodeCommand('G1 X2 ;', 'g1', { x: 2 }, ''), // comment empty string
-    new GCodeCommand('G1 X3 ; hello', 'g1', { x: 3 }, ' hello') // non-thumbnail comment
+    new GCodeCommand(0, 'G1 X1', 'g1', { x: 1 }), // comment undefined
+    new GCodeCommand(0, 'G1 X2 ;', 'g1', { x: 2 }, ''), // comment empty string
+    new GCodeCommand(0, 'G1 X3 ; hello', 'g1', { x: 3 }, ' hello') // non-thumbnail comment
   ];
   const metadata = parser.parseMetadata(commands);
   expect(metadata.thumbnails).toEqual({});
@@ -314,4 +314,25 @@ test('parseGCode ignores a thumbnail with invalid data', () => {
   const gcode = ['; thumbnail begin 8x8 100', '; tooshort', '; thumbnail end'].join('\n');
   const parsed = parser.parseGCode(gcode);
   expect(parsed.metadata.thumbnails['8x8']).toBeUndefined();
+});
+
+describe('source line indices', () => {
+  test.each([false, true])('indexes every source line across chunks with keepLines=%s', (keepLines) => {
+    const parser = new Parser({ keepLines });
+    const first = parser.parseGCode(['; header', '', 'G1 X1']);
+    expect(first.commands.map((command) => command.lineIndex)).toEqual([0, 1, 2]);
+    expect(parser.parseGCode([]).commands).toEqual([]);
+    const second = parser.parseGCode('G1 X2\n');
+    expect(second.commands.map((command) => command.lineIndex)).toEqual([3, 4]);
+    expect(parser.lineCount).toBe(5);
+  });
+
+  test('standalone parsing accepts a source index without advancing the parser', () => {
+    const parser = new Parser();
+    expect(parser.parseCommand('').lineIndex).toBe(0);
+    expect(parser.parseCommand('G1 X1 ; move', false, 42)).toEqual(
+      new GCodeCommand(42, 'G1 X1 ; move', 'g1', { x: 1 })
+    );
+    expect(parser.lineCount).toBe(0);
+  });
 });

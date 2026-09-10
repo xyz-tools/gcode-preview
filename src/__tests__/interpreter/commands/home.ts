@@ -4,7 +4,7 @@ import { home } from '../../../interpreter/commands';
 import { Job } from '../../../job';
 
 test('G28 moves the state to the origin and marks it homed', () => {
-  const command = new GCodeCommand('G28', 'g28', {});
+  const command = new GCodeCommand(0, 'G28', 'g28', {});
   const job = new Job();
   job.state.x = 3;
   job.state.y = 4;

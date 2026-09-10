@@ -257,12 +257,7 @@ export class GCodePreview {
       const split = splitChunk(tail, result.value);
       tail = split.tail;
 
-      // Parsing '' would still count a line -- ''.split('\n') is [''] -- and
-      // shift every lineIndex after it. Chunks complete nothing often: bytes
-      // arrive without a newline, or splitChunk holds a comment run back.
-      if (split.complete === '') continue;
-
-      const { commands, metadata } = this.parser.parseGCode(split.complete);
+      const { commands, metadata } = this.parser.parseGCode(split.complete === '' ? [] : split.complete);
 
       // forward metadata before executing: the layer indexer locks its
       // strategy on the first path it sees
