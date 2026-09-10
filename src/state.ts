@@ -1,4 +1,4 @@
-import { Units, MM_PER_INCH } from './units';
+import { Units } from './units';
 
 /**
  * Represents the current state of the print job
@@ -71,11 +71,6 @@ export class State {
    * the job's decision (see `Job.resolvePosition`), not the state's.
    */
   isHomed = false;
-
-  /** Converts a command distance to millimeters, preserving omitted words. */
-  toMillimeters(value: number | undefined): number | undefined {
-    return value === undefined ? undefined : value * (this.units === 'in' ? MM_PER_INCH : 1);
-  }
 
   /**
    * Applies a move's E parameter to the extruder position

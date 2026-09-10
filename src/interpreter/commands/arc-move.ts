@@ -1,3 +1,4 @@
+import { toMillimeters } from '../../units';
 import { PathType } from '../../path';
 import { ArcTessellator, ArcTessellatorOptions } from '../../arc-tessellator';
 import type { CommandHandler } from '../../interpreter';
@@ -16,17 +17,18 @@ export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler
   const arcTessellator = new ArcTessellator(options);
   return (command, job) => {
     const { state } = job;
-    const e = state.toMillimeters(command.params.e);
-    const i = state.toMillimeters(command.params.i);
-    const j = state.toMillimeters(command.params.j);
-    const r = state.toMillimeters(command.params.r);
+    const { units } = state;
+    const e = toMillimeters(command.params.e, units);
+    const i = toMillimeters(command.params.i, units);
+    const j = toMillimeters(command.params.j, units);
+    const r = toMillimeters(command.params.r, units);
     // The endpoint arrives in logical coordinates; translate it into physical
     // space up front so the tessellator's derived values agree with `from`.
     // I/J/R are relative distances and need no shift.
     const { positionShift } = state;
-    const x = command.params.x === undefined ? undefined : state.toMillimeters(command.params.x)! + positionShift.x;
-    const y = command.params.y === undefined ? undefined : state.toMillimeters(command.params.y)! + positionShift.y;
-    const z = command.params.z === undefined ? undefined : state.toMillimeters(command.params.z)! + positionShift.z;
+    const x = command.params.x === undefined ? undefined : toMillimeters(command.params.x, units)! + positionShift.x;
+    const y = command.params.y === undefined ? undefined : toMillimeters(command.params.y, units)! + positionShift.y;
+    const z = command.params.z === undefined ? undefined : toMillimeters(command.params.z, units)! + positionShift.z;
     // Starting position for the arc, with any un-homed axis assumed at the origin.
     const from = job.resolvePosition();
 

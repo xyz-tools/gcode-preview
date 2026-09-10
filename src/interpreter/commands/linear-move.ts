@@ -1,3 +1,4 @@
+import { toMillimeters } from '../../units';
 import { PathType } from '../../path';
 import type { CommandHandler } from '../../interpreter';
 
@@ -12,10 +13,11 @@ import type { CommandHandler } from '../../interpreter';
  */
 export const linearMove: CommandHandler = (command, job) => {
   const { state } = job;
-  const x = state.toMillimeters(command.params.x);
-  const y = state.toMillimeters(command.params.y);
-  const z = state.toMillimeters(command.params.z);
-  const e = state.toMillimeters(command.params.e);
+  const { units } = state;
+  const x = toMillimeters(command.params.x, units);
+  const y = toMillimeters(command.params.y, units);
+  const z = toMillimeters(command.params.z, units);
+  const e = toMillimeters(command.params.e, units);
   const f = command.params.f;
 
   // discard zero length moves
