@@ -1,4 +1,3 @@
-import { recordExtrusion } from '../../job-stats';
 import { PathType } from '../../path';
 import { ArcTessellator, ArcTessellatorOptions } from '../../arc-tessellator';
 import type { CommandHandler } from '../../interpreter';
@@ -39,7 +38,7 @@ export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler
     const pathType = extruded > 0 ? PathType.Extrusion : PathType.Travel;
     const currentPath = job.continuePath(pathType);
 
-    recordExtrusion(job.stats, extruded);
+    job.stats.recordExtrusion(extruded);
 
     // The tessellator runs on the resolved position and emits every point,
     // ending with the exact endpoint -- which equals resolvePosition() after

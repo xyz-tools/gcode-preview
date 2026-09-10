@@ -22,14 +22,27 @@ export class JobStats {
    * retracting never subtracts filament already consumed.
    */
   public extrusionDistance = 0;
-}
 
-// Keep accounting state private without adding fields to the public stats shape.
-const outstandingRetraction = new WeakMap<JobStats, number>();
+  /**
+   * Filament still owed back after a retraction, in millimeters.
+   *
+   * @remarks
+   * Private so it stays out of the public stats shape: it is bookkeeping for
+   * {@link recordExtrusion}, not a statistic callers should read.
+   */
+  #outstandingRetraction = 0;
 
-/** Accounts a signed filament delta without changing rendering classification. */
-export function recordExtrusion(stats: JobStats, delta: number): void {
-  const retracted = outstandingRetraction.get(stats) ?? 0;
-  stats.extrusionDistance += Math.max(0, delta - retracted);
-  outstandingRetraction.set(stats, Math.max(0, retracted - delta));
+  /**
+   * Accounts a signed filament delta without changing rendering classification
+   * @param delta - Filament advanced (positive) or retracted (negative), in millimeters
+   * @remarks
+   * Only filament beyond what a previous retraction still owes counts as newly
+   * consumed, so a retract/prime pair nets to zero instead of double-counting
+   * the primed length.
+   */
+  public recordExtrusion(delta: number): void {
+    const retracted = this.#outstandingRetraction;
+    this.extrusionDistance += Math.max(0, delta - retracted);
+    this.#outstandingRetraction = Math.max(0, retracted - delta);
+  }
 }
