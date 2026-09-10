@@ -63,8 +63,10 @@
   <body>
     <h1>gcode-preview examples</h1>
     <p class="lede">
-      One page per feature — plain HTML, no build step, no framework. View source on any of them: the whole example is
-      the inline <code>&lt;script type="module"&gt;</code>, so it is meant to be copy-pasted.
+      Small, self-contained pages showing how to drive the library from your own code — loading G-code, wiring up
+      controls, reacting to what the parser found. The <a href="../index.html">demo app</a> is where to look at what the
+      renderer can do; these are where to look at how to talk to it. Plain HTML, no build step, no framework: the whole
+      example is the inline <code>&lt;script type="module"&gt;</code>, meant to be copy-pasted.
     </p>
 
     <ul>
@@ -77,36 +79,16 @@
         <p>Pass a <code>fetch</code> stream to <code>processGCodeStream</code> and watch the model grow as it loads.</p>
       </li>
       <li>
-        <a href="build-volume.html">Build volume</a>
-        <p>The bed grid and volume outline, and what every <code>buildVolume</code> field does.</p>
-      </li>
-      <li>
         <a href="layer-range.html">Layer range</a>
         <p>Scrub the visible layers with a slider, the way a slicer's layer view does.</p>
       </li>
       <li>
-        <a href="tubes.html">Tube geometry</a>
-        <p>Extrusions as solid tubes with real width and height instead of flat lines.</p>
-      </li>
-      <li>
-        <a href="multi-color.html">Multi-color</a>
-        <p>One color per tool, so a multi-material print renders as it was printed.</p>
-      </li>
-      <li>
-        <a href="arcs.html">Arcs (G2/G3)</a>
-        <p>Arc moves, and the tolerance that controls how finely they are tessellated.</p>
+        <a href="drag-drop.html">Drag &amp; drop</a>
+        <p>Drop a <code>.gcode</code> file on the canvas — the library handles the rest.</p>
       </li>
       <li>
         <a href="thumbnail.html">Thumbnail</a>
         <p>The preview image and slicer name that slicers embed in G-code comments.</p>
-      </li>
-      <li>
-        <a href="orthographic.html">Orthographic camera</a>
-        <p>Parallel projection for a technical top or front view, plus travel moves.</p>
-      </li>
-      <li>
-        <a href="drag-drop.html">Drag &amp; drop</a>
-        <p>Drop a <code>.gcode</code> file on the canvas — the library handles the rest.</p>
       </li>
     </ul>
 
