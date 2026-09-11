@@ -184,12 +184,13 @@ describe('public API surface', () => {
   });
 
   describe('GCodeCommand', () => {
-    it('takes src, gcode, params and an optional comment', () => {
-      expect(GCodeCommand.length).toBe(4);
+    it('takes lineIndex, src, gcode, params and an optional comment', () => {
+      expect(GCodeCommand.length).toBe(5);
     });
 
     it('exposes its constructor arguments as public fields', () => {
-      const command = new GCodeCommand('G1 X1 ; up', 'g1', { x: 1 }, 'up');
+      const command = new GCodeCommand(42, 'G1 X1 ; up', 'g1', { x: 1 }, 'up');
+      expect(command.lineIndex).toBe(42);
       expect(command.src).toBe('G1 X1 ; up');
       expect(command.gcode).toBe('g1');
       expect(command.params).toEqual({ x: 1 });
@@ -203,6 +204,7 @@ describe('public API surface', () => {
     });
 
     const methods: Record<string, number> = {
+      beginCommand: 1,
       addPath: 1,
       finishPath: 0,
       breakPath: 1,

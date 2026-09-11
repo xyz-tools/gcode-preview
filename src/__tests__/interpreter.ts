@@ -5,7 +5,7 @@ import { Job } from '../job';
 
 describe('.execute', () => {
   test('returns a stateful job', () => {
-    const command = new GCodeCommand('G0 X1 Y2 Z3', 'g0', { x: 1, y: 2, z: 3 });
+    const command = new GCodeCommand(0, 'G0 X1 Y2 Z3', 'g0', { x: 1, y: 2, z: 3 });
     const interpreter = new Interpreter();
 
     const result = interpreter.execute([command]);
@@ -19,7 +19,7 @@ describe('.execute', () => {
 
   test('skips a command whose gcode is undefined', () => {
     // A command with no gcode at all (guarded by `command.gcode !== undefined`).
-    const command = new GCodeCommand('', undefined as unknown as string, {});
+    const command = new GCodeCommand(0, '', undefined as unknown as string, {});
     const interpreter = new Interpreter();
 
     const result = interpreter.execute([command]);
@@ -31,7 +31,7 @@ describe('.execute', () => {
   });
 
   test('ignores unknown commands', () => {
-    const command = new GCodeCommand('G42', 'g42', {});
+    const command = new GCodeCommand(0, 'G42', 'g42', {});
     const interpreter = new Interpreter();
 
     const result = interpreter.execute([command]);
@@ -46,8 +46,8 @@ describe('.execute', () => {
   });
 
   test('runs multiple commands', () => {
-    const command1 = new GCodeCommand('G0 X1 Y2 Z3', 'g0', { x: 1, y: 2, z: 3 });
-    const command2 = new GCodeCommand('G0 X4 Y5 Z6', 'g0', { x: 4, y: 5, z: 6 });
+    const command1 = new GCodeCommand(0, 'G0 X1 Y2 Z3', 'g0', { x: 1, y: 2, z: 3 });
+    const command2 = new GCodeCommand(0, 'G0 X4 Y5 Z6', 'g0', { x: 4, y: 5, z: 6 });
     const interpreter = new Interpreter();
 
     const result = interpreter.execute([command1, command2, command1, command2]);
@@ -61,7 +61,7 @@ describe('.execute', () => {
 
   test('runs on an existing job', () => {
     const job = new Job();
-    const command = new GCodeCommand('G0 X1 Y2 Z3', 'g0', { x: 1, y: 2, z: 3 });
+    const command = new GCodeCommand(0, 'G0 X1 Y2 Z3', 'g0', { x: 1, y: 2, z: 3 });
     const interpreter = new Interpreter();
 
     const result = interpreter.execute([command], job);
@@ -74,7 +74,7 @@ describe('.execute', () => {
 
   test('finishes the current path at the end of the job', () => {
     const job = new Job();
-    const command = new GCodeCommand('G0 X1 Y2 Z3', 'g0', { x: 1, y: 2, z: 3 });
+    const command = new GCodeCommand(0, 'G0 X1 Y2 Z3', 'g0', { x: 1, y: 2, z: 3 });
     const interpreter = new Interpreter();
     interpreter.execute([command], job);
 
@@ -84,8 +84,8 @@ describe('.execute', () => {
 
   test('resumes the current path when doing incremental execution', () => {
     const job = new Job();
-    const command1 = new GCodeCommand('G0 X1 Y2 Z3', 'g0', { x: 1, y: 2, z: 3 });
-    const command2 = new GCodeCommand('G0 X4 Y5 Z6', 'g0', { x: 4, y: 5, z: 6 });
+    const command1 = new GCodeCommand(0, 'G0 X1 Y2 Z3', 'g0', { x: 1, y: 2, z: 3 });
+    const command2 = new GCodeCommand(0, 'G0 X4 Y5 Z6', 'g0', { x: 4, y: 5, z: 6 });
     const interpreter = new Interpreter();
 
     interpreter.execute([command1], job);

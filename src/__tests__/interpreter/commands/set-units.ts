@@ -4,7 +4,7 @@ import { setInchUnits, setMillimeterUnits } from '../../../interpreter/commands'
 import { Job } from '../../../job';
 
 test('G20 sets the units to inches', () => {
-  const command = new GCodeCommand('G20', 'g20', {});
+  const command = new GCodeCommand(0, 'G20', 'g20', {});
   const job = new Job();
 
   setInchUnits(command, job);
@@ -13,7 +13,7 @@ test('G20 sets the units to inches', () => {
 });
 
 test('G21 sets the units to millimeters', () => {
-  const command = new GCodeCommand('G21', 'g21', {});
+  const command = new GCodeCommand(0, 'G21', 'g21', {});
   const job = new Job();
 
   setMillimeterUnits(command, job);

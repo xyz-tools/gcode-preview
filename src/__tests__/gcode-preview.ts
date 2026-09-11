@@ -561,12 +561,12 @@ describe('GCodePreview', () => {
 
       await preview.readStream(stream);
 
-      // chunk 2 has no newline, so it completes nothing and is skipped rather
-      // than parsed as an empty line; the tail is flushed after the stream ends
-      expect(preview.parser.parseGCode).toHaveBeenCalledTimes(2);
+      // Chunk 2 completes zero lines; the tail is flushed after the stream ends.
+      expect(preview.parser.parseGCode).toHaveBeenCalledTimes(3);
       expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(1, 'G0 X0 Y0');
+      expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(2, []);
       expect(preview.parser.parseGCode).toHaveBeenLastCalledWith('G1 X10 Y10');
-      expect(mockInterpreter.execute).toHaveBeenCalledTimes(2);
+      expect(mockInterpreter.execute).toHaveBeenCalledTimes(3);
     });
 
     it('cancels the stream when clear() replaces the job mid-stream', async () => {
