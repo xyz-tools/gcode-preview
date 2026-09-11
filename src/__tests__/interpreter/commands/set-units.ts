@@ -28,6 +28,49 @@ function run(gcode: string) {
   return new Interpreter().execute(new Parser().parseGCode(gcode).commands);
 }
 
+test.each(['M82', 'M83'])('inch and mm straight moves have identical geometry and filament length in %s', (mode) => {
+  const inch = run(`G20\n${mode}\nG28\nG0 X1 Y1 Z1\nG1 X2 E1\nG1 Y2 Z2 E${mode === 'M82' ? 2 : 1}`);
+  const mm = run(
+    `G21\n${mode}\nG28\nG0 X25.4 Y25.4 Z25.4\nG1 X50.8 E25.4\nG1 Y50.8 Z50.8 E${mode === 'M82' ? 50.8 : 25.4}`
+  );
+
+  expect(inch.paths.map((path) => ({ type: path.type, vertices: path.vertices }))).toEqual(
+    mm.paths.map((path) => ({ type: path.type, vertices: path.vertices }))
+  );
+  expect(inch.boundingBox).toEqual(mm.boundingBox);
+  expect(inch.stats.extrusionDistance).toBeCloseTo(mm.stats.extrusionDistance);
+  expect(inch.stats.extrusionDistance).toBeCloseTo(50.8);
+});
+
+test.each(['M82', 'M83'])('inch E-only retract and prime preserve geometry and subsequent extrusion in %s', (mode) => {
+  const start = `G20\n${mode}\nG28\nG1 X1 Y1 Z1 E2`;
+  const baseline = run(start);
+  const job = run(start);
+  const execute = (gcode: string) => new Interpreter().execute(new Parser().parseGCode(gcode).commands, job);
+
+  for (const [command, expectedE] of [
+    [mode === 'M82' ? 'G1 E1' : 'G1 E-1', 25.4],
+    [mode === 'M82' ? 'G1 E2' : 'G1 E1', 50.8]
+  ] as const) {
+    execute(command);
+    expect(job.state.e).toBeCloseTo(expectedE);
+    expect([job.state.x, job.state.y, job.state.z]).toEqual([25.4, 25.4, 25.4]);
+    expect(job.paths.map((path) => path.vertices)).toEqual(baseline.paths.map((path) => path.vertices));
+    expect(job.boundingBox).toEqual(baseline.boundingBox);
+    expect(job.stats.extrusionDistance).toBeCloseTo(50.8);
+  }
+
+  const nextMove = `G1 X2 E${mode === 'M82' ? 3 : 1}`;
+  execute(nextMove);
+  const uninterrupted = run(`${start}\n${nextMove}`);
+  expect(job.paths.map((path) => ({ type: path.type, vertices: path.vertices }))).toEqual(
+    uninterrupted.paths.map((path) => ({ type: path.type, vertices: path.vertices }))
+  );
+  expect(job.boundingBox).toEqual(uninterrupted.boundingBox);
+  expect(job.state.e).toBeCloseTo(76.2);
+  expect(job.stats.extrusionDistance).toBeCloseTo(76.2);
+});
+
 test.each(['M82', 'M83'])('normalizes linear moves, E-only moves and G92 in %s', (mode) => {
   const job = run(`G20\n${mode}\nG28\nG1 X1 Y2 Z3 E1\nG1 E-1\nG92 X2 Y3 Z4 E2\nG1 X3 Y4 Z5 E3`);
   expect(job.state.x).toBeCloseTo(50.8);
