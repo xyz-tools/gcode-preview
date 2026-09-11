@@ -5,8 +5,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { rollup } from 'rollup';
-import configs from '../rollup.config.mjs';
+import { rolldown } from 'rolldown';
+import configs from '../rolldown.config.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const consumer = mkdtempSync(join(tmpdir(), 'gcode-preview-packaging-'));
@@ -29,24 +29,28 @@ function run(command, args, cwd = consumer) {
 try {
   // Exercise sharing before the standalone parser becomes a public entry point (#492).
   for (const { output, ...config } of configs) {
-    console.log(`Packaging: verify shared ${output.entryFileNames} chunks`);
-    const bundle = await rollup({
+    // The declaration pass lets rolldown-plugin-dts name its own chunks, so the
+    // expected extension comes from the plugin list rather than entryFileNames.
+    const plugins = config.plugins.flat().filter((plugin) => plugin.name !== 'clean-dist');
+    const extension = plugins.some((plugin) => plugin.name.startsWith('rolldown-plugin-dts')) ? '.d.ts' : '.js';
+    console.log(`Packaging: verify shared ${extension} chunks`);
+    const bundle = await rolldown({
       ...config,
       input: { ...config.input, parser: 'src/parser/gcode-parser.ts' },
-      plugins: config.plugins.filter((plugin) => plugin.name !== 'clean-dist')
+      plugins
     });
     try {
       const { output: chunks } = await bundle.generate(output);
-      const owners = chunks.filter(
-        (chunk) => chunk.type === 'chunk' && join(root, 'src/parser/gcode-parser.ts') in chunk.modules
-      );
+      // The declaration pass resolves the parser to its generated .d.ts module.
+      const source = join(root, `src/parser/gcode-parser${extension === '.d.ts' ? '.d.ts' : '.ts'}`);
+      const owners = chunks.filter((chunk) => chunk.type === 'chunk' && source in chunk.modules);
       assert.equal(owners.length, 1, 'parser implementation must not be duplicated');
       assert(
         chunks.some((chunk) => chunk.type === 'chunk' && chunk.imports.includes(owners[0].fileName)),
         'the preview entry must reuse the parser chunk'
       );
       assert.equal(chunks.filter((chunk) => chunk.type === 'chunk' && chunk.isEntry).length, 2);
-      assert(owners[0].fileName.endsWith(output.entryFileNames.endsWith('.d.ts') ? '.d.ts' : '.js'));
+      assert(owners[0].fileName.endsWith(extension));
     } finally {
       await bundle.close();
     }
