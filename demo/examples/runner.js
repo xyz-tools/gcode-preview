@@ -97,10 +97,17 @@ addEventListener('message', (event) => {
   }
 });
 
+// The keys SceneManager.saveCamera() writes. The examples that render keep
+// their viewpoint through a reload, which is what makes Run bearable — but it
+// also means a viewpoint you no longer want follows you around, so Reset puts
+// the view back as well as the code.
+const CAMERA_KEYS = ['cameraPosition', 'cameraRotation', 'cameraZoom', 'cameraTarget'];
+
 editor.value = original;
 document.querySelector('#run').addEventListener('click', run);
 document.querySelector('#reset').addEventListener('click', () => {
   editor.value = original;
+  for (const key of CAMERA_KEYS) localStorage.removeItem(key);
   run();
 });
 

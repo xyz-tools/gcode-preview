@@ -34,7 +34,6 @@
       {
         "imports": {
           "three": "../lib/three/build/three.module.min.js",
-          "lil-gui": "../lib/lil-gui/dist/lil-gui.esm.min.js",
           "gcode-preview": "../dist/gcode-preview.es.js"
         }
       }
@@ -86,6 +85,12 @@
       // The renderer is sized once, at construction. Nothing in the library
       // watches the canvas, so tell it when the canvas changes size.
       new ResizeObserver(() => preview.sceneManager.resize()).observe(canvas);
+
+      // Keep the viewpoint across a reload — and so across Run, which loads
+      // the page again. saveCamera()/loadCamera() persist position, rotation,
+      // zoom and orbit target to localStorage.
+      preview.sceneManager.loadCamera();
+      preview.sceneManager.controls.addEventListener('end', () => preview.sceneManager.saveCamera());
 
       // response.body is a byte stream; decode it to text chunks first.
       const response = await fetch('../gcodes/3DBenchy.gcode');

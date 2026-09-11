@@ -32,12 +32,12 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const examplesDir = join(root, 'demo', 'examples');
 
 const INDEX = 'index.html';
-// The bundle lists the package's dependencies as externals, so a page has to
-// map every one of them — `lil-gui` included, even with devMode off, because
-// the import is static.
+// The bundle leaves the package's dependencies external, so a page has to map
+// every one of them. Only `three` is external today — `lil-gui` is bundled —
+// but the check below derives the list from package.json rather than trusting
+// this constant, so adding a dependency fails a test instead of every page.
 const IMPORTMAP = {
   three: '../lib/three/build/three.module.min.js',
-  'lil-gui': '../lib/lil-gui/dist/lil-gui.esm.min.js',
   'gcode-preview': '../dist/gcode-preview.es.js'
 };
 
