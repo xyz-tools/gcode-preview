@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Parser only — gcode-preview</title>
+    <link rel="stylesheet" href="runner.css" />
+  </head>
+  <body>
+    <header>
+      <a href="index.html">← all examples</a>
+      <h1>Parser only</h1>
+      <p>Use the parser on its own: no canvas, no scene — G-code in, commands out.</p>
+    </header>
+
+    <main>
+      <section class="code">
+        <div class="toolbar">
+          <button id="run" class="primary">Run</button>
+          <button id="reset">Reset</button>
+          <kbd>⌘/Ctrl + ↵</kbd>
+          <span id="status"></span>
+        </div>
+        <textarea spellcheck="false" aria-label="Example code"></textarea>
+        <details>
+          <summary>The rest of the page</summary>
+          <pre id="setup"></pre>
+        </details>
+      </section>
+      <iframe title="Example output"></iframe>
+    </main>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../lib/three/build/three.module.min.js",
+          "lil-gui": "../lib/lil-gui/dist/lil-gui.esm.min.js",
+          "gcode-preview": "../dist/gcode-preview.es.js"
+        }
+      }
+    </script>
+
+    <template id="output">
+      <style>
+        body { margin: 0; padding: 20px; font: 14px/1.6 system-ui, sans-serif; }
+        table { border-spacing: 0 2px; }
+        th { padding-right: 20px; text-align: left; font-weight: 600; }
+        td { font-variant-numeric: tabular-nums; }
+        h2 { margin: 20px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.55; }
+      </style>
+      <div id="out">Parsing…</div>
+    </template>
+
+    <script type="text/plain" id="code">
+      import { Parser } from 'gcode-preview';
+
+      // The parser has nothing to do with rendering: no canvas, no scene, no
+      // GCodePreview. (It still arrives through the one bundle, which is why this
+      // page needs the same importmap as the others.)
+      const parser = new Parser();
+
+      const gcode = await fetch('../gcodes/screw.gcode').then((response) => response.text());
+      const { commands, metadata } = parser.parseGCode(gcode);
+
+      // Every command keeps its letter, its parameters and its comment, so the file
+      // can be queried directly — here, how often each command appears and how fast
+      // the fastest move asked to go. Note that every line yields a command: a
+      // comment-only line is one with an empty `gcode` and the text in `comment`.
+      const counts = {};
+      for (const command of commands) {
+        const name = command.gcode ? command.gcode.toUpperCase() : 'comment only';
+        counts[name] = (counts[name] ?? 0) + 1;
+      }
+
+      const feedrates = commands.map((command) => command.params.f).filter((f) => f !== undefined);
+      const byFrequency = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+      const table = (entries) =>
+        `<table>${entries.map(([label, value]) => `<tr><th>${label}</th><td>${value}</td></tr>`).join('')}</table>`;
+
+      document.querySelector('#out').innerHTML = `
+        <h2>File</h2>
+        ${table([
+          ['Lines read', parser.lineCount.toLocaleString()],
+          ['Commands', commands.length.toLocaleString()],
+          ['Slicer', metadata.slicerName ?? 'unknown'],
+          ['Thumbnails', Object.keys(metadata.thumbnails).join(', ') || 'none'],
+          ['Fastest feedrate', `${Math.max(...feedrates)} mm/min`]
+        ])}
+        <h2>Commands by type</h2>
+        ${table(byFrequency.map(([name, count]) => [name, count.toLocaleString()]))}`;
+    </script>
+
+    <script type="module" src="runner.js"></script>
+  </body>
+</html>

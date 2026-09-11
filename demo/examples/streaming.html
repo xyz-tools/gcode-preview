@@ -1,24 +1,35 @@
 <!doctype html>
-<!--
-  Streaming: hand a fetch() ReadableStream to processGCodeStream so the model
-  grows on screen while the file is still downloading.
--->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Streaming — gcode-preview</title>
-    <style>
-      body { margin: 0; background: #eee; font: 14px/1.5 system-ui, sans-serif; }
-      canvas { display: block; width: 100vw; height: 100vh; }
-      #status {
-        position: fixed; top: 12px; left: 12px; padding: 6px 10px;
-        background: rgba(0, 0, 0, 0.6); color: #fff; border-radius: 4px;
-      }
-    </style>
+    <link rel="stylesheet" href="runner.css" />
   </head>
   <body>
-    <canvas></canvas>
-    <div id="status">Starting…</div>
+    <header>
+      <a href="index.html">← all examples</a>
+      <h1>Streaming</h1>
+      <p>Pass a fetch stream to processGCodeStream and watch the model grow as it loads.</p>
+    </header>
+
+    <main>
+      <section class="code">
+        <div class="toolbar">
+          <button id="run" class="primary">Run</button>
+          <button id="reset">Reset</button>
+          <kbd>⌘/Ctrl + ↵</kbd>
+          <span id="status"></span>
+        </div>
+        <textarea spellcheck="false" aria-label="Example code"></textarea>
+        <details>
+          <summary>The rest of the page</summary>
+          <pre id="setup"></pre>
+        </details>
+      </section>
+      <iframe title="Example output"></iframe>
+    </main>
+
     <script type="importmap">
       {
         "imports": {
@@ -28,13 +39,28 @@
         }
       }
     </script>
-    <script type="module">
+
+    <template id="output">
+      <style>
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #status {
+          position: fixed; top: 12px; left: 12px; padding: 6px 10px;
+          background: rgba(0, 0, 0, 0.6); border-radius: 4px; color: #fff;
+          font: 13px/1.4 system-ui, sans-serif;
+        }
+      </style>
+      <canvas></canvas>
+      <div id="status">Loading…</div>
+    </template>
+
+    <script type="text/plain" id="code">
       import { GCodePreview } from 'gcode-preview';
 
-      const status = document.getElementById('status');
+      const canvas = document.querySelector('canvas');
+      const status = document.querySelector('#status');
 
       const preview = new GCodePreview({
-        canvas: document.querySelector('canvas'),
+        canvas,
         buildVolume: { x: 180, y: 180, z: 0 },
         extrusionWidth: 0.45,
         lineHeight: 0.2,
@@ -57,9 +83,15 @@
         status.textContent = `Done — ${preview.job.countLayers} layers`;
       };
 
+      // The renderer is sized once, at construction. Nothing in the library
+      // watches the canvas, so tell it when the canvas changes size.
+      new ResizeObserver(() => preview.sceneManager.resize()).observe(canvas);
+
       // response.body is a byte stream; decode it to text chunks first.
       const response = await fetch('../gcodes/3DBenchy.gcode');
       await preview.processGCodeStream(response.body.pipeThrough(new TextDecoderStream()));
     </script>
+
+    <script type="module" src="runner.js"></script>
   </body>
 </html>

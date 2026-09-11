@@ -2,24 +2,34 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Thumbnail — gcode-preview</title>
-    <style>
-      body { margin: 0; background: #eee; font: 14px/1.5 system-ui, sans-serif; }
-      canvas { display: block; width: 100vw; height: 100vh; }
-      #info {
-        position: fixed; top: 12px; left: 12px; padding: 8px;
-        background: #fff; border-radius: 4px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-      }
-      #info img { display: block; max-width: 220px; border-radius: 2px; }
-    </style>
+    <link rel="stylesheet" href="runner.css" />
   </head>
   <body>
-    <!--
-      Thumbnail: slicers embed preview images as base64 in G-code comments.
-      The parser collects them (plus the detected slicer name) in its metadata.
-    -->
-    <canvas></canvas>
-    <div id="info"></div>
+    <header>
+      <a href="index.html">← all examples</a>
+      <h1>Thumbnail</h1>
+      <p>Read the preview image and slicer name the slicer embedded, and put them in your own UI.</p>
+    </header>
+
+    <main>
+      <section class="code">
+        <div class="toolbar">
+          <button id="run" class="primary">Run</button>
+          <button id="reset">Reset</button>
+          <kbd>⌘/Ctrl + ↵</kbd>
+          <span id="status"></span>
+        </div>
+        <textarea spellcheck="false" aria-label="Example code"></textarea>
+        <details>
+          <summary>The rest of the page</summary>
+          <pre id="setup"></pre>
+        </details>
+      </section>
+      <iframe title="Example output"></iframe>
+    </main>
+
     <script type="importmap">
       {
         "imports": {
@@ -29,11 +39,26 @@
         }
       }
     </script>
-    <script type="module">
+
+    <template id="output">
+      <style>
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #info {
+          position: fixed; top: 12px; left: 12px; padding: 8px;
+          background: #fff; border-radius: 4px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+        }
+        #info img { display: block; max-width: 220px; border-radius: 2px; }
+      </style>
+      <canvas></canvas>
+      <div id="info"></div>
+    </template>
+
+    <script type="text/plain" id="code">
       import { GCodePreview } from 'gcode-preview';
 
+      const canvas = document.querySelector('canvas');
       const preview = new GCodePreview({
-        canvas: document.querySelector('canvas'),
+        canvas,
         extrusionColor: '#95dfa1',
         travelColor: 'red',
         extrusionWidth: 0.5,
@@ -41,15 +66,14 @@
         buildVolume: { x: 130, y: 150, z: 0, smallGrid: true }
       });
 
-      const response = await fetch('../gcodes/screw.gcode');
-      // Metadata is filled in while the G-code is parsed, so it is only
-      // complete once processGCode() has resolved.
-      await preview.processGCode(await response.text());
+      // Metadata is filled in while the G-code is parsed, so it is only complete
+      // once processGCode() has resolved.
+      const gcode = await fetch('../gcodes/screw.gcode').then((response) => response.text());
+      await preview.processGCode(gcode);
 
-      // preview.parser.metadata.thumbnails is keyed by size, as the "WxH"
-      // string the slicer wrote (e.g. '16x16', '220x124'), so pick the widest
-      // key rather than hard-coding one. Each value is a Thumbnail with a
-      // ready-made `src` data URL and an `isValid` check.
+      // thumbnails is keyed by the "WxH" string the slicer wrote (e.g. '16x16',
+      // '220x124'), so pick the widest rather than hard-coding a key. Each value has
+      // a ready-made `src` data URL and an `isValid` check.
       const { thumbnails, slicerName } = preview.parser.metadata;
       const largest = Object.values(thumbnails)
         .filter((thumbnail) => thumbnail.isValid)
@@ -63,6 +87,12 @@
         info.append(img);
       }
       info.append(`${slicerName ?? 'unknown slicer'} — ${largest ? largest.size : 'no thumbnail'}`);
+
+      // The renderer is sized once, at construction. Nothing in the library
+      // watches the canvas, so tell it when the canvas changes size.
+      new ResizeObserver(() => preview.sceneManager.resize()).observe(canvas);
     </script>
+
+    <script type="module" src="runner.js"></script>
   </body>
 </html>

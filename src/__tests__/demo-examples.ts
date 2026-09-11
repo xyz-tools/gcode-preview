@@ -1,10 +1,11 @@
 /**
  * Conformance checks for the standalone example pages in `demo/examples`.
  *
- * The examples are plain HTML with an inline module script, so nothing else
- * type-checks or bundles them: a renamed option or method would leave them
- * silently broken until someone opened the page. These checks read each page
- * and pin what it actually references against the real source:
+ * Each page holds its example as inert text (`<script type="text/plain">`)
+ * that `runner.js` shows in an editor and runs in an iframe, so nothing else
+ * type-checks or bundles it: a renamed option or method would leave the page
+ * silently broken until someone opened it. These checks read each page and pin
+ * what it actually references against the real source:
  *
  * - the importmap paths that make the pages work both under `npm run dev`
  *   (live-server mounts `/dist` and `/lib`) and on the deployed demo
@@ -13,7 +14,7 @@
  * - every `preview.*` and `preview.sceneManager.*` member touched;
  * - every constructor option key, including the `buildVolume` fields;
  * - every local G-code file fetched;
- * - that the index page links each example.
+ * - that the page is still wired to the runner, and that the index links it.
  *
  * If a check fails because the library changed on purpose, update the examples
  * in the same PR.
@@ -49,10 +50,10 @@ function stripLineComments(source: string): string {
   return source.replaceAll(/(^|[^:])\/\/.*$/gm, '$1');
 }
 
-/** The body of the page's inline module script, comments removed. */
-function moduleScript(html: string): string {
-  const match = html.match(/<script type="module">([\s\S]*?)<\/script>/);
-  if (!match) throw new Error('no inline module script found');
+/** The example's own code, as the runner hands it to the iframe, comments removed. */
+function exampleCode(html: string): string {
+  const match = html.match(/<script type="text\/plain" id="code">([\s\S]*?)<\/script>/);
+  if (!match) throw new Error('no example code block found');
 
   return stripLineComments(match[1]);
 }
@@ -144,9 +145,11 @@ const optionKeys = new Set([
 const buildVolumeKeys = new Set(declaredOptionKeys('build-volume.ts', 'BuildVolumeDef'));
 
 describe('demo examples', () => {
-  it('ships at least one example and an index page', () => {
+  it('ships at least one example, an index page and the runner', () => {
     expect(exampleFiles.length).toBeGreaterThan(0);
-    expect(existsSync(join(examplesDir, INDEX))).toBe(true);
+    for (const file of [INDEX, 'runner.js', 'runner.css']) {
+      expect(existsSync(join(examplesDir, file)), `${file} is missing`).toBe(true);
+    }
   });
 
   it('links every example from the index page', () => {
@@ -159,7 +162,7 @@ describe('demo examples', () => {
 
   describe.each(exampleFiles)('%s', (file) => {
     const html = readFileSync(join(examplesDir, file), 'utf8');
-    const script = moduleScript(html);
+    const script = exampleCode(html);
 
     it('resolves three.js and the library through the shared importmap', () => {
       expect(importMap(html).imports).toMatchObject(IMPORTMAP);
@@ -173,12 +176,21 @@ describe('demo examples', () => {
       }
     });
 
-    it('stays self-contained: no shared example module, no CDN', () => {
+    it('imports nothing but bare specifiers from the importmap', () => {
       const specifiers = [...script.matchAll(/from '([^']+)'/g)].map((match) => match[1]);
 
+      // The code in the editor is what someone copies, so it may not reach for
+      // a helper module of its own: only the library and its externals.
       expect(specifiers.every((specifier) => specifier in IMPORTMAP)).toBe(true);
       expect(html).not.toContain('unpkg.com');
       expect(html).not.toContain('cdn.jsdelivr.net');
+    });
+
+    it('lets the runner drive it: editable code, an output template, a Run button', () => {
+      expect(html).toContain('<script type="module" src="runner.js"></script>');
+      expect(html, 'the runner fills this from the code block').toContain('<textarea');
+      expect(html, 'the runner builds the iframe document from this').toContain('<template id="output">');
+      expect(html).toContain('id="run"');
     });
 
     it('imports only names the library exports', () => {
@@ -208,17 +220,21 @@ describe('demo examples', () => {
 
     it('passes only real constructor options', () => {
       const options = constructorOptions(script);
-      expect(options, 'no GCodePreview constructed').toBeDefined();
+      // Not every example renders: the parser one never builds a preview.
+      if (options === undefined) {
+        expect(script).not.toContain('new GCodePreview');
+        return;
+      }
 
-      for (const key of topLevelKeys(options as string)) {
+      for (const key of topLevelKeys(options)) {
         expect(optionKeys.has(key), `GCodePreviewOptions has no key ${key}`).toBe(true);
       }
     });
 
     it('passes only real buildVolume fields', () => {
-      const options = constructorOptions(script) as string;
-      const start = options.indexOf('buildVolume:');
-      if (start === -1) return;
+      const options = constructorOptions(script);
+      const start = options?.indexOf('buildVolume:') ?? -1;
+      if (options === undefined || start === -1) return;
 
       for (const key of topLevelKeys(objectLiteralAt(options, options.indexOf('{', start)))) {
         expect(buildVolumeKeys.has(key), `BuildVolumeDef has no field ${key}`).toBe(true);

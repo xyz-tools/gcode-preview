@@ -3,14 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Layer range — gcode-preview</title>
+    <title>Print stats — gcode-preview</title>
     <link rel="stylesheet" href="runner.css" />
   </head>
   <body>
     <header>
       <a href="index.html">← all examples</a>
-      <h1>Layer range</h1>
-      <p>Scrub the visible layers with a slider, the way a slicer's layer view does.</p>
+      <h1>Print stats</h1>
+      <p>Build your own info panel out of what the job knows: layers, filament, bounding box, retractions.</p>
     </header>
 
     <main>
@@ -43,64 +43,56 @@
     <template id="output">
       <style>
         canvas { display: block; width: 100vw; height: 100vh; }
-        .controls {
-          position: fixed; left: 0; right: 0; bottom: 0;
-          display: flex; gap: 12px; align-items: center;
-          padding: 10px 16px; background: rgba(255, 255, 255, 0.85);
+        #stats {
+          position: fixed; top: 12px; left: 12px; padding: 10px 12px;
+          background: rgba(0, 0, 0, 0.65); border-radius: 6px; color: #fff;
+          font: 13px/1.6 system-ui, sans-serif;
         }
-        .controls input { flex: 1; }
-        .controls output { min-width: 8em; text-align: right; font-variant-numeric: tabular-nums; }
+        #stats table { border-spacing: 0; }
+        #stats th { padding-right: 16px; text-align: left; font-weight: 400; opacity: 0.7; }
+        #stats td { text-align: right; font-variant-numeric: tabular-nums; }
       </style>
       <canvas></canvas>
-      <div class="controls">
-        <label for="top">Top layer</label>
-        <input id="top" type="range" min="1" max="1" value="1" disabled />
-        <output id="readout">…</output>
-      </div>
+      <div id="stats">Parsing…</div>
     </template>
 
     <script type="text/plain" id="code">
       import { GCodePreview } from 'gcode-preview';
 
       const canvas = document.querySelector('canvas');
-      const slider = document.querySelector('#top');
-      const readout = document.querySelector('#readout');
-
       const preview = new GCodePreview({
         canvas,
         extrusionColor: '#95dfa1',
-        travelColor: 'red',
         extrusionWidth: 0.45,
         lineHeight: 0.2,
         buildVolume: { x: 180, y: 180, z: 0 },
-        // The highlight follows the top of the *visible* range: topLayerColor
-        // recolors the whole layer at endLayer, lastSegmentColor just that layer's
-        // final segment. So both move with the slider.
-        topLayerColor: 'white',
-        lastSegmentColor: '#000'
+        backgroundColor: '#141414'
       });
 
       const gcode = await fetch('../gcodes/3DBenchy.gcode').then((response) => response.text());
       await preview.processGCode(gcode);
 
-      // countLayers is only known once the G-code has been processed.
-      const total = preview.countLayers;
-      slider.max = total;
-      slider.value = total;
-      slider.disabled = false;
-      slider.addEventListener('input', update);
-      update();
+      // All of this is accumulated while the job runs, so read it once the G-code
+      // has been processed: `stats` is tallied by the command handlers, and
+      // `boundingBox` grows with every point added to the job.
+      const { stats, boundingBox } = preview.job;
+      const size = boundingBox.size;
+      // extrusionDistance is filament length, not how far the nozzle moved.
+      const volume = (Math.PI * (1.75 / 2) ** 2 * stats.extrusionDistance) / 1000;
 
-      function update() {
-        const top = Number(slider.value);
-        // 1-based, inclusive. Set both to the same value (or use
-        // sceneManager.singleLayerMode) to show a single layer.
-        preview.sceneManager.startLayer = 1;
-        preview.sceneManager.endLayer = top;
-        // No manual redraw needed: the setters re-render when the highlight has to
-        // move, and the scene manager paints every frame.
-        readout.textContent = `layer ${top} / ${total}`;
-      }
+      const rows = {
+        Slicer: preview.parser.metadata.slicerName ?? 'unknown',
+        Layers: preview.countLayers,
+        Paths: `${preview.job.extrusions.length.toLocaleString()} extrusion / ${preview.job.travels.length.toLocaleString()} travel`,
+        Points: stats.points.toLocaleString(),
+        Filament: `${(stats.extrusionDistance / 1000).toFixed(2)} m · ${volume.toFixed(1)} cm³`,
+        Retractions: stats.retractions,
+        Size: `${size.x.toFixed(1)} × ${size.y.toFixed(1)} × ${size.z.toFixed(1)} mm`
+      };
+
+      document.querySelector('#stats').innerHTML = `<table>${Object.entries(rows)
+        .map(([label, value]) => `<tr><th>${label}</th><td>${value}</td></tr>`)
+        .join('')}</table>`;
 
       // The renderer is sized once, at construction. Nothing in the library
       // watches the canvas, so tell it when the canvas changes size.

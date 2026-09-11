@@ -28,9 +28,10 @@ try it out: https://codepen.io/remcoder/pen/PwYVXBg
 
 ### Examples
 [gcode-preview.web.app/examples/](https://gcode-preview.web.app/examples/) — small standalone pages showing how to
-drive the library from your own code: loading and streaming G-code, wiring a layer slider, handling a dropped file,
-reading the parser's metadata. Plain HTML with an inline module script, no build step, meant to be copy-pasted. They
-live in [`demo/examples`](demo/examples) and are served by `npm run dev` at http://localhost:8080/examples/.
+drive the library from your own code: loading and streaming G-code, replaying a print move by move, wiring a layer
+slider, handling a dropped file, building a stats panel, and using the parser with no renderer at all. Each page shows
+its own code next to what that code draws, and you can edit it and re-run it in place. No build step, no framework.
+They live in [`demo/examples`](demo/examples) and are served by `npm run dev` at http://localhost:8080/examples/.
 
 ### Batteries included
 Click to see the [full-fledged demo](https://gcode-preview.web.app/):

@@ -65,18 +65,22 @@
     <p class="lede">
       Small, self-contained pages showing how to drive the library from your own code — loading G-code, wiring up
       controls, reacting to what the parser found. The <a href="../index.html">demo app</a> is where to look at what the
-      renderer can do; these are where to look at how to talk to it. Plain HTML, no build step, no framework: the whole
-      example is the inline <code>&lt;script type="module"&gt;</code>, meant to be copy-pasted.
+      renderer can do; these are where to look at how to talk to it. Every page shows its own code next to what that
+      code draws: edit it and hit <strong>Run</strong> to see the change. Plain HTML, no build step, no framework.
     </p>
 
     <ul>
       <li>
         <a href="minimal.html">Minimal</a>
-        <p>The smallest thing that renders: a canvas, a color, and two lines of G-code.</p>
+        <p>The smallest thing that renders: a canvas, a color and two lines of G-code.</p>
       </li>
       <li>
         <a href="streaming.html">Streaming</a>
         <p>Pass a <code>fetch</code> stream to <code>processGCodeStream</code> and watch the model grow as it loads.</p>
+      </li>
+      <li>
+        <a href="live-print.html">Live print</a>
+        <p>Replay a file the way a printer runs it: moves arriving over time, not a file loaded all at once.</p>
       </li>
       <li>
         <a href="layer-range.html">Layer range</a>
@@ -84,11 +88,19 @@
       </li>
       <li>
         <a href="drag-drop.html">Drag &amp; drop</a>
-        <p>Drop a <code>.gcode</code> file on the canvas — the library handles the rest.</p>
+        <p>Drop a <code>.gcode</code> file on the canvas and read what the library found in it.</p>
+      </li>
+      <li>
+        <a href="stats.html">Print stats</a>
+        <p>Build your own info panel out of the job: layers, filament, bounding box, retractions.</p>
       </li>
       <li>
         <a href="thumbnail.html">Thumbnail</a>
         <p>The preview image and slicer name that slicers embed in G-code comments.</p>
+      </li>
+      <li>
+        <a href="parser.html">Parser only</a>
+        <p>Use the parser on its own — no canvas, no scene. G-code in, commands out.</p>
       </li>
     </ul>
 

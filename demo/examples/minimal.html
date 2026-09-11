@@ -2,18 +2,34 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Minimal — gcode-preview</title>
-    <style>
-      body { margin: 0; background: #eee; font: 14px/1.5 system-ui, sans-serif; }
-      canvas { display: block; width: 100vw; height: 100vh; }
-    </style>
+    <link rel="stylesheet" href="runner.css" />
   </head>
   <body>
-    <!--
-      Minimal: the smallest gcode-preview setup — a canvas, an extrusion color
-      and a short inline G-code string drawing a diagonal line.
-    -->
-    <canvas></canvas>
+    <header>
+      <a href="index.html">← all examples</a>
+      <h1>Minimal</h1>
+      <p>The smallest thing that renders: a canvas, a color and two lines of G-code.</p>
+    </header>
+
+    <main>
+      <section class="code">
+        <div class="toolbar">
+          <button id="run" class="primary">Run</button>
+          <button id="reset">Reset</button>
+          <kbd>⌘/Ctrl + ↵</kbd>
+          <span id="status"></span>
+        </div>
+        <textarea spellcheck="false" aria-label="Example code"></textarea>
+        <details>
+          <summary>The rest of the page</summary>
+          <pre id="setup"></pre>
+        </details>
+      </section>
+      <iframe title="Example output"></iframe>
+    </main>
+
     <script type="importmap">
       {
         "imports": {
@@ -23,17 +39,33 @@
         }
       }
     </script>
-    <script type="module">
+
+    <template id="output">
+      <style>
+        canvas { display: block; width: 100vw; height: 100vh; }
+      </style>
+      <canvas></canvas>
+    </template>
+
+    <script type="text/plain" id="code">
       import { GCodePreview } from 'gcode-preview';
 
+      const canvas = document.querySelector('canvas');
+
       const preview = new GCodePreview({
-        canvas: document.querySelector('canvas'),
+        canvas,
         extrusionColor: 'hotpink'
       });
 
       // draw a diagonal line
       const gcode = 'G0 X0 Y0 Z0.2\nG1 X42 Y42 E10';
       preview.processGCode(gcode);
+
+      // The renderer is sized once, at construction. Nothing in the library
+      // watches the canvas, so tell it when the canvas changes size.
+      new ResizeObserver(() => preview.sceneManager.resize()).observe(canvas);
     </script>
+
+    <script type="module" src="runner.js"></script>
   </body>
 </html>
