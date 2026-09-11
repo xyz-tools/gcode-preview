@@ -14,6 +14,9 @@ Other things that are always helpful:
 
 ## Development setup
 
+Use Node 24 (the exact version is pinned in `.nvmrc` and shared by CI, demo
+builds, and publishing). With nvm installed, run `nvm install && nvm use` first.
+
 Run the dev setup:
 
 ```sh
@@ -108,7 +111,7 @@ Run the full check suite:
 
 To auto-fix simple issues: `npm run lint:fix` or `npm run prettier:fix`.
 
-CI runs `build`, `test:coverage`, `typeCheck` and `lint` on Ubuntu with Node 22.
+CI runs `build`, `test:coverage`, `typeCheck` and `lint` on Ubuntu with Node 24 from `.nvmrc`.
 Note that CI uses `npm run test:coverage`, not `npm run test`: **every file under
 `src/` must be at 100% statement/branch/function/line coverage** (see
 `vitest.config.mts`), so run it locally before pushing.
