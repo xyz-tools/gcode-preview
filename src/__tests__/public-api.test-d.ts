@@ -276,7 +276,7 @@ describe('public API types', () => {
       >();
       expectTypeOf<Job['resumeLastPath']>().toEqualTypeOf<() => void>();
       expectTypeOf<Job['resolvePosition']>().toEqualTypeOf<() => { x: number; y: number; z: number }>();
-      expectTypeOf<Job['stats']>().toEqualTypeOf<{
+      expectTypeOf<Omit<Job['stats'], 'recordExtrusion'>>().toEqualTypeOf<{
         retractions: number;
         deretractions: number;
         feedrateChanges: number;
@@ -284,6 +284,7 @@ describe('public API types', () => {
         points: number;
         extrusionDistance: number;
       }>();
+      expectTypeOf<Job['stats']['recordExtrusion']>().toEqualTypeOf<(delta: number) => void>();
     });
   });
 });

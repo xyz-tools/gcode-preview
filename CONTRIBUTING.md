@@ -197,6 +197,15 @@ General test expectations:
 - Runtime tests live in `src/__tests__/`, mirroring the `src/` layout, as plain
   `.ts` files (e.g. `src/__tests__/interpreter.ts`) — they are **not** named
   `*.test.ts`, and files named that way won't be picked up.
+- Mirroring the layout means **one test file per module**, named after the module
+  it covers. Don't add a test file named after a feature, a bug or a PR
+  (`filament-consumption.ts`, `fix-inch-units.ts`): put the unit tests next to
+  the class under test (`src/__tests__/job-stats.ts`) and the end-to-end coverage
+  in the test file of the command or entry point that drives it
+  (`src/__tests__/interpreter/commands/linear-move.ts`), grouped in a `describe`
+  block that names the behavior. The exceptions are the few cross-cutting
+  harnesses that already exist and say so in a header comment, such as
+  `src/__tests__/ingestion-equivalence.ts`.
 - `src/__tests__/**/*.test-d.ts` files are compile-time type assertions; they run
   in the typecheck pass, not as runtime tests.
 - Tests should exercise dispatch through `Interpreter.execute()` whenever the

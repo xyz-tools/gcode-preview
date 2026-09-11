@@ -35,7 +35,8 @@ export const linearMove: CommandHandler = (command, job) => {
     // still account the E parameter: in absolute mode a retract/prime pair
     // moves the extruder position, and losing it here would misattribute the
     // difference to the next extruding move
-    state.applyExtrusion(e);
+    const extruded = state.applyExtrusion(e);
+    job.stats.recordExtrusion(extruded);
     return;
   }
 
@@ -56,9 +57,7 @@ export const linearMove: CommandHandler = (command, job) => {
   const pathType = extruded > 0 ? PathType.Extrusion : PathType.Travel;
   const currentPath = job.continuePath(pathType);
 
-  if (extruded > 0) {
-    job.stats.extrusionDistance += extruded;
-  }
+  job.stats.recordExtrusion(extruded);
 
   state.x = targetX;
   state.y = targetY;
