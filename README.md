@@ -59,7 +59,7 @@ GCode Preview depends on [three.js](https://threejs.org/) and supports `three` `
   preview.processGCode(gcode);
 ```
 
-That snippet is also a runnable page: [`demo/examples/minimal.html`](demo/examples/minimal.html).
+The same setup, with a bed under it and enough moves to spell something, is a runnable page: [`demo/examples/minimal.html`](demo/examples/minimal.html).
 
 G-code can also be streamed in and rendered progressively:
 

@@ -10,7 +10,7 @@
     <header>
       <a href="index.html">← all examples</a>
       <h1>Minimal</h1>
-      <p>The smallest thing that renders: a canvas, a color and two lines of G-code.</p>
+      <p>The smallest thing that renders: a canvas, a color, and a handful of G-code moves.</p>
     </header>
 
     <main>
@@ -54,11 +54,30 @@
 
       const preview = new GCodePreview({
         canvas,
-        extrusionColor: 'hotpink'
+        extrusionColor: 'hotpink',
+        // Extrusions are solid tubes, sized in mm. Real prints set these from
+        // the slicer's numbers; this one is drawn fat so it reads as a letter.
+        extrusionWidth: 5,
+        lineHeight: 3,
+        // Not required — the bed gives the model something to sit on.
+        buildVolume: { x: 100, y: 100, z: 0 }
       });
 
-      // draw a diagonal line
-      const gcode = 'G0 X0 Y0 Z0.2\nG1 X42 Y42 E10';
+      // A G, drawn as one continuous extrusion. G0 travels to the start,
+      // then each G1 extrudes to the next point — what makes a move an
+      // extrusion rather than a travel is that E keeps growing.
+      const gcode = `
+        G0 X75 Y70 Z0.2
+        G1 X50 Y90 E1
+        G1 X30 Y75 E2
+        G1 X25 Y50 E3
+        G1 X30 Y25 E4
+        G1 X50 Y10 E5
+        G1 X70 Y25 E6
+        G1 X75 Y40 E7
+        G1 X75 Y50 E8
+        G1 X55 Y50 E9
+      `;
       preview.processGCode(gcode);
 
       // The renderer is sized once, at construction. Nothing in the library
