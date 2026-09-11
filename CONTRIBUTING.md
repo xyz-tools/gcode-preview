@@ -103,6 +103,7 @@ Run the full check suite:
 - `npm run typeCheck` for typescript typings
 - `npm run lint` for code style and formatting
 - `npm run build` for a production build
+- `npm run test:packaging` to pack/install a clean consumer and check exports, shared chunks, and TypeScript resolution
 - or most of it together: `npm run check` (test + typeCheck + lint — note it does **not** run `build` or coverage)
 
 To auto-fix simple issues: `npm run lint:fix` or `npm run prettier:fix`.

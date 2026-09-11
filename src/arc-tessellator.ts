@@ -1,5 +1,3 @@
-import { Units, MM_PER_INCH } from './units';
-
 /** A point along a tessellated arc, in absolute G-code coordinates */
 export interface ArcPoint {
   x: number;
@@ -68,17 +66,15 @@ export class ArcTessellator {
   }
   /**
    * Converts an arc move into the points to draw, ending on the arc's endpoint
-   * @param start - Absolute position at the start of the arc
-   * @param move - Arc parameters from the G2/G3 command
+   * @param start - Absolute position in millimeters at the start of the arc
+   * @param move - Arc parameters normalized to millimeters
    * @param emit - Called once per point, in order, endpoint last. A callback
    * instead of a returned array so arc-heavy files do not allocate a throwaway
    * point object per segment.
-   * @param units - Current units; the chord tolerance is defined in
-   * millimeters, so inch-based arcs are tessellated proportionally finer
    * @returns The arc's exact endpoint (also the last point emitted). Emits at
    * least the endpoint, even for degenerate arcs.
    */
-  tessellate(start: ArcPoint, move: ArcMove, emit: EmitPoint, units: Units = 'mm'): ArcPoint {
+  tessellate(start: ArcPoint, move: ArcMove, emit: EmitPoint): ArcPoint {
     const { cw } = move;
     let { i, j, r } = move;
     // Omitted words are defaults, not "unset": G-code reads a missing I/J as a zero
@@ -150,8 +146,7 @@ export class ArcTessellator {
     // step would satisfy it and only the MAX_SEGMENT_ANGLE cap matters. A
     // non-finite radius flows through as NaN or a 0 step, making totalSegments
     // non-finite; the guard below the z handling skips the loop for those.
-    const radiusMm = units == 'in' ? arcRadius * MM_PER_INCH : arcRadius;
-    const maxStep = 2 * Math.acos(Math.max(1 - this.chordTolerance / radiusMm, -1));
+    const maxStep = 2 * Math.acos(Math.max(1 - this.chordTolerance / arcRadius, -1));
     const step = Math.min(maxStep, MAX_SEGMENT_ANGLE);
 
     let totalSegments = totalArc / step;

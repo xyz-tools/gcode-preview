@@ -14,6 +14,7 @@ describe('ObjectsManager', () => {
   beforeEach(() => {
     scene = new Scene();
     objectsManager = new ObjectsManager(scene, 0.4, 0.2, 0.6);
+    objectsManager.renderTubes = false;
   });
 
   describe('constructor', () => {
@@ -899,7 +900,7 @@ describe('ObjectsManager', () => {
       ['setLineHeight', () => manager.setLineHeight(0.5)],
       ['setLineHeight back to per-path', () => manager.setLineHeight(undefined)],
       ['setExtrusionWidth', () => manager.setExtrusionWidth(1.2)],
-      ['setRenderTubes', () => manager.setRenderTubes(true)]
+      ['setRenderTubes', () => manager.setRenderTubes(false)]
     ])('%s asks for a rebuild', (_name, change) => {
       change();
       vi.advanceTimersByTime(ObjectsManager.rebuildDebounce);
@@ -920,7 +921,7 @@ describe('ObjectsManager', () => {
       ['setLineWidth', () => manager.setLineWidth(0.4)],
       ['setLineHeight', () => manager.setLineHeight(0.2)],
       ['setExtrusionWidth', () => manager.setExtrusionWidth(0.6)],
-      ['setRenderTubes', () => manager.setRenderTubes(false)]
+      ['setRenderTubes', () => manager.setRenderTubes(true)]
     ])('%s does not rebuild when the value is unchanged', (_name, change) => {
       change();
       vi.advanceTimersByTime(ObjectsManager.rebuildDebounce);

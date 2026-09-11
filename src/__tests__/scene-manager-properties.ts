@@ -1464,6 +1464,7 @@ function createSceneManager(opts: Partial<SceneManagerOptions> & { job?: Job } =
       buildVolume: { x: 200, y: 200, z: 200, smallGrid: true },
       renderExtrusion: true,
       renderTravel: false,
+      renderTubes: false,
       ...sceneOptions
     },
     job ?? createJob()

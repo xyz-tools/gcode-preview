@@ -37,6 +37,23 @@ Click to see the [full-fledged demo](https://gcode-preview.web.app/):
 
 GCode Preview depends on [three.js](https://threejs.org/) and supports `three` `>=0.166.0 <0.186.0`.
 
+### Module format (3.0)
+
+The package is ESM-only. Import from `gcode-preview`; the only other public
+package path is `gcode-preview/package.json`. Deep imports such as
+`gcode-preview/dist/gcode-preview.es.js` are no longer supported, and the
+legacy UMD build / `GCodePreview` browser global has been removed.
+
+TypeScript supports `node16`, `nodenext`, and `bundler` module resolution.
+Legacy `moduleResolution: "node"` can still resolve the root import through
+`types`; no `typesVersions` mapping is needed for the current root-only API.
+
+For native browser modules, map `three` in an import map and load
+`dist/gcode-preview.es.js` as a module. When self-hosting, copy the **entire
+`dist` directory**, including any chunks. The debug GUI (`lil-gui`) is bundled,
+so it needs no separate install or import-map entry. The GUI remains synchronous;
+bundling adds roughly 9 KB gzipped even when `devMode` is disabled.
+
 ### Quick start
 
 ```js
@@ -147,11 +164,11 @@ Supported systems include:
  - and possibly more
 
 ### Render extrusion as tubes
-Extrusions are rendered as flat lines by default; pass the `renderTubes`
-constructor option to get true tube geometry (it can also be toggled at runtime
+Extrusions are rendered as tubes by default; pass `renderTubes: false` as a
+constructor option to render flat lines (it can also be toggled at runtime
 via `preview.sceneManager.renderTubes`):
 ```js
-new GCodePreview({ canvas, renderTubes: true });
+new GCodePreview({ canvas, renderTubes: false });
 ```
 
 ### G2/G3 arc support
