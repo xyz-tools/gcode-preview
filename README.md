@@ -164,11 +164,11 @@ Supported systems include:
  - and possibly more
 
 ### Render extrusion as tubes
-Extrusions are rendered as flat lines by default; pass the `renderTubes`
-constructor option to get true tube geometry (it can also be toggled at runtime
+Extrusions are rendered as tubes by default; pass `renderTubes: false` as a
+constructor option to render flat lines (it can also be toggled at runtime
 via `preview.sceneManager.renderTubes`):
 ```js
-new GCodePreview({ canvas, renderTubes: true });
+new GCodePreview({ canvas, renderTubes: false });
 ```
 
 ### G2/G3 arc support
