@@ -69,7 +69,7 @@ describe('SceneManager runtime smoke test', () => {
   });
 
   it('constructs real three.js objects when rendering lines', async () => {
-    const preview = createPreview({ renderExtrusion: true, renderTravel: true });
+    const preview = createPreview({ renderExtrusion: true, renderTravel: true, renderTubes: false });
     preview.processGCode(SAMPLE_GCODE);
     await nextFrame();
 
@@ -90,8 +90,8 @@ describe('SceneManager runtime smoke test', () => {
     expect(mockRenderers[0].dispose).toHaveBeenCalled();
   });
 
-  it('constructs a real BatchedMesh when rendering tubes', async () => {
-    const preview = createPreview({ renderExtrusion: true, renderTravel: false, renderTubes: true });
+  it('constructs a real BatchedMesh by default', async () => {
+    const preview = createPreview({ renderExtrusion: true, renderTravel: false });
     preview.processGCode(SAMPLE_GCODE);
     await nextFrame();
 
