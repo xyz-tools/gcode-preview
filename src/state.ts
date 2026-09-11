@@ -62,6 +62,8 @@ export class State {
   lineHeight: number | undefined = undefined;
   /** Current units (millimeters or inches) */
   units: Units = 'mm';
+  /** Current positioning mode for motion commands */
+  positioning: 'absolute' | 'relative' = 'absolute';
   /**
    * Whether the axes have been homed (G28).
    * @remarks
@@ -71,6 +73,20 @@ export class State {
    * the job's decision (see `Job.resolvePosition`), not the state's.
    */
   isHomed = false;
+
+  /** Moves to logical coordinates, applying the G92 shift only to supplied axes. */
+  moveTo(x: number | undefined, y: number | undefined, z: number | undefined): void {
+    if (x !== undefined) this.x = x + this.positionShift.x;
+    if (y !== undefined) this.y = y + this.positionShift.y;
+    if (z !== undefined) this.z = z + this.positionShift.z;
+  }
+
+  /** Moves by physical offsets, assuming zero only for supplied, unknown axes. */
+  moveBy(x: number | undefined, y: number | undefined, z: number | undefined): void {
+    if (x !== undefined) this.x = (this.x ?? 0) + x;
+    if (y !== undefined) this.y = (this.y ?? 0) + y;
+    if (z !== undefined) this.z = (this.z ?? 0) + z;
+  }
 
   /**
    * Applies a move's E parameter to the extruder position
@@ -95,7 +111,7 @@ export class State {
 
   /**
    * Gets a new State instance with default initial values
-   * @returns New State with an un-homed (unknown) position, e=0, tool=0, units='mm'
+   * @returns New State with an un-homed (unknown) position, e=0, tool=0, units='mm', positioning='absolute'
    */
   static get initial(): State {
     return new State();

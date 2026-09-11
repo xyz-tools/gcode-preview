@@ -2,6 +2,7 @@ export { linearMove } from './linear-move';
 export { arcMove, makeArcMove } from './arc-move';
 export { setInchUnits, setMillimeterUnits } from './set-units';
 export { home } from './home';
+export { setAbsolutePositioning, setRelativePositioning } from './set-positioning';
 export { setPosition } from './set-position';
 export { resetPositionShift } from './reset-position-shift';
 export { setAbsoluteExtrusion, setRelativeExtrusion } from './set-extrusion-mode';

@@ -35,13 +35,6 @@ export const linearMove: CommandHandler = (command, job) => {
 
   job.stats.points++;
 
-  // The move's physical endpoint; an omitted axis keeps its current
-  // (possibly unknown) position. Resolved before touching the state so the
-  // dimension derivation below still sees the segment's starting point.
-  const targetX = x === undefined ? state.x : x + state.positionShift.x;
-  const targetY = y === undefined ? state.y : y + state.positionShift.y;
-  const targetZ = z === undefined ? state.z : z + state.positionShift.z;
-
   // Classified from the length actually extruded, not the raw E parameter: in
   // absolute mode a wipe or retract can move in X/Y while E decreases, which
   // still reads as a positive parameter but lays down no material.
@@ -54,9 +47,11 @@ export const linearMove: CommandHandler = (command, job) => {
     job.stats.extrusionDistance += extruded;
   }
 
-  state.x = targetX;
-  state.y = targetY;
-  state.z = targetZ;
+  if (state.positioning === 'relative') {
+    state.moveBy(x, y, z);
+  } else {
+    state.moveTo(x, y, z);
+  }
 
   const pos = job.resolvePosition();
   currentPath.addPoint(pos.x, pos.y, pos.z);
