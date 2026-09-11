@@ -35,7 +35,7 @@ jobs:
       - run: npm ci
       - name: Install three.js 0.185.1
         run: npm install three@0.185.1 @types/three@0.185.4 --no-save
-      - run: npm run build
+      - run: npm run test:packaging
       - run: npm run test:coverage
       - run: npm run typeCheck
       - run: npm run lint

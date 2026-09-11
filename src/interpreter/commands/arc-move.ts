@@ -1,3 +1,4 @@
+import { toMillimeters } from '../../units';
 import { PathType } from '../../path';
 import { ArcTessellator, ArcTessellatorOptions } from '../../arc-tessellator';
 import type { CommandHandler } from '../../interpreter';
@@ -15,15 +16,19 @@ import type { CommandHandler } from '../../interpreter';
 export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler => {
   const arcTessellator = new ArcTessellator(options);
   return (command, job) => {
-    const { e, i, j, r } = command.params;
     const { state } = job;
+    const { units } = state;
+    const e = toMillimeters(command.params.e, units);
+    const i = toMillimeters(command.params.i, units);
+    const j = toMillimeters(command.params.j, units);
+    const r = toMillimeters(command.params.r, units);
     // The endpoint arrives in logical coordinates; translate it into physical
     // space up front so the tessellator's derived values agree with `from`.
     // I/J/R are relative distances and need no shift.
     const { positionShift } = state;
-    const x = command.params.x === undefined ? undefined : command.params.x + positionShift.x;
-    const y = command.params.y === undefined ? undefined : command.params.y + positionShift.y;
-    const z = command.params.z === undefined ? undefined : command.params.z + positionShift.z;
+    const x = command.params.x === undefined ? undefined : toMillimeters(command.params.x, units)! + positionShift.x;
+    const y = command.params.y === undefined ? undefined : toMillimeters(command.params.y, units)! + positionShift.y;
+    const z = command.params.z === undefined ? undefined : toMillimeters(command.params.z, units)! + positionShift.z;
     // Starting position for the arc, with any un-homed axis assumed at the origin.
     const from = job.resolvePosition();
 
@@ -45,17 +50,12 @@ export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler
     // The tessellator runs on the resolved position and emits every point,
     // ending with the exact endpoint -- which equals resolvePosition() after
     // the state update below, so no separate endpoint emission is needed.
-    arcTessellator.tessellate(
-      from,
-      { cw, x, y, z, i, j, r },
-      (px, py, pz) => {
-        currentPath.addPoint(px, py, pz);
-        if (pathType === PathType.Extrusion) {
-          job.boundingBox.update(px, py, pz);
-        }
-      },
-      state.units
-    );
+    arcTessellator.tessellate(from, { cw, x, y, z, i, j, r }, (px, py, pz) => {
+      currentPath.addPoint(px, py, pz);
+      if (pathType === PathType.Extrusion) {
+        job.boundingBox.update(px, py, pz);
+      }
+    });
 
     // `??` not `||`: an arc ending on X0, Y0 or Z0 used to silently keep the previous
     // coordinate. Safe now that the parser drops non-finite params -- `||` was also
