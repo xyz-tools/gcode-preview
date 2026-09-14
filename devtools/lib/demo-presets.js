@@ -1,8 +1,14 @@
-// Bridges the demo's preset catalog into the devtools pages. Served alongside
-// the demo (the demo is the server root), so its data is one import away.
+// Bridges the demo's preset catalog into the devtools pages.
+//
+// The demo is not always at the server root (see lib/roots.js), so these come
+// in through dynamic import against the probed root. The top-level await is
+// what keeps the rest of this module's API synchronous: importers of
+// demo-presets.js wait for it, exactly as they did for a static import.
 
-import { presets } from '/js/presets.js';
-import { defaultSettings } from '/js/default-settings.js';
+import { DEMO_ROOT, demoUrl } from './roots.js';
+
+const { presets } = await import(new URL('js/presets.js', DEMO_ROOT).href);
+const { defaultSettings } = await import(new URL('js/default-settings.js', DEMO_ROOT).href);
 
 // Defaults that affect what geometry gets built and where the camera sits,
 // pulled from the demo's defaultSettings. Deliberately a small allowlist: the
@@ -37,7 +43,7 @@ export function populatePresetSelect(select, defaultKey) {
 // Preset files are demo-root-relative ('gcodes/…') or absolute URLs.
 export function presetFileUrl(key) {
   const file = presets[key].file;
-  return /^https?:\/\//.test(file) ? file : `/${file}`;
+  return /^https?:\/\//.test(file) ? file : demoUrl(file);
 }
 
 // defaults base ← FULL preset (minus app metadata) ← explicit overrides.

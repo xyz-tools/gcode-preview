@@ -6,6 +6,7 @@ yarn-error.log
 
 # Build output
 dist/*
+devtools/dist
 demo/build/*
 demo/dist
 demo/lib

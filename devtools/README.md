@@ -5,25 +5,31 @@ deployed — these pages exist to help develop and release the library itself.
 
 ## Running
 
-The demo dev server also serves this directory:
+Point any static server at this checkout and open `…/devtools/`. Both common
+layouts work:
 
-```
-npm run dev          # or: npm run demo
-```
+- **the repo root** (a VS Code live preview, `npx http-server .`) — the demo is
+  then under `/demo/` and three/lil-gui under `/node_modules/`.
+- **`demo/` as the root with mounts** — what `npm run dev` gives you
+  (`--mount=/lib:node_modules --mount=/dist:dist`), except that it has no mount
+  for this directory, so `/devtools/` is not reachable that way without editing
+  the tracked `package.json`.
 
-then open <http://localhost:8080/devtools/>. Every page has a light/dark toggle
-top right; the choice persists across pages and reloads.
+`lib/roots.js` probes for the demo assets and node_modules once at load and
+resolves everything from its own URL, so no page hardcodes a layout. Every page
+has a light/dark toggle top right; the choice persists across pages and reloads.
 
-The pages reuse the demo's assets over the same server: `/style.css`, the preset
-catalog (`/js/presets.js`), the bundled gcode files (`/gcodes/…`), and the local
-library build (`/dist/gcode-preview.es.js` — produced by `npm run build`, or kept
+The pages reuse the demo's assets over the same server: `style.css`, the preset
+catalog (`js/presets.js`), the bundled gcode files (`gcodes/…`), and the local
+library build (`dist/gcode-preview.es.js` — produced by `npm run build`, or kept
 fresh by `npm run dev`'s watcher).
 
 ## Shared infrastructure (`lib/`)
 
 - `versions.js` — lists published versions from jsDelivr and builds a per-version
   import map (each release gets the three/lil-gui versions it was published
-  against; `local` maps to `/dist`).
+  against; `local` maps to `/dist`, and `commit:…` to a sweep build in
+  `dist/` — both against this checkout's three/lil-gui).
 - `runner-frame.js` — runs a tool's runner script in a sandboxed iframe with its
   own import map, with a small postMessage protocol
   (`ready`/`phase`/`progress`/`result`/`error`).
@@ -31,6 +37,10 @@ fresh by `npm run dev`'s watcher).
   (scene bits under `.sceneManager`) vs 2.x `WebGLPreview` (flat).
 - `demo-presets.js` — the demo's preset catalog, file URLs, and merged display
   settings.
+- `history.js` — harvested benchmark runs in localStorage, grouped into
+  comparable sets, with CSV/JSON download.
+- `roots.js` — probes where the demo assets, node_modules and `dist/` are, so
+  the pages work whatever the server's root is.
 
 ## Tools
 
@@ -77,6 +87,43 @@ table reports medians. Results can be copied as CSV or Markdown.
 
 Peak-heap numbers need Chrome (`performance.memory`); everything else works in
 any browser.
+
+#### Sweeping a range of commits
+
+To see how a metric moved across a stretch of history — say every commit
+between your checkout and the tip of `develop` — build them all first:
+
+```
+node devtools/sweep/build-commits.mjs            # HEAD → develop, mainline only
+node devtools/sweep/build-commits.mjs --base v3.0.0-alpha.5 --tip develop
+node devtools/sweep/build-commits.mjs --all-commits   # include merged-branch commits
+```
+
+Each commit is checked out in a detached worktree (`devtools/dist/.worktree`)
+that borrows this checkout's `node_modules`, so **your working tree is never
+touched** and three/lil-gui are identical for every build — the only thing that
+varies is the library. Commits whose `src/` tree is unchanged reuse the previous
+build instead of rebuilding. Output lands in `devtools/dist/` as
+`<short-sha>.js` plus an `index.json` catalog the page reads; re-running skips
+shas already built (`--force` to rebuild). It is called `dist` so that the bare
+`dist` already in `.prettierignore` and `.eslintrc.js` keeps the build
+artifacts out of `npm run lint` — no tracked config file has to change.
+
+Back on the benchmark page, the Mode select then offers:
+
+- **Compare A/B** — the original two-version, interleaved comparison.
+- **Harvest one version** — measure version A alone and append it to the
+  history table.
+- **Sweep commit builds** — walk every build in the catalog, oldest first,
+  appending each as it lands. "Skip already harvested" makes an interrupted
+  sweep resumable, and Stop ends it after the current build.
+
+Harvested runs collect in the **Harvested runs** table, grouped by what is
+actually comparable (file + geometry + run count), one row per commit in commit
+order, with each metric shown against the group's oldest row. The table lives in
+localStorage, so it survives reloads, rebuilds and checkouts; **Download CSV** /
+**Download JSON** save it to a file, and Copy Markdown is there for pasting into
+an issue.
 
 ### Memory-leak tester (`memory-leak/`)
 
