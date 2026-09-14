@@ -135,6 +135,32 @@ describe('.geometry', () => {
     expect(result.parameters.lineHeight).toEqual(Path.DEFAULT_LINE_HEIGHT);
   });
 
+  test('per-point dimensions reach the geometry when they changed mid-path', () => {
+    const path = new Path(PathType.Extrusion, 0.4, 0.2, 0);
+    path.addPoint(0, 0, 0);
+    path.addPoint(10, 0, 0);
+    path.updateDimensions(0.6, 0.3);
+    path.addPoint(20, 0, 0);
+
+    const result = path.geometry() as ExtrusionGeometry;
+
+    expect(result.parameters.lineWidth).toEqual(Float32Array.from([0.4, 0.4, 0.6]));
+    expect(result.parameters.lineHeight).toEqual(Float32Array.from([0.2, 0.2, 0.3]));
+  });
+
+  test('the fallbacks fill in per point for the points that carry no dimensions', () => {
+    const path = new Path(PathType.Extrusion, undefined, undefined, 0);
+    path.addPoint(0, 0, 0);
+    path.addPoint(10, 0, 0);
+    path.updateDimensions(0.6, undefined);
+    path.addPoint(20, 0, 0);
+
+    const result = path.geometry({ extrusionWidthFallback: 2, lineHeightFallback: 7 }) as ExtrusionGeometry;
+
+    expect(result.parameters.lineWidth).toEqual(Float32Array.from([2, 2, 0.6]));
+    expect(result.parameters.lineHeight).toEqual(Float32Array.from([7, 7, 7]));
+  });
+
   test('returns null if there are 0 vertices', () => {
     const path = new Path(PathType.Travel, undefined, undefined, undefined);
 
@@ -179,6 +205,49 @@ describe('.line', () => {
   });
 });
 
+describe('.updateDimensions', () => {
+  test('is a no-op while the dimensions do not change', () => {
+    const path = new Path(PathType.Extrusion, 0.4, 0.2, 0);
+    path.addPoint(0, 0, 0);
+
+    path.updateDimensions(0.4, 0.2);
+
+    expect(path.hasVaryingDimensions).toBe(false);
+  });
+
+  test('backfills earlier points with the dimensions they were added under', () => {
+    const path = new Path(PathType.Extrusion, 0.4, 0.2, 0);
+    path.addPoint(0, 0, 0);
+    path.addPoint(10, 0, 0);
+
+    path.updateDimensions(0.4, 0.3);
+    path.addPoint(20, 0, 0);
+
+    expect(path.hasVaryingDimensions).toBe(true);
+    expect(path.lineHeightAt(0)).toEqual(0.2);
+    expect(path.lineHeightAt(1)).toEqual(0.2);
+    expect(path.lineHeightAt(2)).toEqual(0.3);
+  });
+
+  test('lineHeightAt reports unknown heights as undefined', () => {
+    const path = new Path(PathType.Extrusion, undefined, undefined, 0);
+    path.addPoint(0, 0, 0);
+
+    path.updateDimensions(0.5, undefined);
+    path.addPoint(10, 0, 0);
+
+    expect(path.lineHeightAt(0)).toBeUndefined();
+    expect(path.lineHeightAt(1)).toBeUndefined();
+  });
+
+  test('lineHeightAt answers the single height of a uniform path', () => {
+    const path = new Path(PathType.Extrusion, 0.4, 0.2, 0);
+    path.addPoint(0, 0, 0);
+
+    expect(path.lineHeightAt(0)).toEqual(0.2);
+  });
+});
+
 describe('.splitLastSegment', () => {
   test('splits a multi-segment path into a body and the final segment', () => {
     const path = new Path(PathType.Extrusion, 0.5, 0.3, 2);
@@ -218,5 +287,25 @@ describe('.splitLastSegment', () => {
       expect(half.lineHeight).toBe(0.3);
       expect(half.tool).toBe(2);
     });
+  });
+
+  test('each half carries its own slice of varying dimensions', () => {
+    const path = new Path(PathType.Extrusion, undefined, undefined, 0);
+    path.addPoint(0, 0, 0);
+    path.addPoint(10, 0, 0);
+    path.updateDimensions(0.6, 0.3);
+    path.addPoint(20, 0, 0);
+
+    const { body, segment } = path.splitLastSegment();
+
+    // the body's last point predates the change, so its dimensions stay unknown
+    expect(body.hasVaryingDimensions).toBe(true);
+    expect(body.extrusionWidth).toBeUndefined();
+    expect(body.lineHeightAt(0)).toBeUndefined();
+    // the segment ends after the change, so it carries the changed dimensions
+    expect(segment.extrusionWidth).toEqual(0.6);
+    expect(segment.lineHeight).toEqual(0.3);
+    expect(segment.lineHeightAt(0)).toBeUndefined();
+    expect(segment.lineHeightAt(1)).toEqual(0.3);
   });
 });
