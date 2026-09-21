@@ -4,9 +4,9 @@ import { ArcTessellator, ArcMove, ArcPoint } from '../arc-tessellator';
 describe('ArcTessellator', () => {
   const tessellator = new ArcTessellator();
 
-  function tessellate(start: ArcPoint, move: ArcMove, units: 'mm' | 'in' = 'mm'): ArcPoint[] {
+  function tessellate(start: ArcPoint, move: ArcMove): ArcPoint[] {
     const points: ArcPoint[] = [];
-    tessellator.tessellate(start, move, (x, y, z) => points.push({ x, y, z }), units);
+    tessellator.tessellate(start, move, (x, y, z) => points.push({ x, y, z }));
     return points;
   }
 
@@ -139,13 +139,27 @@ describe('ArcTessellator', () => {
     expect(points.length).toBeGreaterThanOrEqual(16);
   });
 
-  test('emits more segments for the same arc in inches', () => {
-    const start = { x: 1, y: 0, z: 0 };
-    const move = { cw: false, x: 0, y: 1, i: -1, j: 0 };
+  test('treats an omitted J as a zero offset', () => {
+    const start = { x: 0, y: 0, z: 0.2 };
+    const explicit = tessellate(start, { cw: true, x: 10, y: 0, i: 5, j: 0 });
+    const omitted = tessellate(start, { cw: true, x: 10, y: 0, i: 5 });
 
-    const mm = tessellate(start, move, 'mm');
-    const inches = tessellate(start, move, 'in');
+    expect(omitted).toEqual(explicit);
+    expect(omitted.length).toBeGreaterThan(1);
+  });
 
-    expect(inches.length).toBeGreaterThan(mm.length);
+  test('treats an omitted axis word as unchanged rather than unknown', () => {
+    const start = { x: 0, y: 0, z: 0.2 };
+    const explicit = tessellate(start, { cw: true, x: 10, y: 0, i: 5, j: 0 });
+    const omitted = tessellate(start, { cw: true, x: 10, i: 5, j: 0 });
+
+    expect(omitted).toEqual(explicit);
+    expect(omitted.length).toBeGreaterThan(1);
+  });
+
+  test('emits only the endpoint for an arc with no offsets at all', () => {
+    const points = tessellate({ x: 0, y: 0, z: 0 }, { cw: true, x: 10, y: 0 });
+
+    expect(points).toEqual([{ x: 10, y: 0, z: 0 }]);
   });
 });

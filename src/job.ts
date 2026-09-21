@@ -212,6 +212,12 @@ export class Job {
     const currentPath = new Path(newType, this.state.extrusionWidth, this.state.lineHeight, this.state.tool);
     const pos = this.resolvePosition();
     currentPath.addPoint(pos.x, pos.y, pos.z);
+    // The seed point is the extrusion's starting position, which the move
+    // handlers never see as a destination; without it a path entered by a
+    // travel move would be missing its first end from the bounds (see #451).
+    if (newType === PathType.Extrusion) {
+      this.boundingBox.update(pos.x, pos.y, pos.z);
+    }
     this.inprogressPath = currentPath;
     return currentPath;
   }
@@ -221,13 +227,14 @@ export class Job {
    * @param pathType - Type of the move about to be added
    * @returns The in-progress path when it can continue, otherwise a fresh one
    * @remarks
-   * The in-progress path continues only while its type and its extrusion
-   * dimensions still match the state; dimension metadata that changed the
-   * state since the path was started (see `beginCommand`) breaks it here, so
-   * every path carries a single width and height. Deciding this lazily at
-   * move time (and not when the metadata is applied) keeps streamed and
-   * one-shot parses identical: the interpreter resumes the last finished path
-   * at every chunk boundary, which would undo an eager break.
+   * The in-progress path continues only while its type, its extrusion
+   * dimensions and its tool still match the state; dimension metadata (see
+   * `beginCommand`) or a tool change that altered the state since the path
+   * was started breaks it here, so every path carries a single width, height
+   * and tool. Deciding this lazily at move time (and not when the metadata or
+   * tool is applied) keeps streamed and one-shot parses identical: the
+   * interpreter resumes the last finished path at every chunk boundary, which
+   * would undo an eager break.
    */
   continuePath(pathType: PathType): Path {
     const currentPath = this.inprogressPath;
@@ -235,7 +242,8 @@ export class Job {
       currentPath !== undefined &&
       currentPath.travelType === pathType &&
       currentPath.extrusionWidth === this.state.extrusionWidth &&
-      currentPath.lineHeight === this.state.lineHeight
+      currentPath.lineHeight === this.state.lineHeight &&
+      currentPath.tool === this.state.tool
     ) {
       return currentPath;
     }

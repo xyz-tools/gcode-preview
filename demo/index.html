@@ -8,7 +8,7 @@
 
 <body >
   <div id="app">
-    <div class="widget right bottom border slide-in-right glass is-clipped" v-cloak v-if="thumbnail || model || slicerName">
+    <div class="widget right bottom border slide-in-right glass is-clipped" v-cloak v-if="thumbnail || model || fileName || slicerName">
       <img v-if="thumbnail"
         draggable="false"
         id=thumbnail
@@ -22,6 +22,10 @@
             <span v-if="model?.designer" class="is-size-8">by {{model?.designer}}</span></div>
 
           <div class="license is-size-8">{{model?.license}}</div>
+        </div>
+
+        <div class="p-1 is-size-8 has-text-grey" v-if="fileName">
+          <span class="has-text-grey-light">{{fileName}}</span> <span v-if="formattedFileSize">({{formattedFileSize}})</span>
         </div>
 
         <div class="p-1 is-size-8 has-text-grey" v-if="slicerName">
@@ -93,10 +97,6 @@
                 <div class="controls">
                   <label for="single-layer-mode">Single layer mode</label>
                   <input type="checkbox" id="single-layer-mode" v-model="settings.singleLayerMode" />
-                </div>
-                <div class="controls">
-                  <label for="animate-layers">Animate layers</label>
-                  <input type="checkbox" id="animate-layers" v-model="loadProgressive" />
                 </div>
               </section>
               <section v-else>
@@ -265,18 +265,15 @@
         </footer>
       </div>
     </div>
-    <div class="widget top right glass p-3 is-size-7 slide-in-down border"><label class="mr-2">dev mode</label><input
-        v-model="enableDevMode" type="checkbox" /> </div>
     <div class="absolute left bottom m-3 has-text-grey slide-in-up">Drop a gcode file to preview it</div>
     <div class="wrapper">
-      <canvas class="preview" :class="{ 'dragging': settings.dragging }"></canvas>
+      <canvas class="preview"></canvas>
     </div>
   </div>
   <script type="importmap">
     {
         "imports": {
             "three": "./lib/three/build/three.module.min.js",
-            "lil-gui": "./lib/lil-gui/dist/lil-gui.esm.min.js",
             "vue": "./js/vue.esm-browser.prod.js",
             "gcode-preview": "./dist/gcode-preview.es.js"
         }

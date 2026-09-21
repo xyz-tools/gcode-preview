@@ -67,7 +67,7 @@ export class ObjectsManager {
    * is unset too.
    */
   extrusionWidth?: number;
-  renderTubes = false;
+  renderTubes = true;
 
   /**
    * Whether extrusion lines get a per-layer brightness gradient baked into their vertex colors.

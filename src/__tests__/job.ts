@@ -742,6 +742,19 @@ describe('.continuePath', () => {
     expect(next).not.toBe(path);
     expect(next.lineHeight).toEqual(0.3);
   });
+
+  test('breaks when the state tool changed', () => {
+    const job = new Job();
+    const path = job.breakPath(PathType.Extrusion);
+    path.addPoint(1, 1, 0);
+    job.state.tool = 1;
+
+    const next = job.continuePath(PathType.Extrusion);
+
+    expect(next).not.toBe(path);
+    expect(next.tool).toEqual(1);
+    expect(job.paths).toEqual([path]);
+  });
 });
 
 describe('.resumeLastPath', () => {

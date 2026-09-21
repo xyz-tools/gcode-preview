@@ -1,3 +1,4 @@
+import { toMillimeters } from '../../units';
 import { PathType } from '../../path';
 import type { CommandHandler } from '../../interpreter';
 
@@ -23,6 +24,7 @@ import type { CommandHandler } from '../../interpreter';
  */
 export const probe: CommandHandler = (command, job) => {
   const { state } = job;
+  const { units } = state;
   const { params } = command;
 
   if (params.p !== undefined) {
@@ -30,9 +32,9 @@ export const probe: CommandHandler = (command, job) => {
   }
 
   const { positionShift } = state;
-  const x = params.x === undefined ? undefined : params.x + positionShift.x;
-  const y = params.y === undefined ? undefined : params.y + positionShift.y;
-  let z = params.z === undefined ? undefined : params.z + positionShift.z;
+  const x = params.x === undefined ? undefined : toMillimeters(params.x, units)! + positionShift.x;
+  const y = params.y === undefined ? undefined : toMillimeters(params.y, units)! + positionShift.y;
+  let z = params.z === undefined ? undefined : toMillimeters(params.z, units)! + positionShift.z;
 
   if (x === undefined && y === undefined && z === undefined) {
     return;

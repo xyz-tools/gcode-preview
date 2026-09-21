@@ -9,22 +9,26 @@ function isCommentOnly(line: string): boolean {
 }
 
 /**
- * Where the run of comment-only lines that ends `text` begins.
+ * Separates the run of comment-only lines that ends `text` from the rest.
  * @param text - Complete lines, newline-separated, with no trailing newline
- * @returns Index into `text`, or its length when the last line carries G-code
+ * @returns `parse`, the lines before the run, and `hold`, the run itself
  */
-function trailingCommentRun(text: string): number {
+function splitOffCommentRun(text: string): { parse: string; hold: string } {
+  let runStart = text.length;
   let end = text.length;
-  let start = text.length;
 
   while (end > 0) {
     const newline = text.lastIndexOf('\n', end - 1);
     if (!isCommentOnly(text.slice(newline + 1, end))) break;
-    start = newline + 1;
+    runStart = newline + 1;
     end = newline;
   }
 
-  return start;
+  if (runStart === text.length) return { parse: text, hold: '' };
+  if (runStart === 0) return { parse: '', hold: text };
+
+  // runStart - 1 is the newline between the two, and belongs to neither
+  return { parse: text.slice(0, runStart - 1), hold: text.slice(runStart) };
 }
 
 /**
@@ -72,14 +76,7 @@ export function splitChunk(tail: string, chunk: string): { complete: string; tai
     return { complete: '', tail: tail + chunk };
   }
 
-  const lines = tail + chunk.slice(0, idxNewLine);
-  const partial = chunk.slice(idxNewLine + 1);
-  const held = trailingCommentRun(lines);
+  const { parse, hold } = splitOffCommentRun(tail + chunk.slice(0, idxNewLine));
 
-  return {
-    // held === lines.length holds nothing back; otherwise the -1 drops the
-    // newline that separated the held run from the lines before it
-    complete: held === lines.length ? lines : held === 0 ? '' : lines.slice(0, held - 1),
-    tail: joinTail(lines.slice(held), partial)
-  };
+  return { complete: parse, tail: joinTail(hold, chunk.slice(idxNewLine + 1)) };
 }

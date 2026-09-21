@@ -7,7 +7,16 @@ import { type Disposable } from './helpers/three-utils';
  * The dimensions a caller supplies to describe a build volume
  * @interface
  */
-export type BuildVolumeDef = Pick<BuildVolume, 'x' | 'y' | 'z' | 'smallGrid'>;
+export type BuildVolumeDef = {
+  /** Width of the build volume in mm */
+  x: number;
+  /** Depth of the build volume in mm */
+  y: number;
+  /** Height of the build volume in mm */
+  z: number;
+  /** Whether the finer secondary grid is drawn on the build plate. Defaults to `false`. */
+  smallGrid?: boolean;
+};
 
 /**
  * Represents the build volume of a 3D printer.
@@ -20,7 +29,7 @@ export class BuildVolume {
   /** Height of the build volume in mm */
   private _z: number;
   /** Whether the finer secondary grid is drawn */
-  private _smallGrid: boolean | undefined;
+  private _smallGrid = false;
   /** Color used for the grid */
   private gridColor: Color = new Color(0x888888); // Default grid color
   private smallGridColor: Color = new Color(0x444444); // Default small grid color
@@ -33,7 +42,7 @@ export class BuildVolume {
    * @param x - Width in mm
    * @param y - Depth in mm
    * @param z - Height in mm
-   * @param smallGrid - Whether to show a small grid
+   * @param smallGrid - Whether to show a small grid; `undefined` keeps the default
    * @param scene - The Three.js scene to add the build volume to
    */
   constructor(
@@ -47,7 +56,9 @@ export class BuildVolume {
     this._x = Math.max(0, x);
     this._y = Math.max(0, y);
     this._z = Math.max(0, z);
-    this._smallGrid = smallGrid;
+    if (smallGrid !== undefined) {
+      this._smallGrid = smallGrid;
+    }
   }
 
   /** Width of the build volume in mm */
@@ -84,12 +95,13 @@ export class BuildVolume {
     this.update(); // Update the build volume when z changes
   }
   /** Whether the finer secondary grid is drawn on the build plate */
-  get smallGrid(): boolean | undefined {
+  get smallGrid(): boolean {
     return this._smallGrid;
   }
   set smallGrid(value: boolean | undefined) {
-    if (this._smallGrid !== value) {
-      this._smallGrid = value;
+    const next = value ?? false;
+    if (this._smallGrid !== next) {
+      this._smallGrid = next;
       this.update(); // Update the build volume when smallGrid changes
     }
   }

@@ -14,6 +14,9 @@ Other things that are always helpful:
 
 ## Development setup
 
+Use Node 24 (the exact version is pinned in `.nvmrc` and shared by CI, demo
+builds, and publishing). With nvm installed, run `nvm install && nvm use` first.
+
 Run the dev setup:
 
 ```sh
@@ -103,11 +106,12 @@ Run the full check suite:
 - `npm run typeCheck` for typescript typings
 - `npm run lint` for code style and formatting
 - `npm run build` for a production build
+- `npm run test:packaging` to pack/install a clean consumer and check exports, shared chunks, and TypeScript resolution
 - or most of it together: `npm run check` (test + typeCheck + lint — note it does **not** run `build` or coverage)
 
 To auto-fix simple issues: `npm run lint:fix` or `npm run prettier:fix`.
 
-CI runs `build`, `test:coverage`, `typeCheck` and `lint` on Ubuntu with Node 22.
+CI runs `build`, `test:coverage`, `typeCheck` and `lint` on Ubuntu with Node 24 from `.nvmrc`.
 Note that CI uses `npm run test:coverage`, not `npm run test`: **every file under
 `src/` must be at 100% statement/branch/function/line coverage** (see
 `vitest.config.mts`), so run it locally before pushing.
@@ -122,6 +126,55 @@ whole range.
 AI-assisted contributions are welcome, but usage of AI tools (Copilot, Claude,
 ChatGPT, etc.) must be disclosed in the PR description. You remain responsible
 for understanding and verifying everything you submit.
+
+## Handling invalid gcode
+
+The closest analogy is a web browser: render as much as possible, keep going when
+something doesn't make sense, and never punish the whole file for one bad line.
+This is a _viewer_, so a partial picture always beats an error message.
+([#361](https://github.com/xyz-tools/gcode-preview/issues/361) is where this was
+settled.)
+
+**Don't crash, don't throw, don't bail.** No input — malformed, truncated,
+corrupted, or not gcode at all — should throw out of the library or leave the
+scene in a broken state. Skip the line you can't make sense of and move on to the
+next one. Real files are almost always slicer output, so a problem is typically a
+handful of lines out of hundreds of thousands; dropping the rest of the model over
+them is the wrong trade.
+
+**Validating gcode is not this library's job.** Don't add checks that exist only to
+tell the user their file is wrong: bounds checks on values the printer would
+happily accept, arity checks on commands we don't implement, rejecting vendor or
+non-standard syntax. Being zealous here breaks legitimate files — Klipper extended
+gcode, vendor macros, slicer directives — for no rendering benefit.
+
+**Unsupported is not invalid.** A command we don't implement is a no-op, not an
+error, and needs no diagnostic. "Invalid" means the shape is wrong where we _do_
+parse: a required argument missing, an extra argument, a value that can't be read
+as a number.
+
+**Set invariants at the parser instead of guarding downstream.** The parser should
+gate garbage at the boundary so the rest of the code doesn't need ad hoc defenses.
+The standing rule: **a parameter is either a finite number or absent** — no `NaN`
+ever leaves the parser. A letter with no number of its own isn't a word; it's glued
+to the value before it and is dropped with the rest of that token.
+
+```js
+new Parser().parseCommand('G1 X123abc Y20').params; // { x: 123, y: 20 }
+new Parser().parseCommand('M117 Hi').params; // {}
+```
+
+`X123abc` still yields `x: 123` — the same prefix Marlin's `strtod` reads — so
+nothing the firmware would act on is thrown away. An `isNaN` or null guard
+appearing in `state`, `Path` or `BoundingBox` is a sign the invariant is leaking
+and the fix belongs upstream.
+
+**Dropping junk is silent, for now.** There is no diagnostics channel on the parse
+result today, and adding one is a separate design decision — don't introduce a
+one-off warning, callback or `console.log` alongside a fix.
+
+Changes in this area want a test that feeds the malformed snippet through the
+pipeline and asserts what _did_ render, not just that nothing threw.
 
 ## Review standards
 
@@ -147,6 +200,15 @@ General test expectations:
 - Runtime tests live in `src/__tests__/`, mirroring the `src/` layout, as plain
   `.ts` files (e.g. `src/__tests__/interpreter.ts`) — they are **not** named
   `*.test.ts`, and files named that way won't be picked up.
+- Mirroring the layout means **one test file per module**, named after the module
+  it covers. Don't add a test file named after a feature, a bug or a PR
+  (`filament-consumption.ts`, `fix-inch-units.ts`): put the unit tests next to
+  the class under test (`src/__tests__/job-stats.ts`) and the end-to-end coverage
+  in the test file of the command or entry point that drives it
+  (`src/__tests__/interpreter/commands/linear-move.ts`), grouped in a `describe`
+  block that names the behavior. The exceptions are the few cross-cutting
+  harnesses that already exist and say so in a header comment, such as
+  `src/__tests__/ingestion-equivalence.ts`.
 - `src/__tests__/**/*.test-d.ts` files are compile-time type assertions; they run
   in the typecheck pass, not as runtime tests.
 - Tests should exercise dispatch through `Interpreter.execute()` whenever the

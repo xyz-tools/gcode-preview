@@ -1,3 +1,4 @@
+import { toMillimeters } from '../../units';
 import { PathType } from '../../path';
 import type { CommandHandler } from '../../interpreter';
 
@@ -11,8 +12,13 @@ import type { CommandHandler } from '../../interpreter';
  * G0 is for rapid moves (non-extrusion), G1 is for linear moves (with optional extrusion).
  */
 export const linearMove: CommandHandler = (command, job) => {
-  const { x, y, z, e, f } = command.params;
   const { state } = job;
+  const { units } = state;
+  const x = toMillimeters(command.params.x, units);
+  const y = toMillimeters(command.params.y, units);
+  const z = toMillimeters(command.params.z, units);
+  const e = toMillimeters(command.params.e, units);
+  const f = command.params.f;
 
   // discard zero length moves
   if (x === undefined && y === undefined && z === undefined) {
@@ -29,7 +35,8 @@ export const linearMove: CommandHandler = (command, job) => {
     // still account the E parameter: in absolute mode a retract/prime pair
     // moves the extruder position, and losing it here would misattribute the
     // difference to the next extruding move
-    state.applyExtrusion(e);
+    const extruded = state.applyExtrusion(e);
+    job.stats.recordExtrusion(extruded);
     return;
   }
 
@@ -43,9 +50,7 @@ export const linearMove: CommandHandler = (command, job) => {
   const pathType = extruded > 0 ? PathType.Extrusion : PathType.Travel;
   const currentPath = job.continuePath(pathType);
 
-  if (extruded > 0) {
-    job.stats.extrusionDistance += extruded;
-  }
+  job.stats.recordExtrusion(extruded);
 
   if (state.positioning === 'relative') {
     state.moveBy(x, y, z);

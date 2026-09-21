@@ -1,3 +1,4 @@
+import { toMillimeters } from '../../units';
 import { PathType } from '../../path';
 import { ArcTessellator, ArcTessellatorOptions } from '../../arc-tessellator';
 import type { CommandHandler } from '../../interpreter';
@@ -15,8 +16,15 @@ import type { CommandHandler } from '../../interpreter';
 export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler => {
   const arcTessellator = new ArcTessellator(options);
   return (command, job) => {
-    const { x, y, z, e, i, j, r } = command.params;
     const { state } = job;
+    const { units } = state;
+    const x = toMillimeters(command.params.x, units);
+    const y = toMillimeters(command.params.y, units);
+    const z = toMillimeters(command.params.z, units);
+    const e = toMillimeters(command.params.e, units);
+    const i = toMillimeters(command.params.i, units);
+    const j = toMillimeters(command.params.j, units);
+    const r = toMillimeters(command.params.r, units);
     // Starting position for the arc, with any un-homed axis assumed at the origin.
     const from = job.resolvePosition();
 
@@ -31,9 +39,7 @@ export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler
     const pathType = extruded > 0 ? PathType.Extrusion : PathType.Travel;
     const currentPath = job.continuePath(pathType);
 
-    if (extruded > 0) {
-      job.stats.extrusionDistance += extruded;
-    }
+    job.stats.recordExtrusion(extruded);
 
     // Start the path before moving the state so it retains the arc's origin.
     // Only absolute endpoints receive the G92 shift; I/J/R remain offsets.
@@ -45,17 +51,12 @@ export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler
 
     // The tessellator emits the exact endpoint; omitted axes retain their
     // previous (possibly unknown) coordinates in the state.
-    arcTessellator.tessellate(
-      from,
-      { cw, x: state.x, y: state.y, z: state.z, i, j, r },
-      (px, py, pz) => {
-        currentPath.addPoint(px, py, pz);
-        if (pathType === PathType.Extrusion) {
-          job.boundingBox.update(px, py, pz);
-        }
-      },
-      state.units
-    );
+    arcTessellator.tessellate(from, { cw, x: state.x, y: state.y, z: state.z, i, j, r }, (px, py, pz) => {
+      currentPath.addPoint(px, py, pz);
+      if (pathType === PathType.Extrusion) {
+        job.boundingBox.update(px, py, pz);
+      }
+    });
   };
 };
 

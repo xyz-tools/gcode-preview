@@ -41,12 +41,21 @@ describe('public API surface', () => {
       expect(packageJson.types).toBe('dist/gcode-preview.d.ts');
       expect(packageJson.files).toEqual(['dist']);
     });
+
+    it('exposes exactly the documented package paths', () => {
+      expect(Object.keys(packageJson.exports)).toEqual(['.', './package.json']);
+    });
+
+    it('does not ship the debug GUI as a dependency', () => {
+      expect(packageJson.dependencies).toEqual({ three: packageJson.dependencies.three });
+      expect(packageJson.devDependencies['lil-gui']).toBeUndefined();
+    });
   });
 
   describe('module exports', () => {
     it('exposes exactly the documented runtime exports', () => {
-      // Type-only exports (GCodePreviewOptions, SceneManagerOptions,
-      // DevModeOptions) are erased at runtime and pinned in the .test-d file.
+      // Type-only exports (GCodePreviewOptions, SceneManagerOptions) are
+      // erased at runtime and pinned in the .test-d file.
       expect(Object.keys(api).sort()).toEqual(['GCodeCommand', 'GCodePreview', 'Job', 'Parser', 'SceneManager']);
     });
 
@@ -75,12 +84,13 @@ describe('public API surface', () => {
       expect(method).toHaveLength(arity);
     });
 
-    it.each(['sceneManager', 'parser', 'countLayers', 'devMode'])('has getter %s', (name) => {
+    it.each(['sceneManager', 'parser', 'countLayers'])('has getter %s', (name) => {
       expect(getterNames(GCodePreview.prototype)).toContain(name);
     });
 
-    it('has setter devMode', () => {
-      expect(setterNames(GCodePreview.prototype)).toContain('devMode');
+    it('has no setters', () => {
+      // devMode was the only one; it went with the debug GUI in 3.0.
+      expect(setterNames(GCodePreview.prototype)).toEqual([]);
     });
   });
 

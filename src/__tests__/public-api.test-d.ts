@@ -21,8 +21,7 @@ import type {
   GCodeCommand,
   Job,
   GCodePreviewOptions,
-  SceneManagerOptions,
-  DevModeOptions
+  SceneManagerOptions
 } from '../gcode-preview';
 import {
   GCodePreview as GCodePreviewClass,
@@ -37,7 +36,6 @@ describe('public API types', () => {
     it('has exactly the documented option keys', () => {
       expectTypeOf<keyof GCodePreviewOptions>().toEqualTypeOf<
         // LibOptions
-        | 'devMode'
         | 'minLayerThreshold'
         | 'droppable'
         | 'keepLines'
@@ -67,7 +65,6 @@ describe('public API types', () => {
     });
 
     it('keeps the documented option field types', () => {
-      expectTypeOf<GCodePreviewOptions['devMode']>().toEqualTypeOf<boolean | DevModeOptions | undefined>();
       expectTypeOf<GCodePreviewOptions['minLayerThreshold']>().toEqualTypeOf<number | undefined>();
       expectTypeOf<GCodePreviewOptions['droppable']>().toEqualTypeOf<boolean | undefined>();
       expectTypeOf<GCodePreviewOptions['keepLines']>().toEqualTypeOf<boolean | undefined>();
@@ -130,20 +127,6 @@ describe('public API types', () => {
     });
   });
 
-  describe('DevModeOptions', () => {
-    it('has exactly the documented keys and field types', () => {
-      expectTypeOf<keyof DevModeOptions>().toEqualTypeOf<
-        'camera' | 'sceneManager' | 'parser' | 'buildVolume' | 'devHelpers' | 'statsContainer'
-      >();
-      expectTypeOf<DevModeOptions['camera']>().toEqualTypeOf<boolean | undefined>();
-      expectTypeOf<DevModeOptions['sceneManager']>().toEqualTypeOf<boolean | undefined>();
-      expectTypeOf<DevModeOptions['parser']>().toEqualTypeOf<boolean | undefined>();
-      expectTypeOf<DevModeOptions['buildVolume']>().toEqualTypeOf<boolean | undefined>();
-      expectTypeOf<DevModeOptions['devHelpers']>().toEqualTypeOf<boolean | undefined>();
-      expectTypeOf<DevModeOptions['statsContainer']>().toEqualTypeOf<HTMLElement | undefined>();
-    });
-  });
-
   describe('GCodePreview', () => {
     it('is constructed from GCodePreviewOptions', () => {
       expectTypeOf<ConstructorParameters<typeof GCodePreviewClass>>().toEqualTypeOf<[GCodePreviewOptions]>();
@@ -154,7 +137,6 @@ describe('public API types', () => {
       expectTypeOf<GCodePreview['sceneManager']>().toEqualTypeOf<SceneManager>();
       expectTypeOf<GCodePreview['parser']>().toEqualTypeOf<Parser>();
       expectTypeOf<GCodePreview['countLayers']>().toEqualTypeOf<number>();
-      expectTypeOf<GCodePreview['devMode']>().toEqualTypeOf<boolean | DevModeOptions | undefined>();
       expectTypeOf<GCodePreview['onJobUpdated']>().toEqualTypeOf<((job: Job) => void) | undefined>();
       expectTypeOf<GCodePreview['onStreamEnd']>().toEqualTypeOf<(() => void) | undefined>();
     });
@@ -276,7 +258,7 @@ describe('public API types', () => {
       >();
       expectTypeOf<Job['resumeLastPath']>().toEqualTypeOf<() => void>();
       expectTypeOf<Job['resolvePosition']>().toEqualTypeOf<() => { x: number; y: number; z: number }>();
-      expectTypeOf<Job['stats']>().toEqualTypeOf<{
+      expectTypeOf<Omit<Job['stats'], 'recordExtrusion'>>().toEqualTypeOf<{
         retractions: number;
         deretractions: number;
         feedrateChanges: number;
@@ -284,6 +266,7 @@ describe('public API types', () => {
         points: number;
         extrusionDistance: number;
       }>();
+      expectTypeOf<Job['stats']['recordExtrusion']>().toEqualTypeOf<(delta: number) => void>();
     });
   });
 });

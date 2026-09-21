@@ -165,3 +165,16 @@ describe('arcMove (G2/G3)', () => {
     expect(zPositions.every((z, index) => index === 0 || z >= zPositions[index - 1])).toBe(true);
   });
 });
+
+describe('arcMove filament consumption', () => {
+  const run = (lines: string[]) => new Interpreter().execute(new Parser().parseGCode(lines).commands);
+
+  test('a retracting arc is repaid by the next extrusion instead of double-counting it', () => {
+    expect(run(['M83', 'G28', 'G2 X10 I5 E-2', 'G1 E3']).stats.extrusionDistance).toEqual(1);
+  });
+
+  test.each(['G2 X20 I5', 'G3 X20 R5'])('recovery via "%s" counts only the excess', (recovery) => {
+    // 10 extruded, 2 retracted, then 3 primed back by the arc: 2 repay, 1 is new
+    expect(run(['M83', 'G28', 'G1 X10 E10', 'G1 E-2', `${recovery} E3`]).stats.extrusionDistance).toEqual(11);
+  });
+});
