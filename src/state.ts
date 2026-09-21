@@ -15,14 +15,12 @@ export class State {
   /** Current extruder position in millimeters, tracked by `applyExtrusion` and reset by G92 */
   e = 0;
   /**
-   * Whether E parameters are relative distances (M83) rather than absolute
-   * extruder positions (M82).
+   * Whether E parameters are relative distances (G91/M83) rather than absolute
+   * extruder positions (G90/M82).
    * @remarks
-   * Defaults to absolute, matching every major firmware (Marlin, Klipper,
-   * RepRapFirmware, Smoothieware). A file that uses relative E without saying so reads as one long
-   * retraction and renders as travel moves only. Slicers always emit M82 or
-   * M83, so that only affects hand-written gcode -- and guessing the other
-   * way would misread the declared-absolute files this exists to get right.
+   * Defaults to absolute. G90/G91 select the mode for all axes, including E;
+   * a subsequent M82/M83 overrides E alone. A later G90/G91 clears that
+   * override, following Marlin's documented ordering.
    */
   relativeExtrusion = false;
   /**
@@ -74,18 +72,50 @@ export class State {
    */
   isHomed = false;
 
-  /** Moves to logical coordinates, applying the G92 shift only to supplied axes. */
+  private zIsAssumed = false;
+
+  /**
+   * Whether Z has a known origin for the preview's probe-trigger assumption
+   * @returns True after homing or an absolute Z target, false for an unknown or assumed Z
+   * @remarks
+   * Relative motion can populate Z from an assumed zero without establishing
+   * its origin. An explicit absolute target establishes the preview coordinate
+   * even in CNC files that do not issue G28; G92 only relabels that coordinate.
+   */
+  get hasKnownZ(): boolean {
+    return this.z !== undefined && (this.isHomed || !this.zIsAssumed);
+  }
+
+  /**
+   * Moves to logical coordinates, applying the G92 shift only to supplied axes
+   * @param x - Logical X target in millimeters, or undefined to leave X unchanged
+   * @param y - Logical Y target in millimeters, or undefined to leave Y unchanged
+   * @param z - Logical Z target in millimeters, or undefined to leave Z unchanged
+   * @returns Nothing; updates the supplied coordinates in place
+   */
   moveTo(x: number | undefined, y: number | undefined, z: number | undefined): void {
     if (x !== undefined) this.x = x + this.positionShift.x;
     if (y !== undefined) this.y = y + this.positionShift.y;
-    if (z !== undefined) this.z = z + this.positionShift.z;
+    if (z !== undefined) {
+      this.z = z + this.positionShift.z;
+      this.zIsAssumed = false;
+    }
   }
 
-  /** Moves by physical offsets, assuming zero only for supplied, unknown axes. */
+  /**
+   * Moves by physical offsets, assuming zero only for supplied, unknown axes
+   * @param x - X offset in millimeters, or undefined to leave X unchanged
+   * @param y - Y offset in millimeters, or undefined to leave Y unchanged
+   * @param z - Z offset in millimeters, or undefined to leave Z unchanged
+   * @returns Nothing; updates the supplied coordinates without marking the axes homed
+   */
   moveBy(x: number | undefined, y: number | undefined, z: number | undefined): void {
     if (x !== undefined) this.x = (this.x ?? 0) + x;
     if (y !== undefined) this.y = (this.y ?? 0) + y;
-    if (z !== undefined) this.z = (this.z ?? 0) + z;
+    if (z !== undefined) {
+      if (this.z === undefined) this.zIsAssumed = true;
+      this.z = (this.z ?? 0) + z;
+    }
   }
 
   /**

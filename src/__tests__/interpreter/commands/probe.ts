@@ -132,4 +132,56 @@ describe('probe (G31)', () => {
     expect(vertices[17]).toEqual(0);
     expect(vertices.slice(-1)[0]).toEqual(0.039);
   });
+
+  test.each(['G31', 'G38.2', 'G38.3', 'G38.4', 'G38.5'])('%s resolves G91 targets before clamping', (command) => {
+    const job = run(['G28', 'G0 X10 Y10 Z20', 'G91', `${command} Z-10`, `${command} Z-15`].join('\n'));
+
+    expect(job.paths[0].vertices).toEqual([0, 0, 0, 10, 10, 20, 10, 10, 10, 10, 10, 0]);
+    expect([job.state.x, job.state.y, job.state.z]).toEqual([10, 10, 0]);
+  });
+
+  test('relative probe offsets do not receive a G92 shift twice', () => {
+    const job = run(['G28', 'G0 X10 Y20 Z30', 'G92 X0 Y0 Z0', 'G91', 'G38.2 X2 Y-3 Z-5'].join('\n'));
+
+    expect([job.state.x, job.state.y, job.state.z]).toEqual([12, 17, 25]);
+    expect(job.paths[0].vertices.slice(-6)).toEqual([10, 20, 30, 12, 17, 25]);
+  });
+
+  test('a relative move from an unknown Z does not establish a probe trigger plane', () => {
+    const job = run(['G91', 'G1 Z2', 'G1 Z1', 'G38.2 X10', 'G90', 'G38.2 Z-5'].join('\n'));
+
+    expect(job.state.isHomed).toBe(false);
+    expect(job.state.z).toEqual(-5);
+    expect(job.paths[0].vertices.slice(-6)).toEqual([10, 0, 3, 10, 0, -5]);
+  });
+
+  test('relative probes preserve the uncertainty of an assumed Z origin', () => {
+    const job = run(['G91', 'G31 Z2', 'G31 Z-5'].join('\n'));
+
+    expect(job.state.z).toEqual(-3);
+    expect(job.state.isHomed).toBe(false);
+    expect(job.paths[0].vertices).toEqual([0, 0, 0, 0, 0, 2, 0, 0, -3]);
+  });
+
+  test('an explicit absolute move establishes Z after an assumed relative move', () => {
+    const job = run(['G91', 'G1 Z2', 'G90', 'G0 Z3', 'G31 Z-5'].join('\n'));
+
+    expect(job.state.z).toEqual(0);
+    expect(job.state.isHomed).toBe(false);
+    expect(job.paths[0].vertices.slice(-6)).toEqual([0, 0, 3, 0, 0, 0]);
+  });
+
+  test('homing establishes Z after an assumed relative move', () => {
+    const job = run(['G91', 'G1 Z2', 'G28', 'G31 Z-5'].join('\n'));
+
+    expect(job.state.z).toEqual(0);
+    expect(job.state.isHomed).toBe(true);
+  });
+
+  test('relative inch probes clamp against the resolved physical Z', () => {
+    const job = run(['G28', 'G0 Z50.8', 'G92 Z0', 'G20', 'G91', 'G31 Z-1', 'G31 Z-2'].join('\n'));
+
+    expect(job.paths[0].vertices).toEqual([0, 0, 0, 0, 0, 50.8, 0, 0, 25.4, 0, 0, 0]);
+    expect(job.state.z).toEqual(0);
+  });
 });

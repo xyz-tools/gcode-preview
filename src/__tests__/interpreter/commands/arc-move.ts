@@ -164,6 +164,28 @@ describe('arcMove (G2/G3)', () => {
     expect(zPositions[zPositions.length - 1]).toEqual(5);
     expect(zPositions.every((z, index) => index === 0 || z >= zPositions[index - 1])).toBe(true);
   });
+
+  test.each(['G2', 'G3'])('%s without X/Y draws a full circle in absolute mode', (command) => {
+    const job = run(['G0 X10 Y20', `${command} I5 J0`].join('\n'));
+    const points = job.paths[0].path().slice(2);
+
+    expect([job.state.x, job.state.y]).toEqual([10, 20]);
+    expect(points.length).toBeGreaterThan(2);
+    expect(points.at(-1)).toMatchObject({ x: 10, y: 20 });
+    let previous = { x: 10, y: 20 };
+    let sweep = 0;
+    for (const point of points) {
+      expect([point.x, point.y, point.z].every(Number.isFinite)).toBe(true);
+      expect(Math.hypot(point.x - 15, point.y - 20)).toBeCloseTo(5);
+      const ax = previous.x - 15;
+      const ay = previous.y - 20;
+      const bx = point.x - 15;
+      const by = point.y - 20;
+      sweep += Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
+      previous = point;
+    }
+    expect(sweep).toBeCloseTo((command === 'G2' ? -2 : 2) * Math.PI);
+  });
 });
 
 describe('arcMove filament consumption', () => {

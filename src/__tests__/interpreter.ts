@@ -124,6 +124,96 @@ describe('handler registry', () => {
 });
 
 describe('positioning modes through the whole pipeline', () => {
+  const run = (lines: string[]) => new Interpreter().execute(new Parser().parseGCode(lines).commands);
+  const vertices = (job: Job) => job.paths.flatMap((path) => path.vertices);
+
+  test.each(['G0 X1 Y0 Z0', 'G1 X1 Y0 Z0', 'G2 X1 Y0 I0.5 J0', 'G3 X1 Y0 R0.5', 'G31 X1 Y0 Z0'])(
+    'relative inch move %s composes with workspace shifts and a switch back to millimeters',
+    (command) => {
+      const job = run(['G28', 'G0 X25.4 Y50.8 Z25.4', 'G92 X0 Y0 Z0', 'G20', 'G91', command, 'G21', 'G1 X1']);
+
+      expect(job.state.x).toBeCloseTo(51.8);
+      expect(job.state.y).toBeCloseTo(50.8);
+      expect(job.state.z).toBeCloseTo(25.4);
+      expect(vertices(job).slice(-6, -3)).toEqual([50.8, 50.8, 25.4]);
+      expect(vertices(job).every(Number.isFinite)).toBe(true);
+    }
+  );
+
+  test.each(['G0', 'G1', 'G2', 'G3'])('%s assumes zero for supplied unknown axes in G91', (command) => {
+    const job = run(['G91', `${command} X10 Y0 Z5 I5 J0`]);
+
+    expect([job.state.x, job.state.y, job.state.z]).toEqual([10, 0, 5]);
+    expect(job.state.isHomed).toBe(false);
+    expect(vertices(job).slice(0, 3)).toEqual([0, 0, 0]);
+    expect(vertices(job).slice(-3)).toEqual([10, 0, 5]);
+    expect(vertices(job).every(Number.isFinite)).toBe(true);
+  });
+
+  test.each(['G0', 'G1', 'G2', 'G3'])('%s preserves omitted unknown axes in G91', (command) => {
+    const job = run(['G91', `${command} X10 I5 J0`]);
+
+    expect(job.state.x).toEqual(10);
+    expect(job.state.y).toBeUndefined();
+    expect(job.state.z).toBeUndefined();
+    expect(job.state.isHomed).toBe(false);
+    expect(vertices(job).slice(-3)).toEqual([10, 0, 0]);
+    expect(vertices(job).every(Number.isFinite)).toBe(true);
+  });
+
+  test('G90/G91 switching applies G92 shifts once, only to absolute targets', () => {
+    const job = run([
+      'G0 X10 Y20 Z30',
+      'G92 X0 Y0 Z0',
+      'G91',
+      'G1 X2 Y-3 Z1',
+      'G90',
+      'G1 X0 Y0 Z0',
+      'G91',
+      'G0 X0',
+      'G92.1',
+      'G0 Y2',
+      'G90',
+      'G0 X0 Y0 Z0'
+    ]);
+
+    expect(vertices(job)).toEqual([0, 0, 0, 10, 20, 30, 12, 17, 31, 10, 20, 30, 10, 20, 30, 10, 22, 30, 0, 0, 0]);
+    expect(job.state.positionShift).toEqual({ x: 0, y: 0, z: 0 });
+  });
+
+  test.each(['G2', 'G3'])('%s keeps I/J and R relative when G91 follows G92', (command) => {
+    for (const arc of ['I5 J0', 'R5']) {
+      const setup = ['G0 X10 Y20 Z30', 'G92 X0 Y0 Z0'];
+      const relative = run([...setup, 'G91', `${command} X10 Y0 Z5 ${arc}`]);
+      const absolute = run([...setup, 'G90', `${command} X10 Y0 Z5 ${arc}`]);
+
+      expect([relative.state.x, relative.state.y, relative.state.z]).toEqual([20, 20, 35]);
+      expect(vertices(relative)).toEqual(vertices(absolute));
+      expect(vertices(relative).every(Number.isFinite)).toBe(true);
+    }
+  });
+
+  test('G91 full circles leave omitted coordinates unchanged despite a G92 shift', () => {
+    const setup = ['G0 X10 Y20 Z30', 'G92 X0 Y0 Z0'];
+    const relative = run([...setup, 'G91', 'G2 I5 J0']);
+    const absolute = run([...setup, 'G90', 'G2 I5 J0']);
+
+    expect([relative.state.x, relative.state.y, relative.state.z]).toEqual([10, 20, 30]);
+    expect(vertices(relative)).toEqual(vertices(absolute));
+  });
+
+  test('a parser/interpreter chunk boundary preserves the positioning mode', () => {
+    const setup = ['G0 X10 Y20 Z30', 'G92 X0 Y0 Z0', 'G91'];
+    const moves = ['G1 X2', 'G2 X10 Y0 I5 J0', 'G90', 'G0 X0 Y0 Z0'];
+    const parser = new Parser();
+    const interpreter = new Interpreter();
+    const chunked = interpreter.execute(parser.parseGCode(setup).commands);
+    interpreter.execute(parser.parseGCode(moves).commands, chunked);
+
+    expect(vertices(chunked)).toEqual(vertices(run([...setup, ...moves])));
+    expect([chunked.state.x, chunked.state.y, chunked.state.z]).toEqual([10, 20, 30]);
+  });
+
   const runGCode = (lines: string[]): { job: Job; arc: number[][] } => {
     const parser = new Parser();
     const interpreter = new Interpreter();
@@ -158,32 +248,6 @@ describe('positioning modes through the whole pipeline', () => {
     expect(job.state.x).toEqual(20);
     expect(job.state.y).toEqual(20);
     expect(job.state.z).toEqual(30);
-  });
-
-  test('an arc without an X/Y endpoint draws a full circle', () => {
-    // No X/Y means start == end, which used to divide by a zero distance and emit NaN
-    // vertices. The whole-circle branch now sweeps a full 2*PI instead.
-    const { job, arc } = runGCode(['G0 X10 Y20', 'G2 I5 J0']);
-
-    expect(job.state.x).toEqual(10);
-    expect(job.state.y).toEqual(20);
-    arc.forEach((point) => {
-      expect(point.every((value) => Number.isFinite(value))).toBe(true);
-      expect(distanceTo(point, 15, 20)).toBeCloseTo(5);
-    });
-    // Sum the signed angles instead of requiring a tessellation vertex at
-    // every cardinal point: adaptive chord counts need not be divisible by four.
-    let previous = [10, 20];
-    let sweep = 0;
-    for (const point of arc) {
-      const ax = previous[0] - 15;
-      const ay = previous[1] - 20;
-      const bx = point[0] - 15;
-      const by = point[1] - 20;
-      sweep += Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
-      previous = point;
-    }
-    expect(sweep).toBeCloseTo(-2 * Math.PI);
   });
 
   test('I/J offsets stay relative to the arc start in relative mode', () => {
