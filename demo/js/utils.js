@@ -24,3 +24,11 @@ export function parseIntOrDefault(value, defaultValue = 0) {
   const parsed = parseInt(value, 10);
   return isNaN(parsed) ? defaultValue : parsed;
 }
+
+export function clearPresetStateOnFileDrop(event, state) {
+  if (!event.dataTransfer?.files?.length) return;
+
+  state.selectedPreset.value = null;
+  state.model.value = null;
+  state.thumbnail.value = null;
+}

@@ -2,7 +2,7 @@ import { createApp, ref, computed, watch, onMounted, watchEffect } from 'vue';
 import { presets } from './presets.js';
 import { GCodePreview } from 'gcode-preview';
 import { defaultSettings } from './default-settings.js';
-import { humanFileSize, parseIntOrDefault } from './utils.js';
+import { clearPresetStateOnFileDrop, humanFileSize, parseIntOrDefault } from './utils.js';
 
 const defaultPreset = 'benchy'; // default preset to load
 const preferDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
@@ -25,7 +25,7 @@ export const app = (window.app = createApp({
     const settings = ref(Object.assign({}, defaultSettings));
 
     watch(selectedPreset, (preset) => {
-      selectPreset(preset);
+      if (preset) selectPreset(preset);
     });
 
     const selectTab = (tab) => (activeTab.value = tab);
@@ -112,6 +112,12 @@ export const app = (window.app = createApp({
 
     onMounted(async () => {
       const canvas = document.querySelector('canvas.preview');
+
+      canvas.addEventListener(
+        'drop',
+        (evt) => clearPresetStateOnFileDrop(evt, { selectedPreset, model, thumbnail }),
+        { capture: true }
+      );
 
       window['_preview'] = preview = new GCodePreview({
         ...defaultSettings,
