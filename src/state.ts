@@ -72,6 +72,7 @@ export class State {
    */
   isHomed = false;
 
+  // Relative motion can populate Z without establishing the probe's Z0 plane.
   private zIsAssumed = false;
 
   /**

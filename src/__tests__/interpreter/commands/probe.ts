@@ -163,6 +163,26 @@ describe('probe (G31)', () => {
     expect(job.paths[0].vertices).toEqual([0, 0, 0, 0, 0, 2, 0, 0, -3]);
   });
 
+  test('the same numeric Z from relative and absolute motion has different probe origins', () => {
+    const assumed = run(['G91', 'G1 Z2'].join('\n'));
+    const known = run('G0 Z2');
+
+    // Both positions render at Z2 without homing; only the absolute move
+    // establishes a coordinate for the preview's assumed Z0 trigger.
+    expect([assumed.state.z, assumed.state.isHomed]).toEqual([2, false]);
+    expect([known.state.z, known.state.isHomed]).toEqual([2, false]);
+
+    const commands = new Parser().parseGCode(['G90', 'G38.2 Z-5']).commands;
+    const interpreter = new Interpreter();
+    interpreter.execute(commands, assumed);
+    interpreter.execute(commands, known);
+
+    expect(assumed.state.z).toEqual(-5);
+    expect(known.state.z).toEqual(0);
+    expect(assumed.paths[0].vertices).toEqual([0, 0, 0, 0, 0, 2, 0, 0, -5]);
+    expect(known.paths[0].vertices).toEqual([0, 0, 0, 0, 0, 2, 0, 0, 0]);
+  });
+
   test('an explicit absolute move establishes Z after an assumed relative move', () => {
     const job = run(['G91', 'G1 Z2', 'G90', 'G0 Z3', 'G31 Z-5'].join('\n'));
 
