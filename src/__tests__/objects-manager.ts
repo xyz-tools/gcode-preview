@@ -190,6 +190,51 @@ describe('ObjectsManager', () => {
         expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9, 1, 1.9, 2.8, 4, 4.9, 5.8]));
       });
 
+      test('a path with varying heights offsets each point by its own height', () => {
+        const manager = new ObjectsManager(new Scene(), 0.4);
+        const path = new Path(PathType.Extrusion, 0.6, 0.2, 0);
+        path.addPoint(1, 2, 3);
+        path.addPoint(4, 5, 6);
+        path.updateDimensions(0.6, 0.4);
+        path.addPoint(7, 8, 9);
+
+        manager.renderExtrusionLines([path], new Color(0x00ff00));
+
+        // z drops by half of each point's own height: 0.1, 0.1, then 0.2
+        const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
+        expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9, 4, 4.9, 5.9, 7, 7.9, 8.8]));
+      });
+
+      test('the global line height fills in per point when a varying path has unknown heights', () => {
+        const manager = new ObjectsManager(new Scene(), 0.4, 0.4);
+        const path = new Path(PathType.Extrusion, undefined, undefined, 0);
+        path.addPoint(1, 2, 3);
+        path.addPoint(4, 5, 6);
+        path.updateDimensions(0.6, 0.2);
+        path.addPoint(7, 8, 9);
+
+        manager.renderExtrusionLines([path], new Color(0x00ff00));
+
+        // the unknown points fall back to the global 0.4, the last uses its own 0.2
+        const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
+        expect(positions).toEqual(new Float32Array([1, 1.9, 2.8, 4, 4.9, 5.8, 4, 4.9, 5.8, 7, 7.9, 8.9]));
+      });
+
+      test('the built-in default height fills in per point without a global', () => {
+        const manager = new ObjectsManager(new Scene(), 0.4);
+        const path = new Path(PathType.Extrusion, undefined, undefined, 0);
+        path.addPoint(1, 2, 3);
+        path.addPoint(4, 5, 6);
+        path.updateDimensions(0.6, 0.4);
+        path.addPoint(7, 8, 9);
+
+        manager.renderExtrusionLines([path], new Color(0x00ff00));
+
+        // the unknown points fall back to the built-in 0.2, the last uses its own 0.4
+        const positions = positionsOf(manager.extrusionsGroup.children[0] as LineSegments2);
+        expect(positions).toEqual(new Float32Array([1, 1.9, 2.9, 4, 4.9, 5.9, 4, 4.9, 5.9, 7, 7.9, 8.8]));
+      });
+
       test("a path's own height wins over the global line height", () => {
         const manager = new ObjectsManager(new Scene(), 0.4, 0.4);
         const path = new Path(PathType.Extrusion, 0.6, 0.2, 0);
