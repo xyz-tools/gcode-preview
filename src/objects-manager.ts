@@ -279,6 +279,7 @@ export class ObjectsManager {
     if (stale) this.disposeBoundingBox();
 
     if (!this.boundingBoxMesh) {
+      // LineBox needs a color up front; the mesh stays hidden until one is set
       const mesh = new LineBox(size.x, size.z, size.y, this.boundingBoxColor ?? 0xffffff, false);
       mesh.name = 'bounding-box';
       const min = corners.min.toVector3();
