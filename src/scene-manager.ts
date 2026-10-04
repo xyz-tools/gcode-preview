@@ -30,6 +30,9 @@ const ORTHO_FAR = 10000;
 const FRUSTUM_PADDING = 1.2; // 20% margin around model/volume
 const DEFAULT_FRUSTUM_SIZE = 500; // fallback when no model or build volume is loaded
 
+/** Line width used when none is given */
+const DEFAULT_LINE_WIDTH = 1;
+
 export type SceneManagerOptions = {
   /** Build volume dimensions */
   buildVolume?: BuildVolumeDef;
@@ -160,7 +163,11 @@ export class SceneManager {
   constructor(opts: SceneManagerOptions, job: Job) {
     this.job = job;
     this.scene = new Scene();
-    this.objectsManager = this.createObjectsManager(opts.lineWidth ?? 1, opts.lineHeight, opts.extrusionWidth);
+    this.objectsManager = this.createObjectsManager(
+      opts.lineWidth ?? DEFAULT_LINE_WIDTH,
+      opts.lineHeight,
+      opts.extrusionWidth
+    );
     this.scene.background = this._backgroundColor;
     if (opts.backgroundColor !== undefined) {
       this.backgroundColor = new Color(opts.backgroundColor);
@@ -438,8 +445,7 @@ export class SceneManager {
     return this.objectsManager.lineWidth;
   }
   set lineWidth(value: number | undefined) {
-    // unset falls back to the same default as the constructor
-    this.objectsManager.setLineWidth(value ?? 1);
+    this.objectsManager.setLineWidth(value ?? DEFAULT_LINE_WIDTH);
   }
 
   get lineHeight(): number | undefined {
