@@ -1,7 +1,9 @@
 # Decisions
 
-Settled decisions about architecture, public API and anything else with real
-impact on users or contributors. One short file per decision, readable in a
+Settled decisions with hard impact: ones that rule something out or set a
+direction that's costly to reverse (architecture, public API shape, dropping
+support for something). Soft impact, where users only need a workaround or
+config tweak, gets a README or release note instead. One short file per decision, readable in a
 minute. Debates stay in issues and PRs; only the outcome lands here.
 
 ## Format
