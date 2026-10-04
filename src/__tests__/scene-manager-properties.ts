@@ -1318,47 +1318,6 @@ describe('SceneManager properties', () => {
     });
   });
 
-  describe('camera persistence', () => {
-    afterEach(() => localStorage.clear());
-
-    test('saveCamera writes the camera to localStorage', () => {
-      sceneManager.saveCamera();
-
-      expect(JSON.parse(localStorage.getItem('cameraZoom'))).toBe(sceneManager.camera.zoom);
-      expect(localStorage.getItem('cameraPosition')).not.toBeNull();
-    });
-
-    test('loadCamera restores a saved camera', () => {
-      sceneManager.camera.position.set(1, 2, 3);
-      sceneManager.camera.zoom = 2;
-      sceneManager.saveCamera();
-      sceneManager.camera.position.set(0, 0, 0);
-
-      sceneManager.loadCamera();
-
-      expect(sceneManager.camera.position.x).toBe(1);
-      expect(sceneManager.camera.zoom).toBe(2);
-    });
-
-    test('loadCamera does nothing when nothing was saved', () => {
-      localStorage.clear();
-      sceneManager.camera.position.set(7, 8, 9);
-
-      sceneManager.loadCamera();
-
-      expect(sceneManager.camera.position.x).toBe(7);
-    });
-
-    test('clearCamera removes the saved camera', () => {
-      sceneManager.saveCamera();
-
-      sceneManager.clearCamera();
-
-      expect(localStorage.getItem('cameraPosition')).toBeNull();
-      expect(localStorage.getItem('cameraTarget')).toBeNull();
-    });
-  });
-
   describe('construction', () => {
     test('throws without a canvas', () => {
       expect(() => new SceneManager({ buildVolume: { x: 1, y: 1, z: 1, smallGrid: true } }, createJob())).toThrow(
@@ -1394,6 +1353,44 @@ describe('SceneManager properties', () => {
       expect(preview.job.state).toMatchObject({ x: 42, y: 42, z: 0.2 });
 
       preview.dispose();
+    });
+
+    test('constructs when localStorage is unavailable', () => {
+      // Regression test for #542: the constructor used to restore a saved
+      // camera from localStorage, and merely reading the property throws a
+      // SecurityError when site data is blocked
+      const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        get() {
+          throw new DOMException('The operation is insecure.', 'SecurityError');
+        }
+      });
+
+      try {
+        const fresh = createSceneManager();
+        expect(fresh.camera.position.toArray()).toEqual([-100, 400, 450]);
+        fresh.dispose();
+      } finally {
+        Object.defineProperty(window, 'localStorage', descriptor);
+      }
+    });
+
+    test('ignores camera keys left in localStorage', () => {
+      // Regression test for #543: malformed JSON under a stored camera key
+      // used to throw from the constructor, and a valid one overrode
+      // initialCameraPosition; persisting the camera is now up to the app
+      localStorage.setItem('cameraPosition', '{not json');
+      localStorage.setItem('cameraZoom', '2');
+
+      try {
+        const fresh = createSceneManager({ initialCameraPosition: [1, 2, 3] });
+        expect(fresh.camera.position.toArray()).toEqual([1, 2, 3]);
+        expect(fresh.camera.zoom).toBe(1);
+        fresh.dispose();
+      } finally {
+        localStorage.clear();
+      }
     });
 
     test('applies every optional setting', () => {

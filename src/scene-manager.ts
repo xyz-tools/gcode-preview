@@ -228,7 +228,6 @@ export class SceneManager {
       this.controls.target.set(100, 0, -100);
     }
     this.disposables.push(this.controls);
-    this.loadCamera();
 
     this.initScene();
     this.animate();
@@ -962,39 +961,5 @@ export class SceneManager {
   private resetHighlightTracking(): void {
     this._highlightedLayerIndex = undefined;
     this._highlightedLastPath = undefined;
-  }
-
-  saveCamera() {
-    localStorage.setItem('cameraPosition', JSON.stringify(this.camera.position));
-    localStorage.setItem('cameraRotation', JSON.stringify(this.camera.rotation));
-    localStorage.setItem('cameraZoom', JSON.stringify(this.camera.zoom));
-    localStorage.setItem('cameraTarget', JSON.stringify(this.controls.target));
-  }
-  loadCamera() {
-    const position = JSON.parse(localStorage.getItem('cameraPosition'));
-    const rotation = JSON.parse(localStorage.getItem('cameraRotation'));
-    const zoom = JSON.parse(localStorage.getItem('cameraZoom'));
-    const target = JSON.parse(localStorage.getItem('cameraTarget'));
-    if (position && rotation && zoom && target) {
-      this.camera.position.x = position.x;
-      this.camera.position.y = position.y;
-      this.camera.position.z = position.z;
-      this.camera.rotation.x = rotation.x;
-      this.camera.rotation.y = rotation.y;
-      this.camera.rotation.z = rotation.z;
-      this.camera.zoom = zoom;
-      // this.camera.updateProjectionMatrix();
-      this.controls.target.x = target.x;
-      this.controls.target.y = target.y;
-      this.controls.target.z = target.z;
-      this.controls.update();
-    }
-  }
-
-  clearCamera() {
-    localStorage.removeItem('cameraPosition');
-    localStorage.removeItem('cameraRotation');
-    localStorage.removeItem('cameraZoom');
-    localStorage.removeItem('cameraTarget');
   }
 }

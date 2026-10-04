@@ -3,6 +3,7 @@ import { presets } from './presets.js';
 import { GCodePreview } from 'gcode-preview';
 import { defaultSettings } from './default-settings.js';
 import { humanFileSize, parseIntOrDefault } from './utils.js';
+import { saveCamera, restoreCamera } from './camera-storage.js';
 
 const defaultPreset = 'benchy'; // default preset to load
 const preferDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
@@ -202,6 +203,15 @@ export const app = (window.app = createApp({
       });
 
       selectPreset(defaultPreset);
+      // a returning visitor gets their last view back instead of the preset's
+      restoreCamera(preview.sceneManager);
+
+      // pagehide also fires on mobile and bfcache navigations where unload doesn't;
+      // read the camera at save time, since toggling orthographic replaces it
+      window.addEventListener('pagehide', () => saveCamera(preview.sceneManager));
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') saveCamera(preview.sceneManager);
+      });
     });
 
     return {
