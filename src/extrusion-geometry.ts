@@ -33,10 +33,10 @@ class ExtrusionGeometry extends BufferGeometry {
   parameters: {
     /** Array of points defining the path */
     points: Vector3[];
-    /** Width of the extruded shape */
-    lineWidth: number;
-    /** Height of the extruded shape */
-    lineHeight: number;
+    /** Width of the extruded shape, one value or one per point */
+    lineWidth: number | ArrayLike<number>;
+    /** Height of the extruded shape, one value or one per point */
+    lineHeight: number | ArrayLike<number>;
     /** Number of segments around the circumference */
     radialSegments: number;
   };
@@ -49,14 +49,16 @@ class ExtrusionGeometry extends BufferGeometry {
   /**
    * Creates a new ExtrusionGeometry
    * @param points - Array of points defining the path (default: single point at origin)
-   * @param lineWidth - Width of the extruded shape (default: 0.6)
-   * @param lineHeight - Height of the extruded shape (default: 0.2)
+   * @param lineWidth - Width of the extruded shape (default: 0.6), a single
+   * value or one per point when the width varies along the path
+   * @param lineHeight - Height of the extruded shape (default: 0.2), a single
+   * value or one per point when the height varies along the path
    * @param radialSegments - Number of segments around the circumference (default: 8)
    */
   constructor(
     points: Vector3[] = [new Vector3()],
-    lineWidth: number = 0.6,
-    lineHeight: number = 0.2,
+    lineWidth: number | ArrayLike<number> = 0.6,
+    lineHeight: number | ArrayLike<number> = 0.2,
     radialSegments: number = 8
   ) {
     super();
@@ -98,6 +100,13 @@ class ExtrusionGeometry extends BufferGeometry {
 
     // Shared, read-only trig tables (see ringCache above); do not mutate.
     const { sin: ringSin, cos: ringCos } = ringTrig(radialSegments);
+
+    // Per-point dimensions resolve once per ring; a scalar keeps the previous
+    // constant-dimension behavior without any per-point lookup.
+    const widths = typeof lineWidth === 'number' ? null : lineWidth;
+    const heights = typeof lineHeight === 'number' ? null : lineHeight;
+    const scalarWidth = typeof lineWidth === 'number' ? lineWidth : 0;
+    const scalarHeight = typeof lineHeight === 'number' ? lineHeight : 0;
 
     const vertices = new Float32Array(vertexCount * 3);
     const normals = new Float32Array(vertexCount * 3);
@@ -155,6 +164,10 @@ class ExtrusionGeometry extends BufferGeometry {
 
       const [P, N, B] = computeCornerAngles(i);
 
+      // this ring's dimensions
+      const width = widths === null ? scalarWidth : widths[i];
+      const height = heights === null ? scalarHeight : heights[i];
+
       // generate points around the tangent
 
       for (let j = 0; j <= radialSegments; j++) {
@@ -173,12 +186,12 @@ class ExtrusionGeometry extends BufferGeometry {
 
         // vertex
 
-        vertex.x = P.x + lineWidth * normal.x * 0.5;
-        vertex.y = P.y + lineWidth * normal.y * 0.5;
-        vertex.z = P.z + lineHeight * normal.z * 0.5;
+        vertex.x = P.x + width * normal.x * 0.5;
+        vertex.y = P.y + width * normal.y * 0.5;
+        vertex.z = P.z + height * normal.z * 0.5;
         vertices[vertexCursor++] = vertex.x;
         vertices[vertexCursor++] = vertex.y;
-        vertices[vertexCursor++] = vertex.z - lineHeight * 0.5;
+        vertices[vertexCursor++] = vertex.z - height * 0.5;
       }
     }
 

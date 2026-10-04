@@ -639,9 +639,10 @@ export class ObjectsManager {
    * Lines need to be offset: the gcode specifies the nozzle height, which is the
    * top of the extrusion. The line has no constant height in world coords, so it
    * is drawn at the horizontal midplane of the extrusion layer — otherwise the
-   * clipping plane cuts it. The height resolves per path: the path's own value
+   * clipping plane cuts it. The height resolves per point: the path's own value
    * (from slicer metadata) wins, then the global lineHeight, then the built-in
-   * default.
+   * default. Paths with a single height (the vast majority) hoist the offset
+   * out of the vertex loop.
    */
   private packLineVertices(paths: Path[]): Float32Array {
     let segments = 0;
@@ -653,8 +654,21 @@ export class ObjectsManager {
     let next = 0;
 
     for (const path of paths) {
-      const offset = -(path.lineHeight ?? this.lineHeight ?? Path.DEFAULT_LINE_HEIGHT) / 2;
       const vertices = path.vertices;
+      if (path.hasVaryingDimensions) {
+        for (let i = 0; i < vertices.length - 3; i += 3) {
+          const startOffset = -(path.lineHeightAt(i / 3) ?? this.lineHeight ?? Path.DEFAULT_LINE_HEIGHT) / 2;
+          const endOffset = -(path.lineHeightAt(i / 3 + 1) ?? this.lineHeight ?? Path.DEFAULT_LINE_HEIGHT) / 2;
+          positions[next++] = vertices[i];
+          positions[next++] = vertices[i + 1] - 0.1;
+          positions[next++] = vertices[i + 2] + startOffset;
+          positions[next++] = vertices[i + 3];
+          positions[next++] = vertices[i + 4] - 0.1;
+          positions[next++] = vertices[i + 5] + endOffset;
+        }
+        continue;
+      }
+      const offset = -(path.lineHeight ?? this.lineHeight ?? Path.DEFAULT_LINE_HEIGHT) / 2;
       for (let i = 0; i < vertices.length - 3; i += 3) {
         positions[next++] = vertices[i];
         positions[next++] = vertices[i + 1] - 0.1;

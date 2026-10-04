@@ -53,6 +53,24 @@ test('ExtrusionGeometry should generate buffer data', () => {
   expect(geometry.attributes.uv.array.length).toBeGreaterThan(0);
 });
 
+test('ExtrusionGeometry applies per-point dimensions to each ring', () => {
+  // A path whose width/height changed along the way passes one dimension per
+  // point; each point's ring must be sized by its own pair. The first ring
+  // must match a scalar build at the first pair, the last ring a scalar build
+  // at the last pair.
+  const points = [new Vector3(0, 0, 0), new Vector3(1, 0, 0)];
+  const radialSegments = 4;
+  const varying = new ExtrusionGeometry(points, [0.4, 0.8], [0.2, 0.3], radialSegments);
+  const thin = new ExtrusionGeometry(points, 0.4, 0.2, radialSegments);
+  const thick = new ExtrusionGeometry(points, 0.8, 0.3, radialSegments);
+
+  const ringFloats = (radialSegments + 1) * 3;
+  const firstRing = (geometry: ExtrusionGeometry) => geometry.attributes.position.array.slice(0, ringFloats);
+  const lastRing = (geometry: ExtrusionGeometry) => geometry.attributes.position.array.slice(ringFloats);
+  expect(firstRing(varying)).toEqual(firstRing(thin));
+  expect(lastRing(varying)).toEqual(lastRing(thick));
+});
+
 test('ExtrusionGeometry fills its buffers exactly, with no slack', () => {
   // The buffers are sized from the path topology before being filled, so a
   // trailing zero would mean the size formula and the fill loop disagree.
