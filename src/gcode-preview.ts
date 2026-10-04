@@ -85,7 +85,7 @@ export class GCodePreview {
   private _sceneManager: SceneManager | null;
   /** The G-code parser instance */
   private _parser: Parser | null;
-  private opts: GCodePreviewOptions;
+  private readonly opts: GCodePreviewOptions;
 
   private interpreter: Interpreter;
 
