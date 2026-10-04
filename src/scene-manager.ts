@@ -444,9 +444,8 @@ export class SceneManager {
   get lineWidth(): number {
     return this.objectsManager.lineWidth;
   }
-  /** undefined restores the default, as when the option is left out */
-  set lineWidth(value: number | undefined) {
-    this.objectsManager.setLineWidth(value ?? DEFAULT_LINE_WIDTH);
+  set lineWidth(value: number) {
+    this.objectsManager.setLineWidth(value);
   }
 
   get lineHeight(): number | undefined {

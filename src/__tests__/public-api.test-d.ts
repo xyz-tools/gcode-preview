@@ -80,7 +80,6 @@ describe('public API types', () => {
       expectTypeOf<GCodePreviewOptions['boundingBoxColor']>().toEqualTypeOf<ColorRepresentation | undefined>();
       expectTypeOf<GCodePreviewOptions['initialCameraPosition']>().toEqualTypeOf<number[] | undefined>();
       expectTypeOf<GCodePreviewOptions['lineWidth']>().toEqualTypeOf<number | undefined>();
-      // unset restores the default, so reading it back always gives a number
       expectTypeOf<SceneManager['lineWidth']>().toEqualTypeOf<number>();
       expectTypeOf<GCodePreviewOptions['lineHeight']>().toEqualTypeOf<number | undefined>();
       expectTypeOf<GCodePreviewOptions['extrusionWidth']>().toEqualTypeOf<number | undefined>();
@@ -185,6 +184,7 @@ describe('public API types', () => {
         sm.boundingBoxColor = 'red';
         sm.buildVolume = { x: 200, y: 200, z: 200, smallGrid: undefined };
         sm.lineWidth = 2;
+        // @ts-expect-error -- leaving the option out gives the default; setting undefined does not
         sm.lineWidth = undefined;
         sm.lineHeight = 0.2;
         sm.extrusionWidth = 0.4;

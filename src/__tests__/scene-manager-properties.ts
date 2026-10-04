@@ -734,14 +734,6 @@ describe('SceneManager properties', () => {
       expect(spy).toHaveBeenCalledWith(value);
       expect(sceneManager[property]).toBe(value);
     });
-
-    test('unsetting lineWidth restores the default', () => {
-      sceneManager.lineWidth = 3;
-
-      sceneManager.lineWidth = undefined;
-
-      expect(sceneManager.lineWidth).toBe(1);
-    });
   });
 
   describe('layer range', () => {
