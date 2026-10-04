@@ -194,3 +194,60 @@ function createMockSceneManager() {
     cancelAnimation: vi.fn(SceneManager.prototype.cancelAnimation)
   };
 }
+
+test('loadCamera does not throw when localStorage access throws (issue #542)', () => {
+  // repro from the issue: sandboxed iframes / privacy modes throw on access
+  const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    get() {
+      throw new DOMException('The operation is insecure.', 'SecurityError');
+    }
+  });
+  try {
+    const mock = createMockSceneManager();
+    expect(() => SceneManager.prototype.loadCamera.call(mock)).not.toThrow();
+  } finally {
+    if (descriptor) Object.defineProperty(window, 'localStorage', descriptor);
+  }
+});
+
+test('saveCamera and clearCamera do not throw when localStorage access throws', () => {
+  const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    get() {
+      throw new DOMException('The operation is insecure.', 'SecurityError');
+    }
+  });
+  try {
+    const mock = createMockSceneManager();
+    expect(() => SceneManager.prototype.saveCamera.call(mock)).not.toThrow();
+    expect(() => SceneManager.prototype.clearCamera.call(mock)).not.toThrow();
+  } finally {
+    if (descriptor) Object.defineProperty(window, 'localStorage', descriptor);
+  }
+});
+
+test('saveCamera/loadCamera round-trip restores camera state', () => {
+  const makeMock = () => ({
+    camera: {
+      position: { x: 10, y: 20, z: 30 },
+      rotation: { x: 0.1, y: 0.2, z: 0.3 },
+      zoom: 2
+    },
+    controls: { target: { x: 1, y: 2, z: 3 }, update: vi.fn(() => {}) }
+  });
+  const saver = makeMock();
+  SceneManager.prototype.saveCamera.call(saver);
+
+  const loader = makeMock();
+  loader.camera.position = { x: 0, y: 0, z: 0 };
+  SceneManager.prototype.loadCamera.call(loader);
+
+  expect(loader.camera.position).toEqual({ x: 10, y: 20, z: 30 });
+  expect(loader.camera.rotation).toEqual({ x: 0.1, y: 0.2, z: 0.3 });
+  expect(loader.camera.zoom).toBe(2);
+  expect(loader.controls.target).toEqual({ x: 1, y: 2, z: 3 });
+  window.localStorage.clear();
+});

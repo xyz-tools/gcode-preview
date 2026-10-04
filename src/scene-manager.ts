@@ -80,6 +80,38 @@ export type SceneManagerOptions = {
 };
 
 /**
+ * Safe wrappers around window.localStorage.
+ *
+ * Merely accessing `window.localStorage` can throw (e.g. SecurityError) when
+ * site data is blocked, inside sandboxed iframes, or in some privacy modes.
+ * These helpers degrade to no-op / null so camera persistence never crashes
+ * the app — a missing stored camera just means the default view is used.
+ */
+function safeStorageGet(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeStorageSet(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // storage unavailable — camera persistence is best-effort
+  }
+}
+
+function safeStorageRemove(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // storage unavailable — nothing to clear
+  }
+}
+
+/**
  * WebGL-based G-code preview renderer
  */
 export class SceneManager {
@@ -965,16 +997,16 @@ export class SceneManager {
   }
 
   saveCamera() {
-    localStorage.setItem('cameraPosition', JSON.stringify(this.camera.position));
-    localStorage.setItem('cameraRotation', JSON.stringify(this.camera.rotation));
-    localStorage.setItem('cameraZoom', JSON.stringify(this.camera.zoom));
-    localStorage.setItem('cameraTarget', JSON.stringify(this.controls.target));
+    safeStorageSet('cameraPosition', JSON.stringify(this.camera.position));
+    safeStorageSet('cameraRotation', JSON.stringify(this.camera.rotation));
+    safeStorageSet('cameraZoom', JSON.stringify(this.camera.zoom));
+    safeStorageSet('cameraTarget', JSON.stringify(this.controls.target));
   }
   loadCamera() {
-    const position = JSON.parse(localStorage.getItem('cameraPosition'));
-    const rotation = JSON.parse(localStorage.getItem('cameraRotation'));
-    const zoom = JSON.parse(localStorage.getItem('cameraZoom'));
-    const target = JSON.parse(localStorage.getItem('cameraTarget'));
+    const position = JSON.parse(safeStorageGet('cameraPosition'));
+    const rotation = JSON.parse(safeStorageGet('cameraRotation'));
+    const zoom = JSON.parse(safeStorageGet('cameraZoom'));
+    const target = JSON.parse(safeStorageGet('cameraTarget'));
     if (position && rotation && zoom && target) {
       this.camera.position.x = position.x;
       this.camera.position.y = position.y;
@@ -992,9 +1024,9 @@ export class SceneManager {
   }
 
   clearCamera() {
-    localStorage.removeItem('cameraPosition');
-    localStorage.removeItem('cameraRotation');
-    localStorage.removeItem('cameraZoom');
-    localStorage.removeItem('cameraTarget');
+    safeStorageRemove('cameraPosition');
+    safeStorageRemove('cameraRotation');
+    safeStorageRemove('cameraZoom');
+    safeStorageRemove('cameraTarget');
   }
 }
