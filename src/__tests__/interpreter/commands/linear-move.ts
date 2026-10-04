@@ -60,6 +60,21 @@ describe('linearMove (G0/G1)', () => {
     expect(job.inprogressPath?.travelType).toEqual('Extrusion');
   });
 
+  test('resolves coordinates relative to the current position in relative mode', () => {
+    const command = new GCodeCommand('G0 X1 Y-2', 'g0', { x: 1, y: -2 });
+    const job = new Job();
+    job.state.x = 10;
+    job.state.y = 20;
+    job.state.z = 30;
+    job.state.positioning = 'relative';
+
+    linearMove(command, job);
+
+    expect(job.state.x).toEqual(11);
+    expect(job.state.y).toEqual(18);
+    expect(job.state.z).toEqual(30);
+  });
+
   test('will not result in a path when there is no movement (retraction)', () => {
     const command = new GCodeCommand('G0 E-2', 'g0', { e: -2 });
     const job = new Job();

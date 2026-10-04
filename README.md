@@ -131,11 +131,20 @@ The interpreter currently handles:
 | `G28` | home |
 | `G31` | straight probe |
 | `G38.2`–`G38.5` | probe family |
+| `G90` / `G91` | absolute / relative positioning |
 | `G92` | set position |
 | `G92.1` | reset coordinate system offsets |
+| `M82` / `M83` | absolute / relative extrusion |
 | `T0`–`T7` | tool selection |
 
 Commands without a handler are parsed but ignored by the interpreter.
+
+`G90` / `G91` select absolute / relative XYZ targets for linear moves, arc endpoints,
+and probes. Arc-center offsets I/J and radius R remain offsets in either mode.
+E follows G90/G91 too; a subsequent M82/M83 overrides E alone, and a later G90/G91
+clears that override, following [Marlin's command ordering](https://marlinfw.org/docs/gcode/M083.html).
+This is a fixed preview convention: firmware-specific alternatives such as
+RepRapFirmware's independent extrusion mode are not selected automatically.
 
 `G92.2` and `G92.3` are not supported.
 Standalone `;WIDTH:<mm>` and `;HEIGHT:<mm>` comments (emitted by PrusaSlicer,
