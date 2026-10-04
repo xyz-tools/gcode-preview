@@ -1,21 +1,33 @@
 {
   "compilerOptions": {
     "declaration": false,
-    "noImplicitAny": true,
     "outDir": "./dist",
     "target": "es2015",
+    // TypeScript 6 no longer infers a wider lib than `target` implies, but the
+    // source has always relied on newer runtime APIs (Object.entries, String
+    // #trimStart). Declaring them keeps the emitted target at es2015 while
+    // typing against the ES2019 baseline the code actually assumes.
+    "lib": ["ES2019", "DOM", "DOM.Iterable"],
     "esModuleInterop": true,
-    "module": "es2015",
-    "moduleResolution": "node",
+    // Rolldown bundles the library, so resolution must follow bundler rules
+    // rather than Node's (`node10` is removed in TypeScript 7). "bundler"
+    // requires an esnext-style `module`; the output target is set separately
+    // in rolldown.config.mjs.
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "sourceMap": true,
-    "baseUrl": ".",
-    "paths": {
-      "three": ["node_modules/three/src/Three"]
-    },
-    // @webgpu/types supplies the ambient GPUTexture global that
-    // @types/three references from ExternalTexture.d.ts (three 0.180+).
-    // It is never imported, so it looks unused -- do not remove.
-    "typeRoots": ["types", "node_modules/@types", "node_modules/@webgpu"]
+    // TypeScript 6 turns `strict` on by default. The source is not yet
+    // strictNullChecks-clean, so the old behaviour is pinned explicitly here
+    // rather than silently changing what `npm run typeCheck` enforces.
+    // `noImplicitAny` stays on, as it was before. Going fully strict is
+    // tracked separately; tsconfig.typecheck.json already opts in for the
+    // public-API type pins.
+    "strict": false,
+    "noImplicitAny": true,
+    // TypeScript 6's DOM lib declares the WebGPU globals (GPUTexture and
+    // friends) that @types/three references from ExternalTexture.d.ts, so the
+    // @webgpu/types package it used to need is no longer installed.
+    "typeRoots": ["types", "node_modules/@types"]
   },
   "files": ["src/gcode-preview.ts"]
 }
