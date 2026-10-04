@@ -539,7 +539,7 @@ export class SceneManager {
     }
 
     if (this._singleLayerMode === true) {
-      this.startLayer = this._endLayer;
+      this.startLayer = this._endLayer ?? this.job.countLayers;
     }
 
     this.updateClippingPlanes();
@@ -566,10 +566,8 @@ export class SceneManager {
 
     if (this._singleLayerMode) {
       this.prevStartLayer = this._startLayer;
-      // known bug: with no end layer this is NaN, so every layer stays visible.
-      // Parked; to be fixed separately.
-      // @ts-expect-error -- see above
-      this._startLayer = Math.max(this._endLayer, 1);
+      // an unset end layer means the top of the stack
+      this._startLayer = Math.max(this._endLayer ?? this.job.countLayers, 1);
     } else {
       this._startLayer = this.prevStartLayer;
     }
