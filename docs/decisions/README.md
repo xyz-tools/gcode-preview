@@ -1,10 +1,8 @@
 # Decisions
 
-Settled decisions with hard impact: ones that rule something out or set a
-direction that's costly to reverse (architecture, public API shape, dropping
-support for something). Soft impact, where users only need a workaround or
-config tweak, gets a README or release note instead. One short file per decision, readable in a
-minute. Debates stay in issues and PRs; only the outcome lands here.
+One short file per decision, readable in a minute. What belongs here is
+decided in [0000](0000-record-decisions.md). Debates stay in issues and PRs;
+only the outcome lands here.
 
 ## Format
 
@@ -29,4 +27,5 @@ lines when they apply.
 
 ## Naming
 
-`NNNN-short-slug.md`, numbered in order: `0002-drop-node10-resolution.md`.
+`NNNN-short-slug.md`, numbered in order, e.g.
+`0001-drop-node10-module-resolution.md`.

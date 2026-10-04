@@ -178,19 +178,11 @@ pipeline and asserts what _did_ render, not just that nothing threw.
 
 ## Decisions
 
-Changes with hard impact need a documented decision in
-[`docs/decisions/`](docs/decisions/): a short file that says what was decided,
-why, and what it causes. Hard impact means the change rules something out or
-sets a direction that's costly to reverse: architecture, public API shape,
-dropping support for something.
-
-Soft impact doesn't need one. If affected users only need a workaround or a
-config tweak, a note in the README or release notes is enough. Example:
-TypeScript 5.x consumers needing `@webgpu/types` got a README note, while
-dropping node10 module resolution got a decision.
-
-These decisions are typically made by the maintainers. If your change needs
-one, raise it in an issue or the PR first; you're welcome to draft the record.
+Changes with hard impact, ones that rule something out or are costly to
+reverse, need a short decision record in [`docs/decisions/`](docs/decisions/).
+These are typically made by the maintainers, so raise the change in an issue
+or the PR first; you're welcome to draft the record. See
+[0000](docs/decisions/0000-record-decisions.md) for what counts.
 
 ## Review standards
 
