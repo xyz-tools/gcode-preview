@@ -54,6 +54,11 @@ TypeScript supports `node16`, `nodenext`, and `bundler` module resolution.
 Legacy `moduleResolution: "node"` can still resolve the root import through
 `types`; no `typesVersions` mapping is needed for the current root-only API.
 
+On TypeScript 5.x with `@types/three` 0.180 or newer, also install
+`@webgpu/types` and add it to `compilerOptions.types` (or enable
+`skipLibCheck`): `@types/three` references WebGPU globals that TypeScript's
+DOM lib only includes from 6.0 onwards.
+
 For native browser modules, map `three` in an import map and load
 `dist/gcode-preview.es.js` as a module. When self-hosting, copy the **entire
 `dist` directory**, including any chunks. The library adds nothing to the
