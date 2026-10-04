@@ -110,10 +110,7 @@ describe('public API surface', () => {
       renderAnimated: 0,
       clear: 0,
       resize: 0,
-      dispose: 0,
-      saveCamera: 0,
-      loadCamera: 0,
-      clearCamera: 0
+      dispose: 0
     };
 
     it.each(Object.entries(methods))('has method %s with %d required parameter(s)', (name, arity) => {
