@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Examples — gcode-preview</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        margin: 0 auto;
+        padding: 32px 20px 64px;
+        max-width: 46rem;
+        font: 16px/1.6 system-ui, sans-serif;
+      }
+      h1 {
+        margin-bottom: 0.25em;
+      }
+      .lede {
+        margin-top: 0;
+        color: #666;
+      }
+      ul {
+        list-style: none;
+        margin: 32px 0;
+        padding: 0;
+      }
+      li {
+        padding: 12px 0;
+        border-top: 1px solid #ddd;
+      }
+      li a {
+        font-weight: 600;
+        text-decoration: none;
+      }
+      li a:hover {
+        text-decoration: underline;
+      }
+      li p {
+        margin: 2px 0 0;
+        color: #666;
+      }
+      footer {
+        border-top: 1px solid #ddd;
+        padding-top: 16px;
+        color: #666;
+        font-size: 14px;
+      }
+      @media (prefers-color-scheme: dark) {
+        .lede,
+        li p,
+        footer {
+          color: #aaa;
+        }
+        li,
+        footer {
+          border-color: #333;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>gcode-preview examples</h1>
+    <p class="lede">
+      Small, self-contained pages showing how to drive the library from your own code — loading G-code, wiring up
+      controls, reacting to what the parser found. The <a href="../index.html">demo app</a> is where to look at what the
+      renderer can do; these are where to look at how to talk to it. Every page shows its own code next to what that
+      code draws: edit it and hit <strong>Run</strong> to see the change. Plain HTML, no build step, no framework.
+    </p>
+
+    <ul>
+      <li>
+        <a href="minimal.html">Minimal</a>
+        <p>The smallest thing that renders: a canvas, a color, and a handful of G-code moves.</p>
+      </li>
+      <li>
+        <a href="streaming.html">Streaming</a>
+        <p>Pass a <code>fetch</code> stream to <code>processGCodeStream</code> and watch the model grow as it loads.</p>
+      </li>
+      <li>
+        <a href="live-print.html">Live print</a>
+        <p>Replay a file the way a printer runs it: moves arriving over time, not a file loaded all at once.</p>
+      </li>
+      <li>
+        <a href="layer-range.html">Layer range</a>
+        <p>Scrub the visible layers with a slider, the way a slicer's layer view does.</p>
+      </li>
+      <li>
+        <a href="drag-drop.html">Drag &amp; drop</a>
+        <p>Drop a <code>.gcode</code> file on the canvas and read what the library found in it.</p>
+      </li>
+      <li>
+        <a href="stats.html">Print stats</a>
+        <p>Build your own info panel out of the job: layers, filament, bounding box, retractions.</p>
+      </li>
+      <li>
+        <a href="thumbnail.html">Thumbnail</a>
+        <p>The preview image and slicer name that slicers embed in G-code comments.</p>
+      </li>
+      <li>
+        <a href="parser.html">Parser only</a>
+        <p>Use the parser on its own — no canvas, no scene. G-code in, commands out.</p>
+      </li>
+    </ul>
+
+    <footer>
+      <a href="../index.html">Full demo app</a> · <a href="../docs/index.html">API docs</a> ·
+      <a href="https://github.com/xyz-tools/gcode-preview">GitHub</a>
+    </footer>
+  </body>
+</html>
