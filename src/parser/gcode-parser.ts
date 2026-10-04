@@ -302,7 +302,8 @@ export class Parser {
    *
    * @param line - Single line of G-code to parse
    * @param keepComments - Whether to preserve comments in the parsed command (default: true)
-   * @returns Parsed GCodeCommand object or null if line is empty/invalid
+   * @returns Parsed GCodeCommand object; an empty or comment-only line yields
+   *   a command with an empty `gcode`
    *
    * @remarks
    * This method handles the parsing of individual G-code lines, including:
@@ -315,7 +316,7 @@ export class Parser {
    * const cmd = parser.parseCommand('G1 X100 Y100 F1000 ; Move to position');
    * ```
    */
-  parseCommand(line: string, keepComments = true): GCodeCommand | null {
+  parseCommand(line: string, keepComments = true): GCodeCommand {
     const input = line.trim();
     const firstSemicolon = input.indexOf(';');
     const cmd = firstSemicolon < 0 ? input : input.slice(0, firstSemicolon);

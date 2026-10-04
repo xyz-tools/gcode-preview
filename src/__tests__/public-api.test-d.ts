@@ -214,7 +214,7 @@ describe('public API types', () => {
       expectTypeOf<keyof ReturnType<Parser['parseGCode']>>().toEqualTypeOf<'metadata' | 'commands'>();
       expectTypeOf<ReturnType<Parser['parseGCode']>['commands']>().toEqualTypeOf<GCodeCommand[]>();
       expectTypeOf<Parameters<Parser['parseCommand']>>().toEqualTypeOf<[string, boolean?]>();
-      expectTypeOf<ReturnType<Parser['parseCommand']>>().toEqualTypeOf<GCodeCommand | null>();
+      expectTypeOf<ReturnType<Parser['parseCommand']>>().toEqualTypeOf<GCodeCommand>();
     });
   });
 
