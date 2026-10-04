@@ -141,16 +141,17 @@ export class Path {
    * @param opts - Geometry options
    * @param opts.extrusionWidthFallback - Width for a path that carries none of its own
    * @param opts.lineHeightFallback - Height for a path that carries none of its own
-   * @returns BufferGeometry representing the path
+   * @returns BufferGeometry representing the path, or null when the path has
+   *   fewer than 2 points
    * @remarks
    * Dimensions resolve per path: the path's own value (from slicer metadata)
    * wins, then the caller's fallback (the renderer's global setting), then
    * the built-in defaults.
    */
-  geometry(opts: { extrusionWidthFallback?: number; lineHeightFallback?: number } = {}): BufferGeometry {
+  geometry(opts: { extrusionWidthFallback?: number; lineHeightFallback?: number } = {}): BufferGeometry | null {
     if (this._vertices.length < 6) {
       // a path needs at least 2 points to be valid
-      console.warn('Path has less than 6 points, returning empty geometry');
+      console.warn('Path has less than 6 points, returning null');
       return null;
     }
 

@@ -22,9 +22,9 @@ export const linearMove: CommandHandler = (command, job) => {
 
   // discard zero length moves
   if (x === undefined && y === undefined && z === undefined) {
-    if (e > 0) {
+    if (e !== undefined && e > 0) {
       job.stats.retractions++;
-    } else if (e < 0) {
+    } else if (e !== undefined && e < 0) {
       job.stats.deretractions++;
     } else if (f !== undefined) {
       job.stats.feedrateChanges++;

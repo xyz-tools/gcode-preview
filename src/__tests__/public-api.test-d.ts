@@ -80,6 +80,7 @@ describe('public API types', () => {
       expectTypeOf<GCodePreviewOptions['boundingBoxColor']>().toEqualTypeOf<ColorRepresentation | undefined>();
       expectTypeOf<GCodePreviewOptions['initialCameraPosition']>().toEqualTypeOf<number[] | undefined>();
       expectTypeOf<GCodePreviewOptions['lineWidth']>().toEqualTypeOf<number | undefined>();
+      expectTypeOf<SceneManager['lineWidth']>().toEqualTypeOf<number>();
       expectTypeOf<GCodePreviewOptions['lineHeight']>().toEqualTypeOf<number | undefined>();
       expectTypeOf<GCodePreviewOptions['extrusionWidth']>().toEqualTypeOf<number | undefined>();
       expectTypeOf<GCodePreviewOptions['startLayer']>().toEqualTypeOf<number | undefined>();
@@ -183,6 +184,8 @@ describe('public API types', () => {
         sm.boundingBoxColor = 'red';
         sm.buildVolume = { x: 200, y: 200, z: 200, smallGrid: undefined };
         sm.lineWidth = 2;
+        // @ts-expect-error -- leaving the option out gives the default; setting undefined does not
+        sm.lineWidth = undefined;
         sm.lineHeight = 0.2;
         sm.extrusionWidth = 0.4;
         sm.startLayer = 1;
@@ -214,7 +217,7 @@ describe('public API types', () => {
       expectTypeOf<keyof ReturnType<Parser['parseGCode']>>().toEqualTypeOf<'metadata' | 'commands'>();
       expectTypeOf<ReturnType<Parser['parseGCode']>['commands']>().toEqualTypeOf<GCodeCommand[]>();
       expectTypeOf<Parameters<Parser['parseCommand']>>().toEqualTypeOf<[string, boolean?]>();
-      expectTypeOf<ReturnType<Parser['parseCommand']>>().toEqualTypeOf<GCodeCommand | null>();
+      expectTypeOf<ReturnType<Parser['parseCommand']>>().toEqualTypeOf<GCodeCommand>();
     });
   });
 
