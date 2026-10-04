@@ -176,6 +176,16 @@ one-off warning, callback or `console.log` alongside a fix.
 Changes in this area want a test that feeds the malformed snippet through the
 pipeline and asserts what _did_ render, not just that nothing threw.
 
+## Decisions
+
+Changes with real impact, like architecture, public API, supported
+platforms/versions or dropping support for something, need a documented
+decision in [`docs/decisions/`](docs/decisions/): a short file that says what
+was decided, why, and what it causes.
+
+These decisions are typically made by the maintainers. If your change needs
+one, raise it in an issue or the PR first; you're welcome to draft the record.
+
 ## Review standards
 
 Every change, **intended or not**, must be:
