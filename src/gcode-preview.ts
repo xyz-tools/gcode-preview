@@ -85,7 +85,7 @@ export class GCodePreview {
   private _sceneManager: SceneManager | null;
   /** The G-code parser instance */
   private _parser: Parser | null;
-  private opts: GCodePreviewOptions | null;
+  private opts: GCodePreviewOptions;
 
   private interpreter: Interpreter;
 
@@ -112,7 +112,7 @@ export class GCodePreview {
 
   /** Builds a parser carrying the preview's parsing options. */
   private createParser(): Parser {
-    return new Parser({ keepLines: this.opts?.keepLines });
+    return new Parser({ keepLines: this.opts.keepLines });
   }
 
   /**
@@ -244,7 +244,7 @@ export class GCodePreview {
       // pile up draw calls
       if (
         options.render &&
-        performance.now() - lastDrawnAt >= (this.opts?.liveRenderInterval ?? LIVE_RENDER_INTERVAL_MS)
+        performance.now() - lastDrawnAt >= (this.opts.liveRenderInterval ?? LIVE_RENDER_INTERVAL_MS)
       ) {
         this.sceneManager.renderProgressive();
         lastDrawnAt = performance.now();

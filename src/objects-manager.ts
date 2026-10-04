@@ -270,8 +270,8 @@ export class ObjectsManager {
    * (a file streaming in) makes a new one. Visibility tracks whether a color is set.
    */
   updateBoundingBox(boundingBox: BoundingBox) {
-    if (!boundingBox.isValid) return;
-    const size = boundingBox.size;
+    const { size, corners } = boundingBox;
+    if (!size || !corners) return;
 
     const stale =
       this.boundingBoxSize &&
@@ -279,9 +279,9 @@ export class ObjectsManager {
     if (stale) this.disposeBoundingBox();
 
     if (!this.boundingBoxMesh) {
-      const mesh = new LineBox(size.x, size.z, size.y, this.boundingBoxColor, false);
+      const mesh = new LineBox(size.x, size.z, size.y, this.boundingBoxColor ?? 0xffffff, false);
       mesh.name = 'bounding-box';
-      const min = boundingBox.corners.min.toVector3();
+      const min = corners.min.toVector3();
       mesh.position.set(min.x, min.y, min.z);
 
       this.boundingBoxMesh = mesh;

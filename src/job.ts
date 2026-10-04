@@ -256,20 +256,21 @@ export class Job {
    * Removes the path from all indexes and sets it as the current in-progress path
    */
   resumeLastPath(): void {
-    if (this.paths.length === 0) {
+    const path = this.paths.pop();
+    if (!path) {
       return;
     }
-    this.inprogressPath = this.paths.pop();
+    this.inprogressPath = path;
     [
       this.extrusionPaths,
       this.travelPaths,
       this.layers[this.layers.length - 1]?.paths,
-      this._toolPaths[this.inprogressPath.tool]
+      this._toolPaths[path.tool]
     ].forEach((indexer) => {
       if (indexer === undefined || indexer.length === 0) {
         return;
       }
-      const travelIndex = indexer.indexOf(this.inprogressPath);
+      const travelIndex = indexer.indexOf(path);
       if (travelIndex > -1) {
         indexer.splice(travelIndex, 1);
       }

@@ -734,6 +734,14 @@ describe('SceneManager properties', () => {
       expect(spy).toHaveBeenCalledWith(value);
       expect(sceneManager[property]).toBe(value);
     });
+
+    test('unsetting lineWidth restores the default', () => {
+      sceneManager.lineWidth = 3;
+
+      sceneManager.lineWidth = undefined;
+
+      expect(sceneManager.lineWidth).toBe(1);
+    });
   });
 
   describe('layer range', () => {
@@ -852,6 +860,29 @@ describe('SceneManager properties', () => {
       const planes = objectsManager(sceneManager).clippingPlanes;
       expect(planes).toHaveLength(1);
       expect(planes[0].constant).toBe(-(layer.z - layer.height));
+    });
+
+    test('singleLayerMode without an end layer shows only the top layer', () => {
+      sceneManager.endLayer = undefined;
+
+      sceneManager.singleLayerMode = true;
+
+      const count = sceneManager.job.countLayers;
+      const layer = sceneManager.job.layers[count - 1];
+      const planes = objectsManager(sceneManager).clippingPlanes;
+      expect(sceneManager.startLayer).toBe(count);
+      expect(planes).toHaveLength(1);
+      expect(planes[0].constant).toBe(-(layer.z - layer.height));
+    });
+
+    test('clearing the end layer in singleLayerMode moves to the top layer', () => {
+      sceneManager.endLayer = 1;
+      sceneManager.singleLayerMode = true;
+
+      sceneManager.endLayer = undefined;
+
+      expect(sceneManager.startLayer).toBe(sceneManager.job.countLayers);
+      expect(objectsManager(sceneManager).clippingPlanes).toHaveLength(1);
     });
 
     test('singleLayerMode restores the previous start layer when turned off', () => {

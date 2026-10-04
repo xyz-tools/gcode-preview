@@ -126,7 +126,7 @@ export class SceneManager {
   /** Frame ID of the incremental render loop, distinct from the continuous one */
   private frameLoopId?: number;
   /** Previous start layer before single layer mode */
-  private prevStartLayer = 0;
+  private prevStartLayer?: number;
   // colors
   /** Background color */
   private _backgroundColor = new Color(0xe0e0e0);
@@ -438,7 +438,8 @@ export class SceneManager {
     return this.objectsManager.lineWidth;
   }
   set lineWidth(value: number | undefined) {
-    this.objectsManager.setLineWidth(value);
+    // unset falls back to the same default as the constructor
+    this.objectsManager.setLineWidth(value ?? 1);
   }
 
   get lineHeight(): number | undefined {
@@ -489,8 +490,10 @@ export class SceneManager {
    *
    */
   updateClippingPlanes() {
-    const bottomLayer = this._startLayer > 1 ? this.job.layers[this._startLayer - 1] : undefined;
-    const topLayer = this._endLayer < this.job.layers.length ? this.job.layers[this._endLayer - 1] : undefined;
+    const start = this._startLayer;
+    const end = this._endLayer;
+    const bottomLayer = start !== undefined && start > 1 ? this.job.layers[start - 1] : undefined;
+    const topLayer = end !== undefined && end < this.job.layers.length ? this.job.layers[end - 1] : undefined;
     // an open bound must stay undefined: subtracting through `?.` would produce
     // NaN, which passes the !== undefined guards and ends up in plane constants
     // and shader uniforms, where NaN comparisons are undefined behavior in GLSL
@@ -530,7 +533,7 @@ export class SceneManager {
     }
 
     if (this._singleLayerMode === true) {
-      this.startLayer = this._endLayer;
+      this.startLayer = this._endLayer ?? this.job.countLayers;
     }
 
     this.updateClippingPlanes();
@@ -557,7 +560,8 @@ export class SceneManager {
 
     if (this._singleLayerMode) {
       this.prevStartLayer = this._startLayer;
-      this._startLayer = Math.max(this._endLayer, 1);
+      // an unset end layer means the top of the stack
+      this._startLayer = Math.max(this._endLayer ?? this.job.countLayers, 1);
     } else {
       this._startLayer = this.prevStartLayer;
     }
@@ -629,8 +633,8 @@ export class SceneManager {
   }
 
   private getOrthoFrustumSize(): number {
-    if (this.job?.boundingBox?.isValid) {
-      const size = this.job.boundingBox.size;
+    const size = this.job?.boundingBox?.size;
+    if (size) {
       return Math.max(size.x, size.y, size.z) * FRUSTUM_PADDING;
     }
     if (this.buildVolume) {
@@ -779,6 +783,9 @@ export class SceneManager {
     this.startLayer = undefined;
     this.endLayer = Infinity;
     this._singleLayerMode = false;
+    // `job` is typed as always set, yet clear() leaves it unset until the caller
+    // assigns a new one. Part of the dispose/lifecycle cleanup, left as is for now.
+    // @ts-expect-error -- see above
     this.job = undefined;
 
     // drop the old manager from disposables too, or dispose() would revisit it

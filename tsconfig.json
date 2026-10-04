@@ -16,14 +16,6 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "sourceMap": true,
-    // TypeScript 6 turns `strict` on by default. The source is not yet
-    // strictNullChecks-clean, so the old behaviour is pinned explicitly here
-    // rather than silently changing what `npm run typeCheck` enforces.
-    // `noImplicitAny` stays on, as it was before. Going fully strict is
-    // tracked separately; tsconfig.typecheck.json already opts in for the
-    // public-API type pins.
-    "strict": false,
-    "noImplicitAny": true,
     // TypeScript 6's DOM lib declares the WebGPU globals (GPUTexture and
     // friends) that @types/three references from ExternalTexture.d.ts, so the
     // @webgpu/types package it used to need is no longer installed.
