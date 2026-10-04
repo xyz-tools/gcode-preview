@@ -89,12 +89,14 @@ export interface GCodeParameters {
 export class GCodeCommand {
   /**
    * Creates a new GCodeCommand instance
+   * @param lineIndex - Zero-based source line index, across all parsed chunks
    * @param src - The original G-code line
    * @param gcode - The parsed G-code command (e.g., 'g0', 'g1')
    * @param params - The parsed parameters
    * @param comment - Optional comment from the G-code line
    */
   constructor(
+    public lineIndex: number,
     public src: string,
     public gcode: string,
     public params: GCodeParameters,
@@ -294,7 +296,8 @@ export class Parser {
    * @private
    */
   private lines2commands(lines: string[]): GCodeCommand[] {
-    return lines.map((l) => this.parseCommand(l));
+    const lineOffset = this.lineCount - lines.length;
+    return lines.map((line, index) => this.parseCommand(line, true, lineOffset + index));
   }
 
   /**
@@ -302,7 +305,8 @@ export class Parser {
    *
    * @param line - Single line of G-code to parse
    * @param keepComments - Whether to preserve comments in the parsed command (default: true)
-   * @returns Parsed GCodeCommand object or null if line is empty/invalid
+   * @param lineIndex - Zero-based source line index (default: 0 for a standalone line)
+   * @returns Parsed GCodeCommand object, including for empty lines
    *
    * @remarks
    * This method handles the parsing of individual G-code lines, including:
@@ -315,7 +319,7 @@ export class Parser {
    * const cmd = parser.parseCommand('G1 X100 Y100 F1000 ; Move to position');
    * ```
    */
-  parseCommand(line: string, keepComments = true): GCodeCommand | null {
+  parseCommand(line: string, keepComments = true, lineIndex = 0): GCodeCommand {
     const input = line.trim();
     const firstSemicolon = input.indexOf(';');
     const cmd = firstSemicolon < 0 ? input : input.slice(0, firstSemicolon);
@@ -366,7 +370,7 @@ export class Parser {
       i = end;
     }
 
-    return new GCodeCommand(line, gcode, params, comment);
+    return new GCodeCommand(lineIndex, line, gcode, params, comment);
   }
 
   /**

@@ -8,7 +8,7 @@ describe('setPosition (G92)', () => {
   const run = (gcode: string) => new Interpreter().execute(new Parser().parseGCode(gcode).commands);
 
   test('gives the current position new coordinates without moving the printhead', () => {
-    const command = new GCodeCommand('G92 X0 Y5 Z1 E2', 'g92', { x: 0, y: 5, z: 1, e: 2 });
+    const command = new GCodeCommand(0, 'G92 X0 Y5 Z1 E2', 'g92', { x: 0, y: 5, z: 1, e: 2 });
     const job = new Job();
     job.state.x = 10;
     job.state.y = 20;
@@ -25,7 +25,7 @@ describe('setPosition (G92)', () => {
   });
 
   test('keeps the shift of the axes a partial G92 omits', () => {
-    const command = new GCodeCommand('G92 Y5', 'g92', { y: 5 });
+    const command = new GCodeCommand(0, 'G92 Y5', 'g92', { y: 5 });
     const job = new Job();
     job.state.y = 7;
     job.state.e = 3;
@@ -37,7 +37,7 @@ describe('setPosition (G92)', () => {
   });
 
   test('shifts Z when it is the only axis given', () => {
-    const command = new GCodeCommand('G92 Z3', 'g92', { z: 3 });
+    const command = new GCodeCommand(0, 'G92 Z3', 'g92', { z: 3 });
     const job = new Job();
     job.state.z = 5;
 
@@ -47,7 +47,7 @@ describe('setPosition (G92)', () => {
   });
 
   test('a bare G92 makes the current position the origin of every axis', () => {
-    const command = new GCodeCommand('G92', 'g92', {});
+    const command = new GCodeCommand(0, 'G92', 'g92', {});
     const job = new Job();
     job.state.x = 1;
     job.state.y = 2;
@@ -61,7 +61,7 @@ describe('setPosition (G92)', () => {
   });
 
   test('a G92 with only non-axis words is not treated as a bare reset', () => {
-    const command = new GCodeCommand('G92 F3000', 'g92', { f: 3000 });
+    const command = new GCodeCommand(0, 'G92 F3000', 'g92', { f: 3000 });
     const job = new Job();
     job.state.x = 1;
     job.state.e = 4;
@@ -73,7 +73,7 @@ describe('setPosition (G92)', () => {
   });
 
   test('an un-homed axis is assumed at the origin when computing the shift', () => {
-    const command = new GCodeCommand('G92 X5', 'g92', { x: 5 });
+    const command = new GCodeCommand(0, 'G92 X5', 'g92', { x: 5 });
     const job = new Job();
 
     setPosition(command, job);
@@ -84,7 +84,7 @@ describe('setPosition (G92)', () => {
 
   test('does not mark the axes as homed', () => {
     // As in Marlin, G92 trusts the given coordinates but does not home
-    const command = new GCodeCommand('G92 X1 Y2 Z3', 'g92', { x: 1, y: 2, z: 3 });
+    const command = new GCodeCommand(0, 'G92 X1 Y2 Z3', 'g92', { x: 1, y: 2, z: 3 });
     const job = new Job();
 
     setPosition(command, job);

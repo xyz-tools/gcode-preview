@@ -10,7 +10,7 @@ import {
   NonPlanarExtrusionError
 } from './indexers';
 import { BoundingBox } from './bounding-box';
-import { Metadata } from './parser/gcode-parser';
+import { GCodeCommand, Metadata } from './parser/gcode-parser';
 import { ExtrusionDimensionMetadata } from './parser/metadata-parser-base';
 import { JobStats } from './job-stats';
 
@@ -45,8 +45,6 @@ export class Job {
   private extrusionDimensions: ExtrusionDimensionMetadata[] = [];
   /** Position in extrusionDimensions up to which events have been applied */
   private dimensionCursor = 0;
-  /** How many commands have been executed on this job — one per parsed line */
-  private executedCommandCount = 0;
 
   /** Statistics accumulated while interpreting the job's G-code */
   public stats: JobStats = new JobStats();
@@ -106,18 +104,20 @@ export class Job {
   /**
    * Advances the job to the next command the interpreter executes
    * @remarks
-   * Called by the interpreter once per command, in file order. Every parsed
-   * line yields exactly one command, so counting them gives the current line
-   * index — which is how line-indexed slicer metadata is mapped onto the
-   * command stream: extrusion dimension changes (`;WIDTH:` / `;HEIGHT:`
-   * comments) recorded at or before this line are folded into the state here.
+   * Applies dimension changes recorded at or before the command's source line.
+   * Commands in source order advance the cursor; going backwards replays the
+   * metadata so dimensions from later lines cannot leak into earlier moves.
    * The in-progress path is deliberately left alone: the move handlers break
    * it via `continuePath` when the state no longer matches, which keeps a
    * streamed parse identical to a one-shot parse — the interpreter resumes
    * the last path at every chunk boundary, undoing any break performed here.
    */
-  beginCommand(): void {
-    const lineIndex = this.executedCommandCount++;
+  beginCommand({ lineIndex }: GCodeCommand): void {
+    if (this.dimensionCursor > 0 && this.extrusionDimensions[this.dimensionCursor - 1].lineIndex > lineIndex) {
+      this.dimensionCursor = 0;
+      this.state.extrusionWidth = undefined;
+      this.state.lineHeight = undefined;
+    }
     while (
       this.dimensionCursor < this.extrusionDimensions.length &&
       this.extrusionDimensions[this.dimensionCursor].lineIndex <= lineIndex

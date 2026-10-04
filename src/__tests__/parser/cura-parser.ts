@@ -3,7 +3,7 @@ import { CuraMetadataParser } from '../../parser/cura-parser';
 import { GCodeCommand } from '../../parser/gcode-parser';
 
 function createCommand(src: string, comment?: string, params = {}): GCodeCommand {
-  return new GCodeCommand(src, 'g1', params, comment);
+  return new GCodeCommand(0, src, 'g1', params, comment);
 }
 
 test('Cura parser can identify Cura gcode by LAYER comments', () => {

@@ -3,7 +3,7 @@ import { detectSlicer, parseSlicerMetadata, getAvailableParsers } from '../../pa
 import { GCodeCommand } from '../../parser/gcode-parser';
 
 function createCommand(src: string, comment?: string, params = {}): GCodeCommand {
-  return new GCodeCommand(src, 'g1', params, comment);
+  return new GCodeCommand(0, src, 'g1', params, comment);
 }
 
 test('detectSlicer detects PrusaSlicer', () => {

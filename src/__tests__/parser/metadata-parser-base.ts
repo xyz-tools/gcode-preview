@@ -14,7 +14,7 @@ class StubMetadataParser extends SlicerMetadataParser {
 }
 
 function comment(text: string): GCodeCommand {
-  return new GCodeCommand(`;${text}`, '', {}, text);
+  return new GCodeCommand(0, `;${text}`, '', {}, text);
 }
 
 describe('SlicerMetadataParser base class', () => {
