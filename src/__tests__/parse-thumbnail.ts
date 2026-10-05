@@ -41,10 +41,23 @@ test('not matching size should be invalid', () => {
   expect(thumb.isValid).toBeFalsy();
 });
 
-test('src should be a jpeg data URL of the base64 chars', () => {
+test('src should be a PNG data URL of the base64 chars', () => {
   const thumb = new Thumbnail('16x16', 16, 16, encodedImg.length);
   thumb.chars = encodedImg;
-  expect(thumb.src).toEqual('data:image/jpeg;base64,' + encodedImg);
+  expect(thumb.src).toEqual('data:image/png;base64,' + encodedImg);
+});
+
+test.each([
+  ['JPEG', '/9j/4AAQ', 'image/jpeg'],
+  ['QOI', 'cW9pZgAAAAEAAAABBAAA/wAA/wAAAAAAAAAB', 'image/qoi'],
+  ['unknown format', 'R0lGODlh', 'image/jpeg'],
+  ['empty payload', '', 'image/jpeg'],
+  ['short payload', 'iVA=', 'image/jpeg'],
+  ['malformed base64', '!!!!!!!!', 'image/jpeg']
+])('src should use the expected MIME type for %s', (_, chars, mimeType) => {
+  const thumb = new Thumbnail('1x1', 1, 1, chars.length);
+  thumb.chars = chars;
+  expect(thumb.src).toEqual(`data:${mimeType};base64,${chars}`);
 });
 
 test('well-formatted thumbnail should be parsed', () => {
@@ -55,6 +68,7 @@ test('well-formatted thumbnail should be parsed', () => {
   expect(parsed.metadata).not.toBeNull();
   expect(parsed.metadata.thumbnails).not.toBeNull();
   expect(Object.keys(parsed.metadata.thumbnails).length).toEqual(1);
+  expect(parsed.metadata.thumbnails['16x16'].src).toEqual('data:image/png;base64,' + encodedImg);
 });
 
 test('no thumbnail should be parsed if none present', () => {

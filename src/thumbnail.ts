@@ -1,5 +1,3 @@
-const prefix = 'data:image/jpeg;base64,';
-
 /**
  * Represents a thumbnail image extracted from G-code
  */
@@ -38,7 +36,21 @@ export class Thumbnail {
    * @returns Data URL for the thumbnail image
    */
   get src(): string {
-    return prefix + this.chars;
+    let mimeType = 'image/jpeg';
+    try {
+      // Decode only the header needed to identify the image format.
+      const header = atob(this.chars.slice(0, 8));
+      if (header.startsWith('\x89PNG')) {
+        mimeType = 'image/png';
+      } else if (header.startsWith('\xff\xd8\xff')) {
+        mimeType = 'image/jpeg';
+      } else if (header.startsWith('qoif')) {
+        mimeType = 'image/qoi';
+      }
+    } catch {
+      // Preserve the legacy JPEG fallback for malformed base64.
+    }
+    return `data:${mimeType};base64,${this.chars}`;
   }
 
   /**
