@@ -28,10 +28,20 @@ export class Path {
   /** Type of path movement */
   public travelType: PathType;
 
-  /** Width of extruded material, or `undefined` when slicer metadata provided none */
+  /**
+   * Width of extruded material, or `undefined` when slicer metadata provided none
+   * @remarks
+   * When the dimensions changed mid-path (see {@link updateDimensions}) this
+   * holds the most recent width; the earlier widths live per point.
+   */
   public extrusionWidth?: number;
 
-  /** Height of extruded line, or `undefined` when slicer metadata provided none */
+  /**
+   * Height of extruded line, or `undefined` when slicer metadata provided none
+   * @remarks
+   * When the dimensions changed mid-path (see {@link updateDimensions}) this
+   * holds the most recent height; the earlier heights live per point.
+   */
   public lineHeight?: number;
 
   /** Tool number used for this path */
@@ -42,6 +52,14 @@ export class Path {
 
   /** Internal storage for path vertices */
   private _vertices: number[];
+
+  /**
+   * Per-point [width, height] pairs, parallel to the vertices. Only allocated
+   * once the dimensions change mid-path; a path with uniform dimensions keeps
+   * the two scalars alone. `NaN` encodes "unknown" (no slicer metadata), so
+   * the render-time fallback still applies per point.
+   */
+  private _pointDims?: number[];
 
   /**
    * Creates a new Path instance
@@ -78,6 +96,56 @@ export class Path {
    */
   addPoint(x: number, y: number, z: number): void {
     this._vertices.push(x, y, z);
+    this._pointDims?.push(this.extrusionWidth ?? NaN, this.lineHeight ?? NaN);
+  }
+
+  /**
+   * Changes the extrusion dimensions for the points added from here on
+   * @param extrusionWidth - Width for the upcoming points, when known
+   * @param lineHeight - Height for the upcoming points, when known
+   * @remarks
+   * The first mid-path change switches the path to per-point dimensions: the
+   * points added so far keep the dimensions they were added under, and each
+   * later point records the dimensions current at its own add. This is what
+   * lets one path span slicer dimension changes (`;WIDTH:` / `;HEIGHT:`)
+   * instead of being broken apart at every change — the path used to be
+   * split here, which multiplied path counts on adaptive-layer-height files.
+   */
+  updateDimensions(extrusionWidth?: number, lineHeight?: number): void {
+    if (extrusionWidth === this.extrusionWidth && lineHeight === this.lineHeight) {
+      return;
+    }
+    if (this._pointDims === undefined) {
+      const dims = new Array<number>((this._vertices.length / 3) * 2);
+      for (let i = 0; i < dims.length; i += 2) {
+        dims[i] = this.extrusionWidth ?? NaN;
+        dims[i + 1] = this.lineHeight ?? NaN;
+      }
+      this._pointDims = dims;
+    }
+    this.extrusionWidth = extrusionWidth;
+    this.lineHeight = lineHeight;
+  }
+
+  /**
+   * Whether the extrusion dimensions changed somewhere along the path
+   */
+  get hasVaryingDimensions(): boolean {
+    return this._pointDims !== undefined;
+  }
+
+  /**
+   * Gets the line height at a given point of the path
+   * @param pointIndex - Index of the point (not the flat vertex offset)
+   * @returns The height the point was added under, or `undefined` when
+   * slicer metadata provided none
+   */
+  lineHeightAt(pointIndex: number): number | undefined {
+    if (this._pointDims === undefined) {
+      return this.lineHeight;
+    }
+    const height = this._pointDims[pointIndex * 2 + 1];
+    return Number.isNaN(height) ? undefined : height;
   }
 
   /**
@@ -90,16 +158,24 @@ export class Path {
    * its own highlight color while the rest of the path keeps another one.
    */
   splitLastSegment(): { body: Path | null; segment: Path } {
-    const segment = this.subPath(this._vertices.slice(this._vertices.length - 6));
-    const body = this._vertices.length > 6 ? this.subPath(this._vertices.slice(0, this._vertices.length - 3)) : null;
+    const pointCount = this._vertices.length / 3;
+    const segment = this.subPath(pointCount - 2, pointCount);
+    const body = pointCount > 2 ? this.subPath(0, pointCount - 1) : null;
     return { body, segment };
   }
 
-  /** Builds a path carrying this path's extrusion settings over a slice of vertices. */
-  private subPath(vertices: number[]): Path {
+  /** Builds a path carrying this path's extrusion settings over a range of points (end exclusive). */
+  private subPath(start: number, end: number): Path {
     const path = new Path(this.travelType, this.extrusionWidth, this.lineHeight, this.tool);
-    for (let i = 0; i < vertices.length; i += 3) {
-      path.addPoint(vertices[i], vertices[i + 1], vertices[i + 2]);
+    path._vertices = this._vertices.slice(start * 3, end * 3);
+    if (this._pointDims !== undefined) {
+      path._pointDims = this._pointDims.slice(start * 2, end * 2);
+      // The scalars describe "the points added from now on"; for a finished
+      // slice that is its last point's dimensions.
+      const lastWidth = path._pointDims[path._pointDims.length - 2];
+      const lastHeight = path._pointDims[path._pointDims.length - 1];
+      path.extrusionWidth = Number.isNaN(lastWidth) ? undefined : lastWidth;
+      path.lineHeight = Number.isNaN(lastHeight) ? undefined : lastHeight;
     }
     return path;
   }
@@ -143,9 +219,10 @@ export class Path {
    * @param opts.lineHeightFallback - Height for a path that carries none of its own
    * @returns BufferGeometry representing the path
    * @remarks
-   * Dimensions resolve per path: the path's own value (from slicer metadata)
+   * Dimensions resolve per point: the path's own value (from slicer metadata)
    * wins, then the caller's fallback (the renderer's global setting), then
-   * the built-in defaults.
+   * the built-in defaults. A path whose dimensions never changed resolves a
+   * single pair for all of its points.
    */
   geometry(opts: { extrusionWidthFallback?: number; lineHeightFallback?: number } = {}): BufferGeometry {
     if (this._vertices.length < 6) {
@@ -154,12 +231,28 @@ export class Path {
       return null;
     }
 
-    return new ExtrusionGeometry(
-      this.path(),
-      this.extrusionWidth ?? opts.extrusionWidthFallback ?? Path.DEFAULT_EXTRUSION_WIDTH,
-      this.lineHeight ?? opts.lineHeightFallback ?? Path.DEFAULT_LINE_HEIGHT,
-      4
-    );
+    const widthFallback = opts.extrusionWidthFallback ?? Path.DEFAULT_EXTRUSION_WIDTH;
+    const heightFallback = opts.lineHeightFallback ?? Path.DEFAULT_LINE_HEIGHT;
+
+    if (this._pointDims === undefined) {
+      return new ExtrusionGeometry(
+        this.path(),
+        this.extrusionWidth ?? widthFallback,
+        this.lineHeight ?? heightFallback,
+        4
+      );
+    }
+
+    const pointCount = this._vertices.length / 3;
+    const widths = new Float32Array(pointCount);
+    const heights = new Float32Array(pointCount);
+    for (let i = 0; i < pointCount; i++) {
+      const width = this._pointDims[i * 2];
+      const height = this._pointDims[i * 2 + 1];
+      widths[i] = Number.isNaN(width) ? widthFallback : width;
+      heights[i] = Number.isNaN(height) ? heightFallback : height;
+    }
+    return new ExtrusionGeometry(this.path(), widths, heights, 4);
   }
 
   /**

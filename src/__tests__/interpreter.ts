@@ -139,37 +139,47 @@ describe('extrusion dimension metadata (;WIDTH: / ;HEIGHT:)', () => {
     expect(job.paths[0].lineHeight).toEqual(0.16);
   });
 
-  test('a HEIGHT change mid-path breaks the path, continuing from the same point', () => {
+  test('a HEIGHT change mid-path folds into the path instead of breaking it', () => {
+    // A dimension change used to break the path; on adaptive-layer-height
+    // files that multiplied the path count and the geometry build time.
     const job = run([';HEIGHT:0.2', 'G1 X10 Y10 E1', 'G1 X20 Y10 E1', ';HEIGHT:0.3', 'G1 X30 Y10 E1']);
 
-    expect(job.paths.length).toEqual(2);
-    expect(job.paths[0].lineHeight).toEqual(0.2);
-    expect(job.paths[1].lineHeight).toEqual(0.3);
-    // the new path starts where the finished one ended
-    expect(job.paths[0].vertices.slice(-3)).toEqual([20, 10, 0]);
-    expect(job.paths[1].vertices.slice(0, 3)).toEqual([20, 10, 0]);
+    expect(job.paths.length).toEqual(1);
+    expect(job.paths[0].hasVaryingDimensions).toBe(true);
+    // per point: the seed and the first two moves at 0.2, the last move at 0.3
+    expect(job.paths[0].lineHeightAt(0)).toEqual(0.2);
+    expect(job.paths[0].lineHeightAt(2)).toEqual(0.2);
+    expect(job.paths[0].lineHeightAt(3)).toEqual(0.3);
+    expect(job.paths[0].vertices.length).toEqual(12);
   });
 
-  test('a WIDTH comment after the first moves breaks the path', () => {
+  test('a WIDTH comment after the first moves keeps the earlier points unknown', () => {
     const job = run(['G1 X10 Y10 E1', ';WIDTH:0.42', 'G1 X20 Y10 E1']);
 
-    expect(job.paths.length).toEqual(2);
-    expect(job.paths[0].extrusionWidth).toBeUndefined();
-    expect(job.paths[1].extrusionWidth).toEqual(0.42);
+    expect(job.paths.length).toEqual(1);
+    expect(job.paths[0].hasVaryingDimensions).toBe(true);
+    // the scalar reflects the most recent width; the earlier points carry none
+    expect(job.paths[0].extrusionWidth).toEqual(0.42);
+    expect(job.paths[0].lineHeightAt(0)).toBeUndefined();
   });
 
-  test('repeating the current value does not break the path', () => {
+  test('repeating the current value keeps the dimensions uniform', () => {
     const job = run([';WIDTH:0.45', ';HEIGHT:0.2', 'G1 X10 Y10 E1', ';WIDTH:0.45', ';HEIGHT:0.2', 'G1 X20 Y10 E1']);
 
     expect(job.paths.length).toEqual(1);
     expect(job.paths[0].extrusionWidth).toEqual(0.45);
+    expect(job.paths[0].hasVaryingDimensions).toBe(false);
   });
 
   test('an arc move also picks up the current dimensions', () => {
     const job = run(['G1 X10 Y10 E1', ';HEIGHT:0.12', 'G2 X20 Y10 I5 J0 E1']);
 
-    expect(job.paths.length).toEqual(2);
-    expect(job.paths[1].lineHeight).toEqual(0.12);
+    expect(job.paths.length).toEqual(1);
+    expect(job.paths[0].lineHeight).toEqual(0.12);
+    // every interpolated arc point carries the height set before the arc
+    const lastPoint = job.paths[0].vertices.length / 3 - 1;
+    expect(job.paths[0].lineHeightAt(lastPoint)).toEqual(0.12);
+    expect(job.paths[0].lineHeightAt(0)).toBeUndefined();
   });
 
   test('the metadata only applies when it has been assigned to the job', () => {
