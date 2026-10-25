@@ -56,10 +56,9 @@ through `types`, but it is no longer tested or supported: TypeScript 6
 deprecates it and TypeScript 7 removes it. Switch to `bundler` for frontend
 apps, or `node16`/`nodenext` for Node.
 
-On TypeScript 5.x with `@types/three` 0.180 or newer, also install
-`@webgpu/types` and add it to `compilerOptions.types` (or enable
-`skipLibCheck`): `@types/three` references WebGPU globals that TypeScript's
-DOM lib only includes from 6.0 onwards.
+Consumers compile with their own TypeScript, not the library's. The packaging
+test typechecks the published declarations on both TypeScript 6 and 5.9, in all
+three supported resolution modes, with no extra ambient type packages.
 
 For native browser modules, map `three` in an import map and load
 `dist/gcode-preview.es.js` as a module. When self-hosting, copy the **entire

@@ -89,15 +89,6 @@ for (const path of ['dist/gcode-preview.es.js', 'dist/gcode-preview.d.ts', 'src/
   );
   run(process.execPath, ['smoke.mjs']);
 
-  // Install the declaration dependencies explicitly, as a TypeScript consumer would.
-  run('npm', [
-    'install',
-    '--ignore-scripts',
-    '--no-audit',
-    '--no-fund',
-    `typescript@${lock.packages['node_modules/typescript'].version}`,
-    `@types/three@${pkg.devDependencies['@types/three']}`
-  ]);
   writeFileSync(
     join(consumer, 'consumer.ts'),
     `import { GCodePreview, Parser, type GCodePreviewOptions } from 'gcode-preview';
@@ -107,36 +98,55 @@ const x: number | undefined = new Parser().parseCommand('G1 X42')?.params.x;
 void x;
 `
   );
-  // node10 ("node") is deliberately not covered: it is deprecated in
+  // Consumers compile with their own TypeScript, not ours, so cover both lines:
+  // the one the repo builds with, and 5.x, which is what most downstream
+  // projects are still on. Bump the 5.x pin when the README stops naming it.
+  const consumerTypeScripts = [lock.packages['node_modules/typescript'].version, '5.9.3'];
+  // node10 ("node") is deliberately not covered on either: it is deprecated in
   // TypeScript 6 and stops working in 7.0.
-  for (const [moduleResolution, module] of [
-    ['node16', 'node16'],
-    ['nodenext', 'nodenext'],
-    ['bundler', 'esnext']
-  ]) {
-    console.log(`Packaging: typecheck with moduleResolution=${moduleResolution}`);
-    writeFileSync(
-      join(consumer, 'tsconfig.json'),
-      JSON.stringify({
-        compilerOptions: {
-          moduleResolution,
-          module,
-          target: 'es2020',
-          // TypeScript 6 no longer pulls in DOM implicitly; the consumer
-          // fixture constructs a canvas element.
-          lib: ['ES2020', 'DOM'],
-          strict: true,
-          noEmit: true,
-          // No ambient type packages: the DOM lib carries the WebGPU
-          // globals @types/three expects.
-          types: []
-        },
-        files: ['consumer.ts']
-      })
-    );
-    run(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.json']);
+  for (const version of consumerTypeScripts) {
+    // Install the declaration dependencies explicitly, as a consumer would.
+    run('npm', [
+      'install',
+      '--ignore-scripts',
+      '--no-audit',
+      '--no-fund',
+      `typescript@${version}`,
+      `@types/three@${pkg.devDependencies['@types/three']}`
+    ]);
+    for (const [moduleResolution, module] of [
+      ['node16', 'node16'],
+      ['nodenext', 'nodenext'],
+      ['bundler', 'esnext']
+    ]) {
+      console.log(`Packaging: typecheck with TypeScript ${version}, moduleResolution=${moduleResolution}`);
+      writeFileSync(
+        join(consumer, 'tsconfig.json'),
+        JSON.stringify({
+          compilerOptions: {
+            moduleResolution,
+            module,
+            target: 'es2020',
+            // TypeScript 6 no longer pulls in DOM implicitly; the consumer
+            // fixture constructs a canvas element.
+            lib: ['ES2020', 'DOM'],
+            strict: true,
+            noEmit: true,
+            // @types/three declares its own stub GPUTexture/GPUDevice, so no
+            // ambient @webgpu/types is needed on either TypeScript line.
+            types: []
+          },
+          files: ['consumer.ts']
+        })
+      );
+      run(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.json']);
+    }
   }
-  console.log('Packaging smoke test passed (runtime, exports, and three TypeScript resolution modes).');
+  console.log(
+    `Packaging smoke test passed (runtime, exports, and three TypeScript resolution modes on ${consumerTypeScripts.join(
+      ' and '
+    )}).`
+  );
   rmSync(consumer, { recursive: true, force: true });
 } catch (error) {
   console.error(`Packaging fixture and command log retained at ${consumer}`);
