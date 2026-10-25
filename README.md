@@ -273,21 +273,11 @@ If you are on **TypeScript 6** and have **`@types/three` 0.181.0 – 0.183.1**
 pinned, `tsc` reports around 50 duplicate-identifier errors (TS2403, TS2687,
 TS2717, TS6200) inside `node_modules/@webgpu/types/dist/index.d.ts`.
 
-Nothing in this library is involved — it neither imports nor re-exports a
-WebGPU type. Those `@types/three` versions reference `@webgpu/types` from
-`textures/ExternalTexture.d.ts`, which the core `three` index re-exports, so
-the reference is reachable from a plain `import 'three'` and the package's
-ambient `GPU*` globals collide with the ones TypeScript 6 moved into
-`lib.dom.d.ts`. It was fixed upstream in `@types/three` 0.184.0, which declares
-local stub interfaces instead.
-
 Any one of these resolves it:
 - upgrade `@types/three` to **0.184.0 or newer** (recommended),
 - or stay on `@types/three` **0.180.x or older**,
 - or set `"skipLibCheck": true` in your `tsconfig.json` — on by default in most
   scaffolded projects, which is why this rarely shows up.
-
-TypeScript 5.x is unaffected at every `@types/three` version.
 
 ## Sponsors
 
