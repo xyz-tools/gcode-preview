@@ -168,6 +168,21 @@
                 </div>
                 </section>
 
+                <section>
+                  <div class="controls">
+                    <label
+                      for="color-by-segment"
+                      title="Colors the stretches between pause commands (M400 U), as used for a manual filament change, instead of coloring per tool. Cycles through the extrusion colors below."
+                      >Color by print segment</label
+                    ><input
+                      type="checkbox"
+                      id="color-by-segment"
+                      v-model="settings.colorBySegment"
+                      :disabled="!settings.renderExtrusion"
+                    />
+                  </div>
+                </section>
+
                 <section class="extrusion-colors">
                   <div class="flex just-between"># of extrusion colors  <div class="controls">
                     <button @click="addColor">+</button>

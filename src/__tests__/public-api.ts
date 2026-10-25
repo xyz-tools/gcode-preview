@@ -134,6 +134,7 @@ describe('public API surface', () => {
       'renderExtrusion',
       'renderTravel',
       'renderTubes',
+      'colorBySegment',
       'lineWidth',
       'lineHeight',
       'extrusionWidth',

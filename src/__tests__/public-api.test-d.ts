@@ -59,6 +59,7 @@ describe('public API types', () => {
         | 'disableGradient'
         | 'extrusionWidth'
         | 'renderTubes'
+        | 'colorBySegment'
         | 'boundingBoxColor'
         | 'orthographic'
       >();
@@ -87,6 +88,7 @@ describe('public API types', () => {
       expectTypeOf<GCodePreviewOptions['renderExtrusion']>().toEqualTypeOf<boolean | undefined>();
       expectTypeOf<GCodePreviewOptions['renderTravel']>().toEqualTypeOf<boolean | undefined>();
       expectTypeOf<GCodePreviewOptions['renderTubes']>().toEqualTypeOf<boolean | undefined>();
+      expectTypeOf<GCodePreviewOptions['colorBySegment']>().toEqualTypeOf<boolean | undefined>();
       expectTypeOf<GCodePreviewOptions['disableGradient']>().toEqualTypeOf<boolean | undefined>();
       expectTypeOf<GCodePreviewOptions['orthographic']>().toEqualTypeOf<boolean | undefined>();
     });
@@ -121,6 +123,7 @@ describe('public API types', () => {
         | 'disableGradient'
         | 'extrusionWidth'
         | 'renderTubes'
+        | 'colorBySegment'
         | 'boundingBoxColor'
         | 'orthographic'
       >();
@@ -191,6 +194,7 @@ describe('public API types', () => {
         sm.renderExtrusion = true;
         sm.renderTravel = false;
         sm.renderTubes = true;
+        sm.colorBySegment = false;
         sm.disableGradient = false;
         sm.brightness = 1;
         sm.orthographic = false;

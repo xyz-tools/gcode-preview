@@ -18,6 +18,7 @@ export const defaultSettings = {
   lineWidth: 1,
   extrusionWidth: 0.4,
   colors: ['#ff0000', '#00ff00', '#0000ff', '#ffff00'],
+  colorBySegment: false,
   highlightTopLayer: false,
   topLayerColor: '#40BFBF',
   highlightLastSegment: false,

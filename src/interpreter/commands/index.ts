@@ -7,3 +7,4 @@ export { resetPositionShift } from './reset-position-shift';
 export { setAbsoluteExtrusion, setRelativeExtrusion } from './set-extrusion-mode';
 export { probe } from './probe';
 export { selectTool } from './select-tool';
+export { pause } from './pause';

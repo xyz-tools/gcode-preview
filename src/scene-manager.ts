@@ -73,6 +73,12 @@ export type SceneManagerOptions = {
   extrusionWidth?: number;
   /** Render paths as 3D tubes instead of lines */
   renderTubes?: boolean;
+  /**
+   * Color extrusions by the print segment they belong to — the stretches
+   * separated by pause commands (`M400 U<ms>`), as used for a manual filament
+   * change — instead of by tool. Cycles through the extrusionColor palette.
+   */
+  colorBySegment?: boolean;
   /** Color for the bounding box. If undefined, the bounding box is not rendered. */
   boundingBoxColor?: ColorRepresentation;
   /** Use an orthographic (flat, no perspective distortion) camera instead of the default perspective camera */
@@ -177,6 +183,7 @@ export class SceneManager {
     this._renderExtrusion = opts.renderExtrusion ?? this._renderExtrusion;
     this._renderTravel = opts.renderTravel ?? this._renderTravel;
     this.objectsManager.renderTubes = opts.renderTubes ?? this.objectsManager.renderTubes;
+    this.objectsManager.colorBySegment = opts.colorBySegment ?? this.objectsManager.colorBySegment;
 
     if (opts.boundingBoxColor !== undefined) {
       this.objectsManager.setBoundingBoxColor(new Color(opts.boundingBoxColor));
@@ -428,6 +435,21 @@ export class SceneManager {
   }
   set renderTubes(value: boolean) {
     this.objectsManager.setRenderTubes(value);
+  }
+
+  /**
+   * Whether extrusions are colored by print segment rather than by tool
+   * @remarks
+   * Segments are the stretches between pause commands (`M400 U<ms>`), which
+   * is how a manual filament change or an insert is announced. Each one takes
+   * the next color of the extrusionColor palette, cycling when the print has
+   * more segments than the palette has colors.
+   */
+  get colorBySegment(): boolean {
+    return this.objectsManager.colorBySegment;
+  }
+  set colorBySegment(value: boolean) {
+    this.objectsManager.setColorBySegment(value);
   }
 
   get boundingBoxMesh(): LineBox | undefined {
@@ -769,6 +791,7 @@ export class SceneManager {
     // read the settings off the outgoing manager before it is torn down
     const { lineWidth, lineHeight, extrusionWidth, renderTubes, ambientLight, directionalLight, brightness } =
       this.objectsManager;
+    const { colorBySegment } = this.objectsManager;
     const { buildVolume, boundingBoxColor, extrusionColor, travelColor } = this.objectsManager;
     // the bounding box belongs to the outgoing job, but the build volume does not:
     // it is recreated on the replacement manager from the same dimensions
@@ -790,6 +813,7 @@ export class SceneManager {
     // assign the fields directly: the fresh manager has no materials or geometry
     // yet, so the setters' uniform writes and rebuild requests have nothing to do
     this.objectsManager.renderTubes = renderTubes;
+    this.objectsManager.colorBySegment = colorBySegment;
     this.objectsManager.ambientLight = ambientLight;
     this.objectsManager.directionalLight = directionalLight;
     this.objectsManager.brightness = brightness;
@@ -945,7 +969,7 @@ export class SceneManager {
     if (!splitSegment) return;
 
     this.objectsManager.claimPaths([lastPath]);
-    const bodyColor = topColor ?? this.objectsManager.colorForTool(lastPath.tool);
+    const bodyColor = topColor ?? this.objectsManager.colorForPath(lastPath);
     const { body, segment } = lastPath.splitLastSegment();
     if (body) this.objectsManager.renderExtrusionsInColor([body], bodyColor);
     this.objectsManager.renderExtrusionsInColor([segment], segColor);
