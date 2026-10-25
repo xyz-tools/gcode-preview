@@ -37,6 +37,15 @@ renderTubes: true   // extrusion-shaped geometry (default)
 renderTubes: false  // flat lines
 ```
 
+Lines are shaded slightly differently per layer, which gives a flat render some
+depth. `disableGradient` turns that off (it applies to line rendering only —
+tubes are never gradient-shaded):
+
+```js
+disableGradient: false  // per-layer shading (default)
+disableGradient: true   // one flat colour
+```
+
 <img src="media/tubes-lines.png" width="49%" alt="3DBenchy drawn as flat lines"> <img src="media/tubes-tubes.png" width="49%" alt="3DBenchy drawn as extrusion tubes">
 
 ---
@@ -86,7 +95,7 @@ topLayerColor: '#ffffff',
 lastSegmentColor: '#ff3b30'
 ```
 
-<img src="media/highlight.png" width="60%" alt="3DBenchy stopped mid-print, with the top layer in white and the last segment in red">
+<img src="media/highlight.png" width="60%" alt="A cat model stopped mid-print, with the top layer in white and the last segment in red">
 
 ---
 
@@ -149,17 +158,20 @@ or lining a part up against the plate.
 orthographic: true
 ```
 
-<img src="media/camera-perspective.png" width="49%" alt="A vase seen through the perspective camera"> <img src="media/camera-orthographic.png" width="49%" alt="The same vase through the orthographic camera">
+<img src="media/camera-perspective.png" width="49%" alt="A cat on the build plate through the perspective camera, the grid lines converging towards the back"> <img src="media/camera-orthographic.png" width="49%" alt="The same scene through the orthographic camera, every grid cell the same size">
 
 ---
 
 ## CNC and laser toolpaths
 
-**Added in v3**
+**Changed in v3**
 
 G-code that never extrudes still renders. With `renderTravel: true` the whole
 toolpath is visible, so CNC jobs, laser cuts and pen plots work the same way a
-print does.
+print does. v3 also interprets the commands these files lean on and 2.x ignored
+— `G20`/`G21` for units, `G28` for homing, `G92` for setting position, and the
+`G31`/`G38.x` probe family — so the toolpath lands where the machine would put
+it.
 
 ```js
 renderTravel: true,
@@ -167,25 +179,3 @@ travelColor: '#30d158'
 ```
 
 <img src="media/cnc-easel.png" width="49%" alt="A CNC engraving toolpath spelling CKC"> <img src="media/cnc-mach3.png" width="49%" alt="A Mach3 CNC toolpath">
-
----
-
-## Layer-by-layer playback
-
-**Changed in v3**
-
-Stepping `endLayer` from the first layer to the last replays the print. The
-animation below is nothing but that setter in a loop — the same thing a layer
-slider does, and roughly what you see while a large file is still parsing,
-since the preview draws as it goes (`liveRenderInterval`, 250 ms by default).
-
-![A 3DBenchy built up layer by layer](media/grow.gif)
-
----
-
-## Orbit, pan and zoom
-
-The canvas comes with orbit controls wired up — drag to rotate, scroll to zoom,
-right-drag to pan. `initialCameraPosition` sets where the camera starts.
-
-![The tree frog rotating on the build plate](media/orbit.gif)

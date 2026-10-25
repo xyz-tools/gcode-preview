@@ -52,6 +52,19 @@ G-code can also be streamed in and rendered progressively:
 
 ## Demo's
 
+### In action
+
+Stepping `endLayer` from the first layer to the last replays the print — the
+same thing the layer slider does, and roughly what you see while a large file is
+still streaming in:
+
+![A 3DBenchy built up layer by layer](media/grow.gif)
+
+The canvas comes with orbit controls wired up: drag to rotate, scroll to zoom,
+right-drag to pan.
+
+![The tree frog rotating on the build plate](media/orbit.gif)
+
 ### Full demo
 
 [<img title="click to see the demo" width="320" alt="image" src="https://github.com/user-attachments/assets/4e663193-0a01-4fe2-864b-a8ffb18cbcd8">](https://gcode-preview.web.app/)
