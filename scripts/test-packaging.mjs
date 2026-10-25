@@ -96,8 +96,7 @@ for (const path of ['dist/gcode-preview.es.js', 'dist/gcode-preview.d.ts', 'src/
     '--no-audit',
     '--no-fund',
     `typescript@${lock.packages['node_modules/typescript'].version}`,
-    `@types/three@${pkg.devDependencies['@types/three']}`,
-    `@webgpu/types@${pkg.devDependencies['@webgpu/types']}`
+    `@types/three@${pkg.devDependencies['@types/three']}`
   ]);
   writeFileSync(
     join(consumer, 'consumer.ts'),
@@ -108,8 +107,9 @@ const x: number | undefined = new Parser().parseCommand('G1 X42')?.params.x;
 void x;
 `
   );
+  // node10 ("node") is deliberately not covered: it is deprecated in
+  // TypeScript 6 and stops working in 7.0.
   for (const [moduleResolution, module] of [
-    ['node', 'esnext'],
     ['node16', 'node16'],
     ['nodenext', 'nodenext'],
     ['bundler', 'esnext']
@@ -122,16 +122,21 @@ void x;
           moduleResolution,
           module,
           target: 'es2020',
+          // TypeScript 6 no longer pulls in DOM implicitly; the consumer
+          // fixture constructs a canvas element.
+          lib: ['ES2020', 'DOM'],
           strict: true,
           noEmit: true,
-          types: ['@webgpu/types']
+          // No ambient type packages: the DOM lib carries the WebGPU
+          // globals @types/three expects.
+          types: []
         },
         files: ['consumer.ts']
       })
     );
     run(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.json']);
   }
-  console.log('Packaging smoke test passed (runtime, exports, and four TypeScript resolution modes).');
+  console.log('Packaging smoke test passed (runtime, exports, and three TypeScript resolution modes).');
   rmSync(consumer, { recursive: true, force: true });
 } catch (error) {
   console.error(`Packaging fixture and command log retained at ${consumer}`);
