@@ -154,6 +154,21 @@ describe('SceneManager properties', () => {
     });
   });
 
+  describe('colorBySegment', () => {
+    test('reads through to the objects manager', () => {
+      expect(sceneManager.colorBySegment).toBe(objectsManager(sceneManager).colorBySegment);
+    });
+
+    test('asks the objects manager to color by print segment', () => {
+      const spy = vi.spyOn(objectsManager(sceneManager), 'setColorBySegment');
+
+      sceneManager.colorBySegment = true;
+
+      expect(spy).toHaveBeenCalledWith(true);
+      expect(sceneManager.colorBySegment).toBe(true);
+    });
+  });
+
   describe('colors', () => {
     test('extrusionColor recolors without rebuilding', () => {
       const before = extrusionGroup(sceneManager).children[0];
