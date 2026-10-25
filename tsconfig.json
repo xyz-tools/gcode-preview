@@ -24,9 +24,19 @@
     // public-API type pins.
     "strict": false,
     "noImplicitAny": true,
-    // TypeScript 6's DOM lib declares the WebGPU globals (GPUTexture and
-    // friends) that @types/three references from ExternalTexture.d.ts, so the
-    // @webgpu/types package it used to need is no longer installed.
+    // Don't type-check declaration files. We compile against whichever
+    // @types/three the matrix installs, and those packages carry ambient
+    // declarations we neither control nor use: 0.181.0 through 0.183.1
+    // reference @webgpu/types from textures/ExternalTexture.d.ts, which the
+    // core index re-exports, so its GPU* globals collide with the ones
+    // TypeScript 6 added to lib.dom.d.ts. Upstream dropped that reference in
+    // 0.184.0, but the affected versions stay inside our supported three.js
+    // range. Errors inside node_modules are not ours to fix and say nothing
+    // about this source.
+    "skipLibCheck": true,
+    // Keep auto-inclusion to the @types/* we actually vendor or depend on.
+    // This does not stop a /// <reference types="..." /> from resolving —
+    // skipLibCheck above is what keeps third-party ambient types quiet.
     "typeRoots": ["types", "node_modules/@types"]
   },
   "files": ["src/gcode-preview.ts"]
