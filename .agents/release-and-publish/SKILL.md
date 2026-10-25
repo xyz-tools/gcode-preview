@@ -21,9 +21,11 @@ prerelease builds both go through it — the only difference is the version numb
   prerelease version (`3.1.0-alpha.1`) publishes to its prerelease id (`alpha`).
 - `.github/workflows/announce-release-in-discord.yml` runs on
   `release: [published]` → posts the release body to Discord. It uses
-  `published`, **not** `released`, so **every release pings Discord
-  `@everyone`** — alphas and prereleases included. That's intentional: alphas
-  are meant to be seen and tested.
+  `published`, **not** `released`, so **every release is announced** — alphas
+  and prereleases included, since alphas are meant to be found and tested.
+  The `@everyone` ping is separate: `content` is set only when the release is
+  **not** a prerelease, so **stable releases ping `@everyone` and alphas
+  announce quietly**.
 - `.github/workflows/firebase-hosting-merge.yml` runs on **push to `develop`** →
   deploys the demo to https://gcode-preview.web.app (`predeploy` + `typedoc`).
 
@@ -105,8 +107,8 @@ title **and** the full curated body, exactly as it will appear on the Releases
 page — and **ask for feedback**:
 
 > Here's the full release as it will be published. Anything to change before I
-> publish it? (Remember: every release — alphas included — broadcasts this
-> to Discord `@everyone`.)
+> publish it? (Remember: every release — alphas included — is broadcast to
+> Discord; a stable one also pings `@everyone`.)
 
 **Do not proceed to Step 5 until the user approves.** If they request changes,
 edit the notes and show the updated full release again — repeat until they're
@@ -114,21 +116,22 @@ happy. Only once they've explicitly signed off do you publish.
 
 ## Step 5 — Publish the release
 
-Once the notes are ready, publish it. Both kinds publish to npm and both ping
-Discord; the flags only affect how GitHub labels the release:
+Once the notes are ready, publish it. Both kinds publish to npm and both are
+announced in Discord; `--prerelease` is also what suppresses the `@everyone`
+ping:
 
 ```bash
-# Stable release — marked latest:
+# Stable release — marked latest, pings Discord @everyone:
 gh release create <tag> --title "<title>" --notes-file <notes.md> --latest --verify-tag
 
-# Alpha / prerelease — marked pre-release:
+# Alpha / prerelease — marked pre-release, announced without the ping:
 gh release create <tag> --title "<title>" --notes-file <notes.md> --prerelease --verify-tag
 ```
 
 The npm dist-tag comes from the version number, not these flags — a
 `-alpha.N` version always lands on the `alpha` tag even though the publish
 happens via a GitHub Release. Mark alpha releases `--prerelease` so GitHub shows
-them correctly.
+them correctly **and** so the Discord post doesn't ping `@everyone`.
 
 After publishing, confirm:
 - The **Node.js Package** workflow (npm-publish) went green and the version is
@@ -204,8 +207,9 @@ Notes on the template:
   notes do, especially first-time and external contributors.
 - Always keep the **Full Changelog** compare link at the bottom; `gh release
   create --generate-notes` adds it automatically — reuse it.
-- Because this hits Discord `@everyone`, proofread before publishing; edits after
-  the fact won't re-notify but the stale version stays broadcast.
+- Because this is broadcast to Discord (and pings `@everyone` on a stable
+  release), proofread before publishing; edits after the fact won't re-notify
+  but the stale version stays broadcast.
 
 ## Notes
 
