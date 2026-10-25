@@ -43,8 +43,6 @@ renderTubes: false  // flat lines
 
 ## Arc moves (G2 / G3)
 
-**Changed in v3**
-
 Arcs are interpolated into segments rather than skipped or flattened into
 chords you can see. `arcChordTolerance` controls how closely the interpolation
 follows the true arc — smaller means smoother and more segments.
@@ -53,7 +51,10 @@ follows the true arc — smaller means smoother and more segments.
 arcChordTolerance: 0.05 // mm, the default
 ```
 
-<img src="media/arcs-1.png" width="49%" alt="A screw thread printed with arc moves"> <img src="media/arcs-2.png" width="49%" alt="Close-up of the arc interpolation on the thread">
+A single layer of a screw thread, seen straight down through the orthographic
+camera — the curves are all `G2`/`G3` moves:
+
+<img src="media/arcs-topdown.png" width="60%" alt="Top-down orthographic view of one layer of a screw thread, its concentric arc passes drawn as curves">
 
 ---
 
