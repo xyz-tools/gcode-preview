@@ -3,8 +3,6 @@ A simple [G-code](https://en.wikipedia.org/wiki/G-code) parser & viewer lib with
 
 Join us on <a href="https://discord.gg/w2bsGRE6S4">discord</a>
 
-## New org: XYZ Tools
-11-11-2024 This repo was moved to a brand new org which is a collaboration between @remcoder and @sophiedeziel for everything 3D printing related.
 
 ## Feature summary
 - multi-color
@@ -278,6 +276,11 @@ Any one of these resolves it:
 - or stay on `@types/three` **0.180.x or older**,
 - or set `"skipLibCheck": true` in your `tsconfig.json` — on by default in most
   scaffolded projects, which is why this rarely shows up.
+
+## Brought to you by XYZ Tools
+11-11-2024 This repo was moved to a brand new org which is a collaboration between @remcoder and @sophiedeziel for everything 3D printing related.
+
+![logo](https://avatars.githubusercontent.com/u/188104494?s=200&v=4)
 
 ## Sponsors
 
