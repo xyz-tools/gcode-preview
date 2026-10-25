@@ -1,4 +1,4 @@
-# GCode Preview [![npm version](http://img.shields.io/npm/v/gcode-preview.svg?style=flat)](https://npmjs.org/package/gcode-preview "View this project on npm") [![npm alpha](https://img.shields.io/npm/v/gcode-preview/alpha.svg?style=flat&label=alpha)](https://www.npmjs.com/package/gcode-preview?activeTab=versions "Latest alpha on npm") [![MIT license](http://img.shields.io/badge/license-MIT-brightgreen.svg)](http://opensource.org/licenses/MIT)
+# GCode Preview [![npm version](http://img.shields.io/npm/v/gcode-preview.svg?style=flat)](https://npmjs.org/package/gcode-preview "View this project on npm") [![MIT license](http://img.shields.io/badge/license-MIT-brightgreen.svg)](http://opensource.org/licenses/MIT)
 A simple [G-code](https://en.wikipedia.org/wiki/G-code) parser & viewer lib with 3D printing in mind. Written in Typescript.
 
 Join us on <a href="https://discord.gg/w2bsGRE6S4">discord</a>
@@ -51,8 +51,15 @@ package path is `gcode-preview/package.json`. Deep imports such as
 legacy UMD build / `GCodePreview` browser global has been removed.
 
 TypeScript supports `node16`, `nodenext`, and `bundler` module resolution.
-Legacy `moduleResolution: "node"` can still resolve the root import through
-`types`; no `typesVersions` mapping is needed for the current root-only API.
+Legacy `moduleResolution: "node"` (`node10`) currently resolves the root import
+through `types`, but it is no longer tested or supported: TypeScript 6
+deprecates it and TypeScript 7 removes it. Switch to `bundler` for frontend
+apps, or `node16`/`nodenext` for Node.
+
+On TypeScript 5.x with `@types/three` 0.180 or newer, also install
+`@webgpu/types` and add it to `compilerOptions.types` (or enable
+`skipLibCheck`): `@types/three` references WebGPU globals that TypeScript's
+DOM lib only includes from 6.0 onwards.
 
 For native browser modules, map `three` in an import map and load
 `dist/gcode-preview.es.js` as a module. When self-hosting, copy the **entire
