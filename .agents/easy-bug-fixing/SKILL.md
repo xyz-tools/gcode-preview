@@ -21,9 +21,17 @@ Triage GitHub issues labeled `bug` and fix only obvious, reproducible, contained
 
 1. List open issues labeled `bug`, oldest first unless repository triage conventions say otherwise.
 2. Read each issue's title, description, labels, assignees, comments, and linked PRs.
-3. Skip if already assigned/claimed, actively being worked on, a linked fix is in progress, or a maintainer decision is needed (explicitly or implicitly).
-4. Skip issues outside the skill's low-risk scope.
-5. Before commenting or changing code, check whether the bug may already be fixed on the default branch.
+3. **Check every candidate for an existing PR first, and leave the issue alone if there is one.** An open PR that references the issue means the bug is taken, whether it is a full fix, a partial fix, or only a failing test. Check both directions: PRs whose title or body mentions the issue, and PRs that cross-reference it in the issue timeline.
+
+   ```bash
+   gh api "repos/{owner}/{repo}/issues/<N>/timeline" --paginate \
+     --jq '.[] | select(.event=="cross-referenced") | select(.source.issue.pull_request != null) | "PR #\(.source.issue.number) (\(.source.issue.state)): \(.source.issue.title)"'
+   ```
+
+   A closed or merged PR is not by itself a reason to skip, but read it before continuing: a closed attempt often explains why the obvious fix is wrong, and a merged one may mean the bug is already gone.
+4. Skip if already assigned/claimed, actively being worked on, or a maintainer decision is needed (explicitly or implicitly).
+5. Skip issues outside the skill's low-risk scope.
+6. Before commenting or changing code, check whether the bug may already be fixed on the default branch.
 
 ## 2. Reproduce
 
