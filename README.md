@@ -1,4 +1,4 @@
-# GCode Preview [![npm version](http://img.shields.io/npm/v/gcode-preview.svg?style=flat)](https://npmjs.org/package/gcode-preview "View this project on npm") [![MIT license](http://img.shields.io/badge/license-MIT-brightgreen.svg)](http://opensource.org/licenses/MIT)
+# GCode Preview [![npm version](http://img.shields.io/npm/v/gcode-preview.svg?style=flat)](https://npmjs.org/package/gcode-preview "View this project on npm") [![npm alpha](https://img.shields.io/npm/v/gcode-preview/alpha.svg?style=flat&label=alpha)](https://www.npmjs.com/package/gcode-preview?activeTab=versions "Latest alpha on npm") [![MIT license](http://img.shields.io/badge/license-MIT-brightgreen.svg)](http://opensource.org/licenses/MIT)
 A simple [G-code](https://en.wikipedia.org/wiki/G-code) parser & viewer lib with 3D printing in mind. Written in Typescript.
 
 Join us on <a href="https://discord.gg/w2bsGRE6S4">discord</a>
