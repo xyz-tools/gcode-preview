@@ -27,28 +27,6 @@ npm run dev
 This runs the demo app which is fairly complete in using the library's features.
 If you don't need the demo app, just run `npm run dev:watch`.
 
-## Dependency updates
-
-A dependency version has to have been on npm for **at least 48 hours** before we
-install it. Compromised packages are usually caught and unpublished within a day
-or two, so waiting out that window costs us nothing and catches the bulk of
-supply-chain attacks. A high-severity advisory is not a reason to skip it.
-
-`.npmrc` sets `min-release-age=2` (the unit is days), so npm enforces this for
-you: `npm install` and `npm update` will not resolve a version that is too young.
-It needs npm >= 11.6, which is what the Node version in `.nvmrc` ships.
-
-`npm ci` installs the lockfile verbatim and is not filtered, so CI and publishing
-keep working regardless. The gate bites where it should — at the point someone
-picks a new version.
-
-If a version is blocked and you genuinely cannot wait, say so in the PR rather
-than editing `.npmrc`; `min-release-age-exclude` exists for that, per package.
-
-Keep it to one dependency upgrade per PR. If refreshing the lockfile drags a
-second package forward because its range allowed it, pin that one back to the
-version on `develop` and give it its own PR.
-
 ## Branches
 
 `develop` is the default and integration branch. Open your PR against `develop` —
