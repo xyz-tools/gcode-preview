@@ -6,7 +6,7 @@ import { setAbsoluteExtrusion, setRelativeExtrusion } from '../../../interpreter
 import { Job } from '../../../job';
 
 test('M83 switches E parameters to relative distances', () => {
-  const command = new GCodeCommand('M83', 'm83', {});
+  const command = new GCodeCommand(0, 'M83', 'm83', {});
   const job = new Job();
 
   setRelativeExtrusion(command, job);
@@ -15,7 +15,7 @@ test('M83 switches E parameters to relative distances', () => {
 });
 
 test('M82 switches E parameters back to absolute positions', () => {
-  const command = new GCodeCommand('M82', 'm82', {});
+  const command = new GCodeCommand(0, 'M82', 'm82', {});
   const job = new Job();
   job.state.relativeExtrusion = true;
 

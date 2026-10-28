@@ -9,7 +9,7 @@ describe('probe (G31)', () => {
   const run = (gcode: string) => new Interpreter().execute(new Parser().parseGCode(gcode).commands);
 
   test('a downward Z probe crossing the origin plane is assumed to trigger at Z0', () => {
-    const command = new GCodeCommand('G31 Z-11.8', 'g31', { z: -11.8 });
+    const command = new GCodeCommand(0, 'G31 Z-11.8', 'g31', { z: -11.8 });
     const job = new Job();
     job.state.z = 0.2;
 
@@ -20,7 +20,7 @@ describe('probe (G31)', () => {
   });
 
   test('a probe to a target above the origin plane travels to the commanded target', () => {
-    const command = new GCodeCommand('G31 Z2', 'g31', { z: 2 });
+    const command = new GCodeCommand(0, 'G31 Z2', 'g31', { z: 2 });
     const job = new Job();
     job.state.z = 5;
 
@@ -30,7 +30,7 @@ describe('probe (G31)', () => {
   });
 
   test('a probe starting at or below the origin plane travels to the commanded target', () => {
-    const command = new GCodeCommand('G31 Z-5', 'g31', { z: -5 });
+    const command = new GCodeCommand(0, 'G31 Z-5', 'g31', { z: -5 });
     const job = new Job();
     job.state.z = -1;
 
@@ -40,7 +40,7 @@ describe('probe (G31)', () => {
   });
 
   test('X/Y targets are kept as commanded while Z is clamped', () => {
-    const command = new GCodeCommand('G31 X1 Y2 Z-3', 'g31', { x: 1, y: 2, z: -3 });
+    const command = new GCodeCommand(0, 'G31 X1 Y2 Z-3', 'g31', { x: 1, y: 2, z: -3 });
     const job = new Job();
     job.state.z = 1;
 
@@ -52,7 +52,7 @@ describe('probe (G31)', () => {
   });
 
   test('an X-only probe travels to the target without touching Z', () => {
-    const command = new GCodeCommand('G31 X5', 'g31', { x: 5 });
+    const command = new GCodeCommand(0, 'G31 X5', 'g31', { x: 5 });
     const job = new Job();
     job.state.z = 3;
 
@@ -63,7 +63,7 @@ describe('probe (G31)', () => {
   });
 
   test('a G31 without axis words is ignored (Marlin dock-sled form)', () => {
-    const command = new GCodeCommand('G31', 'g31', {});
+    const command = new GCodeCommand(0, 'G31', 'g31', {});
     const job = new Job();
 
     probe(command, job);
@@ -74,7 +74,7 @@ describe('probe (G31)', () => {
   });
 
   test('a G31 with a P word is ignored (RepRapFirmware set-trigger form)', () => {
-    const command = new GCodeCommand('G31 P500 X0 Y0 Z2.6', 'g31', { p: 500, x: 0, y: 0, z: 2.6 });
+    const command = new GCodeCommand(0, 'G31 P500 X0 Y0 Z2.6', 'g31', { p: 500, x: 0, y: 0, z: 2.6 });
     const job = new Job();
     job.state.z = 5;
 
