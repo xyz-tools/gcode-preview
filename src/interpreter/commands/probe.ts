@@ -13,7 +13,7 @@ import type { CommandHandler } from '../../interpreter';
  * which makes the G92 re-zeroes that follow a touch-off converge each cycle
  * exactly like on a real machine, and keeps a repeated probe without a lift
  * sitting on the plane instead of diving through it (see #437). Other probes —
- * including from an un-homed Z, whose real position is unknown — render as a
+ * including from an unknown or assumed Z origin — render as a
  * plain travel to the commanded target. The trigger is assumed on the Z axis only; X/Y targets
  * are kept as commanded. A G31 carrying a P word is RepRapFirmware's
  * set-trigger-values form, not a move, and is ignored; one without any axis
@@ -31,26 +31,30 @@ export const probe: CommandHandler = (command, job) => {
     return;
   }
 
-  const { positionShift } = state;
-  const x = params.x === undefined ? undefined : toMillimeters(params.x, units)! + positionShift.x;
-  const y = params.y === undefined ? undefined : toMillimeters(params.y, units)! + positionShift.y;
-  let z = params.z === undefined ? undefined : toMillimeters(params.z, units)! + positionShift.z;
+  const x = toMillimeters(params.x, units);
+  const y = toMillimeters(params.y, units);
+  const z = toMillimeters(params.z, units);
 
   if (x === undefined && y === undefined && z === undefined) {
     return;
   }
 
-  if (z !== undefined && z < 0 && state.z !== undefined && state.z >= 0) {
-    z = 0;
-  }
-
   job.stats.points++;
 
+  const fromZ = state.z;
+  const hasKnownZ = state.hasKnownZ;
   const currentPath = job.continuePath(PathType.Travel);
 
-  state.x = x ?? state.x;
-  state.y = y ?? state.y;
-  state.z = z ?? state.z;
+  if (state.positioning === 'relative') {
+    state.moveBy(x, y, z);
+  } else {
+    state.moveTo(x, y, z);
+  }
+
+  // Clamp the resolved physical target, never the raw relative offset.
+  if (z !== undefined && hasKnownZ && fromZ! >= 0 && state.z! < 0) {
+    state.z = 0;
+  }
 
   const pos = job.resolvePosition();
   currentPath.addPoint(pos.x, pos.y, pos.z);

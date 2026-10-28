@@ -7,12 +7,14 @@ import {
   setInchUnits,
   setMillimeterUnits,
   home,
-  setPosition,
   resetPositionShift,
+  selectTool,
+  setAbsolutePositioning,
+  setRelativePositioning,
   setAbsoluteExtrusion,
   setRelativeExtrusion,
-  probe,
-  selectTool
+  setPosition,
+  probe
 } from './interpreter/commands';
 
 /** Options for the {@link Interpreter} */
@@ -57,6 +59,8 @@ export const handlers: ReadonlyMap<string, CommandHandler> = new Map<string, Com
   ['g38.3', probe],
   ['g38.4', probe],
   ['g38.5', probe],
+  ['g90', setAbsolutePositioning],
+  ['g91', setRelativePositioning],
   ['g92', setPosition],
   ['g92.1', resetPositionShift],
   ['m82', setAbsoluteExtrusion],
