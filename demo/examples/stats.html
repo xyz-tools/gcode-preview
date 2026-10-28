@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Print stats — gcode-preview</title>
+    <link rel="stylesheet" href="runner.css" />
+  </head>
+  <body>
+    <header>
+      <a href="index.html">← all examples</a>
+      <h1>Print stats</h1>
+      <p>Build your own info panel out of what the job knows: layers, filament, bounding box, retractions.</p>
+    </header>
+
+    <main>
+      <section class="code">
+        <div class="toolbar">
+          <button id="run" class="primary">Run</button>
+          <button id="reset">Reset</button>
+          <kbd>⌘/Ctrl + ↵</kbd>
+          <span id="status"></span>
+        </div>
+        <textarea spellcheck="false" aria-label="Example code"></textarea>
+        <details>
+          <summary>The rest of the page</summary>
+          <pre id="setup"></pre>
+        </details>
+      </section>
+      <iframe title="Example output"></iframe>
+    </main>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../lib/three/build/three.module.min.js",
+          "gcode-preview": "../dist/gcode-preview.es.js"
+        }
+      }
+    </script>
+
+    <template id="output">
+      <style>
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #stats {
+          position: fixed; top: 12px; left: 12px; padding: 10px 12px;
+          background: rgba(0, 0, 0, 0.65); border-radius: 6px; color: #fff;
+          font: 13px/1.6 system-ui, sans-serif;
+        }
+        #stats table { border-spacing: 0; }
+        #stats th { padding-right: 16px; text-align: left; font-weight: 400; opacity: 0.7; }
+        #stats td { text-align: right; font-variant-numeric: tabular-nums; }
+      </style>
+      <canvas></canvas>
+      <div id="stats">Parsing…</div>
+    </template>
+
+    <script type="text/plain" id="code">
+      import { GCodePreview } from 'gcode-preview';
+
+      const canvas = document.querySelector('canvas');
+      const preview = new GCodePreview({
+        canvas,
+        extrusionColor: '#95dfa1',
+        extrusionWidth: 0.45,
+        lineHeight: 0.2,
+        buildVolume: { x: 180, y: 180, z: 0 },
+        backgroundColor: '#141414'
+      });
+
+      const gcode = await fetch('../gcodes/3DBenchy.gcode').then((response) => response.text());
+      await preview.processGCode(gcode);
+
+      // All of this is accumulated while the job runs, so read it once the G-code
+      // has been processed: `stats` is tallied by the command handlers, and
+      // `boundingBox` grows with every point added to the job.
+      const { stats, boundingBox } = preview.job;
+      const size = boundingBox.size;
+      // extrusionDistance is filament length, not how far the nozzle moved.
+      const volume = (Math.PI * (1.75 / 2) ** 2 * stats.extrusionDistance) / 1000;
+
+      const rows = {
+        Slicer: preview.parser.metadata.slicerName ?? 'unknown',
+        Layers: preview.countLayers,
+        Paths: `${preview.job.extrusions.length.toLocaleString()} extrusion / ${preview.job.travels.length.toLocaleString()} travel`,
+        Points: stats.points.toLocaleString(),
+        Filament: `${(stats.extrusionDistance / 1000).toFixed(2)} m · ${volume.toFixed(1)} cm³`,
+        Retractions: stats.retractions,
+        Size: `${size.x.toFixed(1)} × ${size.y.toFixed(1)} × ${size.z.toFixed(1)} mm`
+      };
+
+      document.querySelector('#stats').innerHTML = `<table>${Object.entries(rows)
+        .map(([label, value]) => `<tr><th>${label}</th><td>${value}</td></tr>`)
+        .join('')}</table>`;
+
+      // The renderer is sized once, at construction. Nothing in the library
+      // watches the canvas, so tell it when the canvas changes size.
+      new ResizeObserver(() => preview.sceneManager.resize()).observe(canvas);
+
+      // Keep the viewpoint across a reload — and so across Run, which loads
+      // the page again. saveCamera()/loadCamera() persist position, rotation,
+      // zoom and orbit target to localStorage.
+      preview.sceneManager.loadCamera();
+      preview.sceneManager.controls.addEventListener('end', () => preview.sceneManager.saveCamera());
+    </script>
+
+    <script type="module" src="runner.js"></script>
+  </body>
+</html>

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Minimal — gcode-preview</title>
+    <link rel="stylesheet" href="runner.css" />
+  </head>
+  <body>
+    <header>
+      <a href="index.html">← all examples</a>
+      <h1>Minimal</h1>
+      <p>The smallest thing that renders: a canvas, a color, and a handful of G-code moves.</p>
+    </header>
+
+    <main>
+      <section class="code">
+        <div class="toolbar">
+          <button id="run" class="primary">Run</button>
+          <button id="reset">Reset</button>
+          <kbd>⌘/Ctrl + ↵</kbd>
+          <span id="status"></span>
+        </div>
+        <textarea spellcheck="false" aria-label="Example code"></textarea>
+        <details>
+          <summary>The rest of the page</summary>
+          <pre id="setup"></pre>
+        </details>
+      </section>
+      <iframe title="Example output"></iframe>
+    </main>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../lib/three/build/three.module.min.js",
+          "gcode-preview": "../dist/gcode-preview.es.js"
+        }
+      }
+    </script>
+
+    <template id="output">
+      <style>
+        canvas { display: block; width: 100vw; height: 100vh; }
+      </style>
+      <canvas></canvas>
+    </template>
+
+    <script type="text/plain" id="code">
+      import { GCodePreview } from 'gcode-preview';
+
+      const canvas = document.querySelector('canvas');
+
+      const preview = new GCodePreview({
+        canvas,
+        extrusionColor: 'hotpink',
+        // Extrusions are solid tubes, sized in mm. Real prints set these from
+        // the slicer's numbers; this one is drawn fat so it reads as a letter.
+        extrusionWidth: 5,
+        lineHeight: 3,
+        // Not required — the bed gives the model something to sit on.
+        buildVolume: { x: 100, y: 100, z: 0 }
+      });
+
+      // A G, drawn as one continuous extrusion. G0 travels to the start,
+      // then each G1 extrudes to the next point — what makes a move an
+      // extrusion rather than a travel is that E keeps growing.
+      const gcode = `
+        G0 X75 Y70 Z0.2
+        G1 X50 Y90 E1
+        G1 X30 Y75 E2
+        G1 X25 Y50 E3
+        G1 X30 Y25 E4
+        G1 X50 Y10 E5
+        G1 X70 Y25 E6
+        G1 X75 Y40 E7
+        G1 X75 Y50 E8
+        G1 X55 Y50 E9
+      `;
+      preview.processGCode(gcode);
+
+      // The renderer is sized once, at construction. Nothing in the library
+      // watches the canvas, so tell it when the canvas changes size.
+      new ResizeObserver(() => preview.sceneManager.resize()).observe(canvas);
+
+      // Keep the viewpoint across a reload — and so across Run, which loads
+      // the page again. saveCamera()/loadCamera() persist position, rotation,
+      // zoom and orbit target to localStorage.
+      preview.sceneManager.loadCamera();
+      preview.sceneManager.controls.addEventListener('end', () => preview.sceneManager.saveCamera());
+    </script>
+
+    <script type="module" src="runner.js"></script>
+  </body>
+</html>
