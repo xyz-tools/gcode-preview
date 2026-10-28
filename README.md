@@ -1,78 +1,43 @@
 # GCode Preview [![npm version](http://img.shields.io/npm/v/gcode-preview.svg?style=flat)](https://npmjs.org/package/gcode-preview "View this project on npm") [![npm alpha](https://img.shields.io/npm/v/gcode-preview/alpha.svg?style=flat&label=alpha)](https://www.npmjs.com/package/gcode-preview?activeTab=versions "Latest alpha on npm") [![MIT license](http://img.shields.io/badge/license-MIT-brightgreen.svg)](http://opensource.org/licenses/MIT)
-A simple [G-code](https://en.wikipedia.org/wiki/G-code) parser & viewer lib with 3D printing in mind. Written in Typescript.
 
-Join us on <a href="https://discord.gg/w2bsGRE6S4">discord</a>
+A simple [G-code](https://en.wikipedia.org/wiki/G-code) parser & viewer library with 3D printing in mind. Using Threejs and written in Typescript.
 
 
-## Feature summary
-- multi-color
-- tube geometry
-- g2/g3 arcs
-- streaming (progressive rendering from a `ReadableStream`)
-- thumbnail preview
-- build volume
-- orthographic camera
-- slicer detection (PrusaSlicer family, Cura, Simplify3D, Slic3r)
-- per-path extrusion width & line height from `;WIDTH:` / `;HEIGHT:` slicer comments (adaptive layer height)
-- drag & drop
-- examples for various frameworks
+Talk to us on <a href="https://discord.gg/w2bsGRE6S4">discord</a>.
 
-## Demo 
-
-### Minimal demo
-<img width="433" alt="image" src="https://github.com/user-attachments/assets/3b52c7a9-d1c9-41c5-9c41-570e12825aaf" />
-
-try it out: https://codepen.io/remcoder/pen/PwYVXBg
-
-### Batteries included
-Click to see the [full-fledged demo](https://gcode-preview.web.app/):
-
-[<img title="click to see the demo" width="320" alt="image" src="https://github.com/user-attachments/assets/4e663193-0a01-4fe2-864b-a8ffb18cbcd8">](https://gcode-preview.web.app/)
 
 ## Installation
 
-The 3.0 release is currently in alpha. To install the latest alpha:
+> ### 📣 3.0 is in alpha — and it's better in almost every way
 
-`npm install gcode-preview@alpha`
+To install the latest version: `npm install gcode-preview@alpha`
 
-For the current stable 2.x release:
+For the current stable 2.x release (latest update 2024): `npm install gcode-preview`
 
-`npm install gcode-preview`
 
-GCode Preview depends on [three.js](https://threejs.org/) and supports `three` `>=0.166.0 <0.186.0`.
-
-### Module format (3.0)
-
-The package is ESM-only. Import from `gcode-preview`; the only other public
-package path is `gcode-preview/package.json`. Deep imports such as
-`gcode-preview/dist/gcode-preview.es.js` are no longer supported, and the
-legacy UMD build / `GCodePreview` browser global has been removed.
-
-TypeScript supports `node16`, `nodenext`, and `bundler` module resolution.
-Legacy `moduleResolution: "node"` (`node10`) currently resolves the root import
-through `types`, but it is no longer tested or supported: TypeScript 6
-deprecates it and TypeScript 7 removes it. Switch to `bundler` for frontend
-apps, or `node16`/`nodenext` for Node.
-
-Consumers compile with their own TypeScript, not the library's. The packaging
-test typechecks the published declarations on both TypeScript 6 and 5.9, in all
-three supported resolution modes, with no extra ambient type packages.
-
-For native browser modules, map `three` in an import map and load
-`dist/gcode-preview.es.js` as a module. When self-hosting, copy the **entire
-`dist` directory**, including any chunks. The library adds nothing to the
-document beyond the canvas you hand it.
-
-### Quick start
+## Quick start
 
 ```js
+  // v3 syntax
   import { GCodePreview } from 'gcode-preview';
 
   const preview = new GCodePreview({
       canvas: document.querySelector('canvas'),
       extrusionColor: 'hotpink'
   });
-  
+```
+
+```js
+  // v2 syntax
+  import { WebGLPreview } from 'gcode-preview';
+
+  const preview = new WebGLPreview({
+    canvas: document.querySelector('canvas'),
+    extrusionColor: 'hotpink'
+  });
+```
+
+```js
   // draw a diagonal line
   const gcode = 'G0 X0 Y0 Z0.2\nG1 X42 Y42 E10';
   preview.processGCode(gcode);
@@ -85,97 +50,137 @@ G-code can also be streamed in and rendered progressively:
   await preview.processGCodeStream(response.body);
 ```
 
-### Constructor options
+## Demo's
 
-The main options accepted by `new GCodePreview({ ... })` (see the
-[API docs](https://gcode-preview.web.app/docs) for the full reference):
+### In action
 
-- `canvas` — the canvas element to render to
-- `buildVolume` — renders the build volume (see below)
-- colors: `backgroundColor`, `extrusionColor`, `travelColor`, `topLayerColor`, `lastSegmentColor`, `boundingBoxColor`
-- render toggles: `renderExtrusion`, `renderTravel`, `renderTubes`, `disableGradient`
-- geometry: `lineWidth`, `lineHeight`, `extrusionWidth` — per-path dimensions from `;WIDTH:` / `;HEIGHT:` slicer comments always win (adaptive layer height renders correctly); `lineHeight` / `extrusionWidth` fill in for paths without them, and built-in defaults (0.6 width / 0.2 height) apply last
-- layer range: `startLayer`, `endLayer`
-- camera: `orthographic`, `initialCameraPosition`
-- streaming: `liveRenderInterval` (throttles progressive rendering)
-- arcs: `arcChordTolerance` (tessellation precision for G2/G3)
-- misc: `droppable` (drag & drop g-code files onto the canvas), `keepLines`, `minLayerThreshold`
+Stepping `endLayer` from the first layer to the last replays the print — the
+same thing the layer slider does, and roughly what you see while a large file is
+still streaming in:
 
-After construction, most rendering properties live on the scene manager and can
-be changed at runtime, e.g. `preview.sceneManager.renderTubes = true`, followed
-by a re-render.
+![A 3DBenchy built up layer by layer](media/grow.gif)
+
+The canvas comes with orbit controls wired up: drag to rotate, scroll to zoom,
+right-drag to pan.
+
+![The tree frog rotating on the build plate](media/orbit.gif)
+
+### Full demo
+
+[<img title="click to see the demo" width="320" alt="image" src="https://github.com/user-attachments/assets/4e663193-0a01-4fe2-864b-a8ffb18cbcd8">](https://gcode-preview.web.app/)
+
+Try the [full demo](https://gcode-preview.web.app/)
+
+### Minimal demo
+<img width="433" alt="image" src="https://github.com/user-attachments/assets/3b52c7a9-d1c9-41c5-9c41-570e12825aaf" />
+
+Try this [codepen](https://codepen.io/remcoder/pen/PwYVXBg).
+
+
+## Feature summary
+
+See [FEATURES.md](FEATURES.md) for a screenshot of each of these, and
+[EXAMPLES-v3.md](EXAMPLES-v3.md) for runnable snippets
+([EXAMPLES-v2.md](EXAMPLES-v2.md) if you are still on 2.x).
+
+#### Rendering 
+- multi-color
+- tube geometry
+- g2/g3 arcs
+- variable width/height (like Prusa's Arachne)
+
+#### Parser
+- embedded thumbnail preview
+- slicer detection (PrusaSlicer family, Cura, Simplify3D, Slic3r)
+
+#### 3D scene
+- build area/volume
+- perspective/orthographic camera
+
+#### etc
+- streaming (progressive rendering from a `ReadableStream`)
+- drag & drop
+- integration examples for frameworks like React, Vuejs, Svelte
 
 ### API Docs
-Check the full API documentation at https://gcode-preview.web.app/docs
+See the [API docs](https://gcode-preview.web.app/docs) for the full reference.
 
-### Vue.js / React / Svelte integration
-<img src="https://vuejs.org/logo.svg" height="40px" />
 
- There's a [Vue.js example](https://github.com/xyz-tools/gcode-preview-examples) that has a [Vue component](https://github.com/xyz-tools/gcode-preview-examples/blob/main/GCodePreview.vue) to wrap the library.
-
+### Framework integration
+ <img src="https://vuejs.org/logo.svg" height="40px" />
  <img src="https://reactjs.org/favicon.ico" height="42px"/>
- 
- @Zeng95 provided a [React & Typescript example](https://github.com/xyz-tools/gcode-preview-react) that has a [React component](https://github.com/xyz-tools/gcode-preview-react/blob/main/src/components/GCodePreview.tsx) to wrap the library.
- 
  <img src='https://svelte.dev/favicon.png' height='42px' />
  
- There is a [Svelte example](https://github.com/xyz-tools/gcode-preview-svelte) with a [Svelte component](https://github.com/xyz-tools/gcode-preview-svelte/blob/main/src/lib/GCodePreview.svelte).
+ There are example components for:
+
+ - a [Vue.js example app](https://github.com/xyz-tools/gcode-preview-vue) that has a [Vue component](https://github.com/xyz-tools/gcode-preview-vue/blob/main/src/GCodePreview.vue) to wrap the library.
+ - a [React example app](https://github.com/xyz-tools/gcode-preview-react) that has a [React component](https://github.com/xyz-tools/gcode-preview-react/blob/main/src/lib/GCodePreview.tsx) to wrap the library. (contributed by @Zeng95 )
+ -  a [Svelte example app](https://github.com/xyz-tools/gcode-preview-svelte) with a [Svelte component](https://github.com/xyz-tools/gcode-preview-svelte/blob/main/src/lib/GCodePreview.svelte).
 
 ## Feature description
 
 ### Supported G-code commands
 
-The interpreter currently handles:
+The v3 interpreter handles:
 
-| Command | Meaning |
-| --- | --- |
-| `G0` / `G1` | linear move |
-| `G2` / `G3` | clockwise / counter-clockwise arc |
-| `G20` / `G21` | set units to inches / millimeters |
-| `G28` | home |
-| `G31` | straight probe |
-| `G38.2`–`G38.5` | probe family |
-| `G92` | set position |
-| `G92.1` | reset coordinate system offsets |
-| `T0`–`T7` | tool selection |
+| Command | Meaning | |
+| --- | --- | --- |
+| `G0` / `G1` | linear move | |
+| `G2` / `G3` | clockwise / counter-clockwise arc | |
+| `G20` / `G21` | set units to inches / millimeters | new in v3 |
+| `G28` | home | new in v3 |
+| `G31` | straight probe | new in v3 |
+| `G38.2`–`G38.5` | probe family | new in v3 |
+| `G92` | set position | new in v3 |
+| `G92.1` | reset coordinate system offsets | new in v3 |
+| `T0`–`T7` | tool selection | |
 
 Commands without a handler are parsed but ignored by the interpreter.
 
 `G92.2` and `G92.3` are not supported.
-Standalone `;WIDTH:<mm>` and `;HEIGHT:<mm>` comments (emitted by PrusaSlicer,
-SuperSlicer, OrcaSlicer and Bambu Studio) are picked up by the slicer metadata
-pipeline and set the extrusion width and line height of the paths that follow,
-so prints sliced with adaptive layer height render with the true dimensions of
-each path. Dimensions resolve per path: the slicer-announced value wins, the
-`lineHeight` / `extrusionWidth` options fill in for paths without one, and the
-built-in defaults (0.6 width / 0.2 height) apply last.
+
+### Metadata in gcode comments
+
+Slicers put more than the toolpath in a gcode file. These comments are read:
+
+| Comment | Meaning | |
+| --- | --- | --- |
+| `;WIDTH:<mm>` | extrusion width for the paths that follow, overriding `extrusionWidth` | new in v3 |
+| `;HEIGHT:<mm>` | layer height for the paths that follow, overriding `lineHeight` | new in v3 |
+| `; thumbnail begin` / `; thumbnail end` | a base64 preview image, split over the lines in between | |
+| `;LAYER:<n>` | layer change (Cura, PrusaSlicer family) | new in v3 |
+| `;Z:<mm>` | layer height of the next layer (PrusaSlicer family) | new in v3 |
+| `; layer <n>, Z = <mm>` | layer change (Simplify3D) | new in v3 |
+| `;move to next layer (<n>)` | layer change (Slic3r) | new in v3 |
+| `; layer_z = <mm>` | Z of the next layer (Slic3r) | new in v3 |
+
+Which set is used depends on the slicer, which is detected from the file's own
+header comments.
 
 ### Multi-color support
+Also known as multi-tool or multi-material. 
+
+A `T0`–`T7` instruction will change the color the subsequent extrusion.
 
 GCode files that were sliced for a multi-tool system can be previewed as such. Pass an array of colors as the `extrusionColor` constructor option (or assign `preview.sceneManager.extrusionColor` at runtime), where the index in the array corresponds to the index of the tool: T0..T7. 
 
-example: 
+Set colors in the constructor: 
 ```js
 extrusionColor: ['hotpink', 'indigo', 'lime']
 ```
-Here, T0 is hotpink, T1 is indigo and T2 is lime.
+
+resulting in:
 
 <img width="300" alt="image" src="https://github.com/remcoder/gcode-preview/assets/461650/d965d30f-101e-40d3-8ad7-c8257dd7866a">
 
-Supported systems include:
- - Prusa MMU1/2/3 and XL
- - Bambulab AMS & AMS lite
- - Enraged Rabbit Carrot Feeder (ERCF)
- - IDEX machines
- - toolchangers
- - 3D Chameleon
- - Virtual tools (color mixing)
- - and possibly more
 
-### Render extrusion as tubes
-Extrusions are rendered as tubes by default; pass `renderTubes: false` as a
-constructor option to render flat lines (it can also be toggled at runtime
-via `preview.sceneManager.renderTubes`):
+
+### Render extrusion as tubes / lines
+Extrusions are rendered as (volumetric) tubes by default. 
+Set the following option to render thin lines:
+
+`renderTubes: false` 
+
 ```js
 new GCodePreview({ canvas, renderTubes: false });
 ```
@@ -186,7 +191,9 @@ Thanks to @Sindarius arc commands are now supported, which means gcode processed
 ### Thumbnail preview
 Thumbnail previews as generated by PrusaSlicer are detected and parsed. In the gcode these are found in comments, enclosed between 'thumbnail begin' and 'thumbnail end'. The images are encoded as base64 strings but split over multiple lines. These are now parsed and patched back together, but still kept a base64. This allows easy use in the browser for us as [data urls](https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/Data_URIs).
 
-![image](https://github.com/user-attachments/assets/6931167b-d48e-44a8-9233-ec8dbc064a0b) *Thumbnail Preview as generated by PrusaSlicer*
+![image](https://github.com/user-attachments/assets/6931167b-d48e-44a8-9233-ec8dbc064a0b) 
+
+*Thumbnail Preview as generated by PrusaSlicer*
 
 The thumbnails can be accessed like this: 
 `gcodePreview.parser.metadata.thumbnails['220x124']`
@@ -260,22 +267,6 @@ Want to help out? We are open to your ideas and always willing to get you starte
 - ❤️ Thank you @Zeng95 for providing a React & Typescript example.
 - ❤️ Thank you @raulodev for parser and preview fixes.
 - ❤️ Thank you @TimTheBig for dependency and tooling updates.
-
-## Known issues
-### Preview doesn't render in Brave
-This is caused by the device recognition shield in Brave. By changing the setting for "Device Recognition" in Shield settings to "Allow all device recognition attemps" or "Only block cross-site device recognition attemps" you should not get this error.
-https://github.com/mrdoob/three.js/issues/16904
-
-### Compile errors from `@types/three` on TypeScript 6
-If you are on **TypeScript 6** and have **`@types/three` 0.181.0 – 0.183.1**
-pinned, `tsc` reports around 50 duplicate-identifier errors (TS2403, TS2687,
-TS2717, TS6200) inside `node_modules/@webgpu/types/dist/index.d.ts`.
-
-Any one of these resolves it:
-- upgrade `@types/three` to **0.184.0 or newer** (recommended),
-- or stay on `@types/three` **0.180.x or older**,
-- or set `"skipLibCheck": true` in your `tsconfig.json` — on by default in most
-  scaffolded projects, which is why this rarely shows up.
 
 ## Brought to you by XYZ Tools
 11-11-2024 This repo was moved to a brand new org which is a collaboration between @remcoder and @sophiedeziel for everything 3D printing related.
