@@ -41,6 +41,15 @@ export class State {
   /** Currently active tool */
   tool = 0;
   /**
+   * Index of the print segment paths are now part of, counted from 0.
+   * @remarks
+   * Incremented by every pause command (`M400 U<ms>`), which is what slicers
+   * and users insert for a manual filament change or to drop an object into
+   * the print. The renderer can give each segment its own color, so the
+   * stages of such a print are told apart in the preview.
+   */
+  segmentIndex = 0;
+  /**
    * Width of extruded material, in millimeters, for paths created from here
    * on, or `undefined` until slicer metadata announces one.
    * @remarks

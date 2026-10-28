@@ -221,6 +221,46 @@ describe('tool changes (T0-T7)', () => {
   });
 });
 
+describe('pause commands (M400 U)', () => {
+  const run = (lines: string[]) => new Interpreter().execute(new Parser().parseGCode(lines).commands);
+  const summary = (job: Job) => job.extrusions.map((path) => ({ segment: path.segmentIndex, vertices: path.vertices }));
+
+  test('a pause between two extrusions breaks the path and starts the next segment', () => {
+    const job = run(['G0 X0 Y0 Z0.2', 'G1 X10 E1', 'M400 U1', 'G1 X20 E2']);
+
+    expect(job.state.segmentIndex).toEqual(1);
+    expect(summary(job)).toEqual([
+      { segment: 0, vertices: [0, 0, 0.2, 10, 0, 0.2] },
+      { segment: 1, vertices: [10, 0, 0.2, 20, 0, 0.2] }
+    ]);
+  });
+
+  test('a pause followed by a travel assigns the next extrusion to the new segment', () => {
+    const job = run(['G0 X0 Y0 Z0.2', 'G1 X10 E1', 'M400 U1', 'G0 X10 Y0 Z0.2', 'G1 X20 E2']);
+
+    expect(summary(job)).toEqual([
+      { segment: 0, vertices: [0, 0, 0.2, 10, 0, 0.2] },
+      { segment: 1, vertices: [10, 0, 0.2, 20, 0, 0.2] }
+    ]);
+  });
+
+  test('a bare M400 waits for the planner and does not break the path', () => {
+    const job = run(['G0 X0 Y0 Z0.2', 'G1 X10 E1', 'M400', 'G1 X20 E2']);
+
+    expect(job.state.segmentIndex).toEqual(0);
+    expect(summary(job)).toEqual([{ segment: 0, vertices: [0, 0, 0.2, 10, 0, 0.2, 20, 0, 0.2] }]);
+  });
+
+  test('consecutive pauses count every segment, empty ones included', () => {
+    const job = run(['G0 X0 Y0 Z0.2', 'G1 X10 E1', 'M400 U1', 'M400 U1', 'G1 X20 E2']);
+
+    expect(summary(job)).toEqual([
+      { segment: 0, vertices: [0, 0, 0.2, 10, 0, 0.2] },
+      { segment: 2, vertices: [10, 0, 0.2, 20, 0, 0.2] }
+    ]);
+  });
+});
+
 describe('malformed coordinates through the whole pipeline', () => {
   const run = (gcode: string) => new Interpreter().execute(new Parser().parseGCode(gcode).commands);
   const allVertices = (job: Job) => job.paths.flatMap((path) => path.vertices);

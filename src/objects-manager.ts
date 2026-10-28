@@ -47,6 +47,18 @@ export class ObjectsManager {
   extrusionColor: Color | Color[] = ObjectsManager.defaultExtrusionColor;
   /** Current travel move color */
   travelColor = new Color(0x990000);
+  /**
+   * Whether extrusions take their color from the print segment they belong to
+   * rather than from the tool that printed them.
+   * @remarks
+   * Print segments are separated by pause commands (`M400 U<ms>`), which is
+   * how a manual filament change or an insert is announced; giving each one
+   * its own color tells the stages of such a print apart in the preview. The
+   * existing extrusionColor palette is reused and cycles when a print has more
+   * segments than there are colors, so this needs no color configuration of
+   * its own.
+   */
+  colorBySegment = false;
   /** Tool indices already warned about missing an entry in the extrusionColor array */
   private warnedMissingExtrusionColorIndices = new Set<number>();
 
@@ -139,7 +151,15 @@ export class ObjectsManager {
    * color, so shrinking the array never leaves a tool showing a stale color.
    */
   setExtrusionColor(value: Color | Color[]) {
+    const paletteLength = this.paletteLength();
     this.extrusionColor = value;
+
+    // segment colors cycle through the palette, so a palette of a different
+    // length regroups the paths: that is geometry, not a repaint
+    if (this.colorBySegment && this.paletteLength() !== paletteLength) {
+      this.requestRebuild();
+      return;
+    }
 
     if (!Array.isArray(value)) {
       this.applyExtrusionColor(value);
@@ -174,6 +194,32 @@ export class ObjectsManager {
     if (!Array.isArray(this.extrusionColor)) return this.extrusionColor;
 
     return this.extrusionColor[toolIndex] ?? this.fallbackExtrusionColor(toolIndex);
+  }
+
+  /**
+   * Resolves the color a path draws with, by tool or by print segment.
+   * @param path - Path asking for its color
+   */
+  colorForPath(path: Path): Color {
+    return this.colorForTool(this.colorIndexFor(path));
+  }
+
+  /**
+   * The palette slot a path draws with: its tool, or — when coloring by
+   * segment — its print segment wrapped into the palette, so that a print with
+   * more segments than colors cycles through them instead of running out.
+   */
+  private colorIndexFor(path: Path): number {
+    if (!this.colorBySegment) return path.tool;
+
+    return path.segmentIndex % this.paletteLength();
+  }
+
+  /** How many colors the palette offers; a single color counts as one. */
+  private paletteLength(): number {
+    if (!Array.isArray(this.extrusionColor)) return 1;
+
+    return Math.max(this.extrusionColor.length, 1);
   }
 
   private fallbackExtrusionColor(toolIndex: number): Color {
@@ -328,11 +374,25 @@ export class ObjectsManager {
     this.requestRebuild();
   }
 
+  /**
+   * Switches between coloring extrusions per tool and per print segment.
+   * @param value - True to color by the segments pauses separate
+   * @remarks
+   * Paths are grouped into one drawable per color, so changing what the color
+   * stands for regroups them: a rebuild, not a repaint.
+   */
+  setColorBySegment(value: boolean) {
+    if (value === this.colorBySegment) return;
+    this.colorBySegment = value;
+    this.requestRebuild();
+  }
+
   // --- rendering --------------------------------------------------------------
 
   /**
    * Draws a slice of the job's combined path list, routing each path to its
-   * category: travels as travel lines, extrusions per tool in the current
+   * category: travels as travel lines, extrusions per color (tool, or print
+   * segment when colorBySegment is on) in the current
    * representation.
    * @param paths - Paths in print order, travels and extrusions interleaved
    * @param categories - Which categories to draw. Paths of a disabled category
@@ -347,17 +407,18 @@ export class ObjectsManager {
     }
 
     if (categories.extrusions) {
-      const byTool = new Map<number, Path[]>();
+      const byColorIndex = new Map<number, Path[]>();
       for (const path of paths) {
         if (path.travelType !== PathType.Extrusion) continue;
-        const toolPaths = byTool.get(path.tool);
-        if (toolPaths) {
-          toolPaths.push(path);
+        const colorIndex = this.colorIndexFor(path);
+        const indexPaths = byColorIndex.get(colorIndex);
+        if (indexPaths) {
+          indexPaths.push(path);
         } else {
-          byTool.set(path.tool, [path]);
+          byColorIndex.set(colorIndex, [path]);
         }
       }
-      byTool.forEach((toolPaths, toolIndex) => this.renderExtrusions(toolPaths, toolIndex));
+      byColorIndex.forEach((indexPaths, colorIndex) => this.renderExtrusions(indexPaths, colorIndex));
     }
   }
 

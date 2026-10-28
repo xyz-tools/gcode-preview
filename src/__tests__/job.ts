@@ -600,6 +600,15 @@ describe('.breakPath', () => {
     expect(path.tool).toEqual(2);
   });
 
+  test('creates a path carrying the state print segment', () => {
+    const job = new Job();
+    job.state.segmentIndex = 2;
+
+    const path = job.breakPath(PathType.Extrusion);
+
+    expect(path.segmentIndex).toEqual(2);
+  });
+
   test('leaves the dimensions unknown on a fresh state', () => {
     // Unknown dimensions resolve at render time: global setting, then the
     // built-in defaults.
@@ -753,6 +762,19 @@ describe('.continuePath', () => {
 
     expect(next).not.toBe(path);
     expect(next.tool).toEqual(1);
+    expect(job.paths).toEqual([path]);
+  });
+
+  test('breaks when a pause started the next print segment', () => {
+    const job = new Job();
+    const path = job.breakPath(PathType.Extrusion);
+    path.addPoint(1, 1, 0);
+    job.state.segmentIndex = 1;
+
+    const next = job.continuePath(PathType.Extrusion);
+
+    expect(next).not.toBe(path);
+    expect(next.segmentIndex).toEqual(1);
     expect(job.paths).toEqual([path]);
   });
 });

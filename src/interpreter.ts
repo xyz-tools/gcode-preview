@@ -12,7 +12,8 @@ import {
   setAbsoluteExtrusion,
   setRelativeExtrusion,
   probe,
-  selectTool
+  selectTool,
+  pause
 } from './interpreter/commands';
 
 /** Options for the {@link Interpreter} */
@@ -61,6 +62,7 @@ export const handlers: ReadonlyMap<string, CommandHandler> = new Map<string, Com
   ['g92.1', resetPositionShift],
   ['m82', setAbsoluteExtrusion],
   ['m83', setRelativeExtrusion],
+  ['m400', pause],
   ['t0', selectTool],
   ['t1', selectTool],
   ['t2', selectTool],

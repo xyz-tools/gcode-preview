@@ -707,6 +707,76 @@ describe('ObjectsManager', () => {
     });
   });
 
+  describe('coloring by print segment', () => {
+    function createSegmentPath(segmentIndex: number, tool = 0): Path {
+      const path = new Path(PathType.Extrusion, 0.6, 0.2, tool, segmentIndex);
+      path.addPoint(0, 0, 0);
+      path.addPoint(10, 0, 0);
+      return path;
+    }
+
+    function renderedColors(): number[] {
+      return (objectsManager.extrusionsGroup.children as LineSegments2[]).map((line) =>
+        (line.material as LineMaterial).color.getHex()
+      );
+    }
+
+    beforeEach(() => {
+      objectsManager.colorBySegment = true;
+      objectsManager.setExtrusionColor([new Color(0xff0000), new Color(0x00ff00), new Color(0x0000ff)]);
+    });
+
+    test('draws each print segment in its own palette color', () => {
+      objectsManager.renderPaths([createSegmentPath(0), createSegmentPath(1), createSegmentPath(2)], {
+        travels: true,
+        extrusions: true
+      });
+
+      expect(renderedColors()).toEqual([0xff0000, 0x00ff00, 0x0000ff]);
+    });
+
+    test('cycles through the palette when a print has more segments than colors', () => {
+      objectsManager.renderPaths([createSegmentPath(3), createSegmentPath(4)], {
+        travels: true,
+        extrusions: true
+      });
+
+      expect(renderedColors()).toEqual([0xff0000, 0x00ff00]);
+    });
+
+    test('a single extrusion color leaves every segment in that one color', () => {
+      objectsManager.setExtrusionColor(new Color(0xabcdef));
+
+      objectsManager.renderPaths([createSegmentPath(0), createSegmentPath(7)], {
+        travels: true,
+        extrusions: true
+      });
+
+      // one color means one palette slot, so every segment shares its drawable
+      expect(renderedColors()).toEqual([0xabcdef]);
+    });
+
+    test('paths of one segment share a drawable regardless of tool', () => {
+      objectsManager.renderPaths([createSegmentPath(1, 0), createSegmentPath(1, 2)], {
+        travels: true,
+        extrusions: true
+      });
+
+      expect(renderedColors()).toEqual([0x00ff00]);
+    });
+
+    test('colors by tool again once turned off', () => {
+      objectsManager.colorBySegment = false;
+
+      objectsManager.renderPaths([createSegmentPath(2, 0), createSegmentPath(2, 1)], {
+        travels: true,
+        extrusions: true
+      });
+
+      expect(renderedColors()).toEqual([0xff0000, 0x00ff00]);
+    });
+  });
+
   describe('renderExtrusions', () => {
     test('renders lines when renderTubes is off', () => {
       objectsManager.renderExtrusions([createTestPath()]);
@@ -900,7 +970,15 @@ describe('ObjectsManager', () => {
       ['setLineHeight', () => manager.setLineHeight(0.5)],
       ['setLineHeight back to per-path', () => manager.setLineHeight(undefined)],
       ['setExtrusionWidth', () => manager.setExtrusionWidth(1.2)],
-      ['setRenderTubes', () => manager.setRenderTubes(false)]
+      ['setRenderTubes', () => manager.setRenderTubes(false)],
+      ['setColorBySegment', () => manager.setColorBySegment(true)],
+      [
+        'a palette resize while coloring by segment',
+        () => {
+          manager.colorBySegment = true;
+          manager.setExtrusionColor([new Color(0xff0000), new Color(0x00ff00)]);
+        }
+      ]
     ])('%s asks for a rebuild', (_name, change) => {
       change();
       vi.advanceTimersByTime(ObjectsManager.rebuildDebounce);
@@ -921,7 +999,15 @@ describe('ObjectsManager', () => {
       ['setLineWidth', () => manager.setLineWidth(0.4)],
       ['setLineHeight', () => manager.setLineHeight(0.2)],
       ['setExtrusionWidth', () => manager.setExtrusionWidth(0.6)],
-      ['setRenderTubes', () => manager.setRenderTubes(true)]
+      ['setRenderTubes', () => manager.setRenderTubes(true)],
+      ['setColorBySegment', () => manager.setColorBySegment(false)],
+      [
+        'a same-size palette while coloring by segment',
+        () => {
+          manager.colorBySegment = true;
+          manager.setExtrusionColor(new Color(0xff0000));
+        }
+      ]
     ])('%s does not rebuild when the value is unchanged', (_name, change) => {
       change();
       vi.advanceTimersByTime(ObjectsManager.rebuildDebounce);

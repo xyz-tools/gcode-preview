@@ -168,6 +168,7 @@ export const app = (window.app = createApp({
 
         preview.sceneManager.renderExtrusion = settings.value.renderExtrusion;
         preview.sceneManager.renderTubes = settings.value.renderTubes;
+        preview.sceneManager.colorBySegment = settings.value.colorBySegment;
         preview.sceneManager.disableGradient = settings.value.disableGradient;
         preview.sceneManager.extrusionWidth = +settings.value.extrusionWidth;
 

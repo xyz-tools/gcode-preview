@@ -204,8 +204,8 @@ describe('.splitLastSegment', () => {
     expect(segment.vertices).toEqual([0, 0, 0, 10, 0, 0]);
   });
 
-  test('both halves carry the source travel type, extrusion settings and tool', () => {
-    const path = new Path(PathType.Extrusion, 0.5, 0.3, 2);
+  test('both halves carry the source travel type, extrusion settings, tool and print segment', () => {
+    const path = new Path(PathType.Extrusion, 0.5, 0.3, 2, 3);
     path.addPoint(0, 0, 0);
     path.addPoint(10, 0, 0);
     path.addPoint(10, 10, 0);
@@ -217,6 +217,7 @@ describe('.splitLastSegment', () => {
       expect(half.extrusionWidth).toBe(0.5);
       expect(half.lineHeight).toBe(0.3);
       expect(half.tool).toBe(2);
+      expect(half.segmentIndex).toBe(3);
     });
   });
 });

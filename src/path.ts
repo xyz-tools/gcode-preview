@@ -37,6 +37,15 @@ export class Path {
   /** Tool number used for this path */
   public tool: number;
 
+  /**
+   * Index of the print segment this path belongs to, counted from 0.
+   * @remarks
+   * Segments are separated by pause commands (`M400 U<ms>`), typically a
+   * manual filament change. Not to be confused with a path's line segments:
+   * this numbers the stages of the print, not the pieces of this path.
+   */
+  public segmentIndex: number;
+
   /** Index of the layer this path belongs to, set by the LayersIndexer; undefined for non-planar jobs */
   public layerIndex?: number;
 
@@ -49,17 +58,19 @@ export class Path {
    * @param extrusionWidth - Width of extruded material, when known
    * @param lineHeight - Height of extruded line, when known
    * @param tool - Tool number (default: 0)
+   * @param segmentIndex - Index of the print segment this path belongs to (default: 0)
    * @remarks
    * A path's own dimensions come from slicer metadata and take precedence at
    * render time; a path without them falls back to the renderer's global
    * setting, then to the built-in defaults.
    */
-  constructor(travelType: PathType, extrusionWidth?: number, lineHeight?: number, tool = 0) {
+  constructor(travelType: PathType, extrusionWidth?: number, lineHeight?: number, tool = 0, segmentIndex = 0) {
     this.travelType = travelType;
     this._vertices = [];
     this.extrusionWidth = extrusionWidth;
     this.lineHeight = lineHeight;
     this.tool = tool;
+    this.segmentIndex = segmentIndex;
   }
 
   /**
@@ -84,7 +95,7 @@ export class Path {
    * Splits the path into its final segment and the body that precedes it.
    * @returns The last two points as `segment`, and everything up to and including
    * the segment's first point as `body` (null when the path is a single segment).
-   * Both carry this path's travel type, extrusion settings and tool.
+   * Both carry this path's travel type, extrusion settings, tool and print segment.
    * @remarks
    * Requires at least two points; used to draw the final segment of a print in
    * its own highlight color while the rest of the path keeps another one.
@@ -97,7 +108,7 @@ export class Path {
 
   /** Builds a path carrying this path's extrusion settings over a slice of vertices. */
   private subPath(vertices: number[]): Path {
-    const path = new Path(this.travelType, this.extrusionWidth, this.lineHeight, this.tool);
+    const path = new Path(this.travelType, this.extrusionWidth, this.lineHeight, this.tool, this.segmentIndex);
     for (let i = 0; i < vertices.length; i += 3) {
       path.addPoint(vertices[i], vertices[i + 1], vertices[i + 2]);
     }
