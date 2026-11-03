@@ -6,6 +6,8 @@ name: Deploy to Firebase Hosting on merge
   push:
     branches:
       - develop
+permissions:
+  contents: read
 jobs:
   build_and_deploy:
 
