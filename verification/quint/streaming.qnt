@@ -1,23 +1,25 @@
 // -*- mode: Bluespec; -*-
 /**
  * Formal specification of the streaming chunk-boundary line splitter
- * (unit ST-1): the carry-buffer machine in src/helpers/split-chunk.ts.
+ * (unit ST-1): the carry-buffer machine that turns arbitrarily chunked
+ * input into whole lines while holding back trailing comment-only runs.
  *
  * The document is a list of integer tokens over a 5-letter alphabet that the
  * replay maps 1:1 to characters:
  *
  *   0 -> 'a'   ordinary letter
  *   1 -> 'b'   ordinary letter
- *   2 -> ' '   blank (isCommentOnly's trimStart() skips it)
+ *   2 -> ' '   blank (skipped when deciding whether a line is comment-only)
  *   3 -> ';'   comment opener
  *   4 -> '\n'  line separator
  *
- * '\n' is the only separator the source splits on (chunk.lastIndexOf('\n'));
- * there is no CRLF handling, so '\r' is not in the alphabet. All state is
+ * '\n' is the only separator the splitter recognizes, and a chunk splits at
+ * its LAST separator; there is no CRLF handling (a pinned behavior choice),
+ * so '\r' is not in the alphabet. All state is
  * integer tokens and lists of them; there is no numeric scaling.
  *
  * Each step feeds a nondeterministically sized chunk (possibly empty) of the
- * remaining document to a pure transition `feed` that mirrors splitChunk
+ * remaining document to a pure transition `feed` that mirrors the splitter
  * line by line: no newline in the chunk carries it whole, a trailing run of
  * comment-only lines is held back in the carry (keeping its terminating
  * newline), everything before the run is emitted. Once the document is
@@ -25,16 +27,16 @@
  * enabled.
  *
  * Emitted-line accounting: a line is recorded the moment its terminating
- * newline leaves the splitter. This matches the TS `complete` output split
- * on '\n', with one refinement: when `complete` is '' but a newline was
- * still consumed (tail + chunk == complete + '\n' + newTail), the step
- * records one empty line. That makes conservation exact: every emitted
+ * newline leaves the splitter. This matches the splitter's completed output
+ * split on '\n', with one refinement: when the completed text is empty but a
+ * newline was still consumed (carry + chunk == completed + '\n' + new carry),
+ * the step records one empty line. That makes conservation exact: every emitted
  * line re-terminated with '\n', then the carry, then the unread input,
  * reconstructs the document.
  *
  * The cmd, chunkTaken and stepLines variables record what each step fed and
  * what came out, so an ITF trace doubles as a chunking schedule: a replay
- * harness can feed the real splitChunk the same chunk strings and compare
+ * harness can feed the real splitter the same chunk strings and compare
  * the emitted lines and the carry after every step.
  */
 module streaming {
@@ -61,7 +63,7 @@ module streaming {
 
   pure def minInt(a: int, b: int): int = if (a < b) a else b
 
-  /// Index of the last T_NL in xs, or -1 (chunk.lastIndexOf('\n'))
+  /// Index of the last T_NL in xs, or -1 when none (the split point)
   pure def lastNlIndex(xs: List[int]): int =
     xs.foldl((0, -1), (acc, t) => (acc._1 + 1, if (t == T_NL) acc._1 else acc._2))._2
 
@@ -76,7 +78,7 @@ module streaming {
     if (lns.length() == 0) List()
     else range(1, lns.length()).foldl(lns[0], (acc, i) => acc.append(T_NL).concat(lns[i]))
 
-  /// line.trimStart().startsWith(';') — src/helpers/split-chunk.ts isCommentOnly
+  /// A comment-only line: optional leading blanks, then the comment opener
   pure def isCommentOnly(line: List[int]): bool =
     line.foldl(0, (st, t) =>
       if (st != 0) st
@@ -85,17 +87,17 @@ module streaming {
       else 2) == 1
 
   /// Length of the maximal trailing run of comment-only lines
-  /// (the runStart loop of splitOffCommentRun, counted in lines)
+  /// (counted in lines)
   pure def trailingCommentRun(lns: List[List[int]]): int =
     lns.foldr((0, true), (line, acc) =>
       if (acc._2 and isCommentOnly(line)) (acc._1 + 1, true) else (acc._1, false))._1
 
   type SplitResult = { emittedLines: List[List[int]], newCarry: List[int] }
 
-  /// One splitChunk(tail, chunk) call, with lines instead of a joined string.
-  /// emittedLines is `complete` split on '\n' whenever a separator was
-  /// consumed (so an empty `complete` that consumed one records a single
-  /// empty line), and [] when nothing completed.
+  /// One splitter step on (carry, chunk), with lines instead of a joined
+  /// string. emittedLines is the completed text split on '\n' whenever a
+  /// separator was consumed (so an empty completion that consumed one records
+  /// a single empty line), and [] when nothing completed.
   pure def feed(carryIn: List[int], chunk: List[int]): SplitResult = {
     val nlIdx = lastNlIndex(chunk)
     if (nlIdx < 0) {

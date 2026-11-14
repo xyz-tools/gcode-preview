@@ -14,18 +14,18 @@
  * Further G92s after the frame step are deliberately forbidden, so B's
  * shift is frozen at the frame values for the whole trace.
  *
- * Modeled commands and their TypeScript ground truth:
- *   G0/G1  src/interpreter/commands/linear-move.ts  (physical = word + shift)
- *   G28    src/interpreter/commands/home.ts         (pos := 0, homed, shift kept)
- *   G92    src/interpreter/commands/set-position.ts (shift := physical - word)
- *   M82/83 src/interpreter/commands/set-extrusion-mode.ts
+ * Modeled command semantics:
+ *   G0/G1  linear move           (physical = word + shift)
+ *   G28    home all axes         (pos := 0, homed, shift kept)
+ *   G92    set position          (shift := physical - word)
+ *   M82/83 extruder addressing   (absolute / relative E)
  * Units stay 'mm' throughout (G20/G21 are out of scope here), tools are not
  * modeled, and all lengths are integers in centi-millimeters (mm * 100).
  *
  * The cmd, has and word variables record copy A's command line and the
  * bWord variables the re-encoded words of copy B's line, so an ITF trace
  * doubles as TWO G-code programs that a replay harness can feed to two
- * real Jobs and compare.
+ * real jobs and compare.
  */
 module encoding_equivalence {
   // --- trace-contract variables: the command taken on this step ---
@@ -81,7 +81,7 @@ module encoding_equivalence {
   pure val EWords: Set[int] = (-20).to(20)
   pure val OffsetWords: Set[int] = (-30).to(30)
 
-  /// E accounting of copy A (src/state.ts State.applyExtrusion, always mm)
+  /// E accounting of copy A (relative accumulates, absolute replaces; always mm)
   def nextAE(he: bool, we: int): int =
     if (not(he)) aE100 else if (aRel) aE100 + we * 100 else we * 100
 
@@ -121,9 +121,9 @@ module encoding_equivalence {
   // --- one action per step class ---
 
   /// The frame step: B executes `G92 X(ox) Y(oy) Z(oz)` while B is still
-  /// clean (physical position resolves to 0 on every unknown axis, per
-  /// Job.resolvePosition), so bShift becomes -off * 100 exactly as
-  /// src/interpreter/commands/set-position.ts computes physical - word.
+  /// clean (an unknown axis's physical position resolves to 0, the library's
+  /// un-homed convention), so bShift becomes -off * 100 by the G92 rule
+  /// shift := physical - word.
   /// A executes nothing on this step (the replay feeds A no line).
   action frameWith(ox: int, oy: int, oz: int): bool = all {
     not(frameSet),
@@ -135,10 +135,10 @@ module encoding_equivalence {
     keepAPose, keepBPose, keepEs, keepRels, keepHomes
   }
 
-  /// G0/G1 linear move — src/interpreter/commands/linear-move.ts.
+  /// G0/G1 linear move.
   /// A executes the words as-is (zero shift); B executes word + off against
   /// its frozen G92 shift, landing on the identical physical target. Also
-  /// covers the zero-length early return: with no X/Y/Z words only E moves.
+  /// covers the degenerate zero-length form: with no X/Y/Z words only E moves.
   action moveWith(g: str, hx: bool, wx: int, hy: bool, wy: int, hz: bool, wz: int, he: bool, we: int): bool = all {
     frameSet,
     recordStep(g,
@@ -163,9 +163,10 @@ module encoding_equivalence {
     keepFrame, keepBShift, keepRels, keepHomes
   }
 
-  /// G28 home all axes in BOTH streams — src/interpreter/commands/home.ts.
+  /// G28 home all axes in BOTH streams.
   /// The physical position goes to 0 in both copies; B's workspace shift is
-  /// untouched (home.ts never writes positionShift), so the frames stay apart.
+  /// untouched (mirroring Marlin's position_shift model, homing never clears
+  /// the G92 shift), so the frames stay apart.
   action homeBoth = all {
     frameSet,
     recordBare("g28"),
@@ -178,7 +179,7 @@ module encoding_equivalence {
     keepFrame, keepBShift, keepEs, keepRels
   }
 
-  /// M82 absolute E in both streams — set-extrusion-mode.ts (setAbsoluteExtrusion)
+  /// M82 — absolute extruder addressing in both streams
   action absoluteE = all {
     frameSet,
     recordBare("m82"),
@@ -186,7 +187,7 @@ module encoding_equivalence {
     keepFrame, keepAPose, keepBPose, keepBShift, keepEs, keepHomes
   }
 
-  /// M83 relative E in both streams — set-extrusion-mode.ts (setRelativeExtrusion)
+  /// M83 — relative extruder addressing in both streams
   action relativeE = all {
     frameSet,
     recordBare("m83"),

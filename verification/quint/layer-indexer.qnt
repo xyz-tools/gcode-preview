@@ -2,14 +2,13 @@
 /**
  * Formal specification of the layer-indexing state machine.
  *
- * Models the layer bookkeeping a Job performs when the interpreter replays
- * one G-code line (or one slicer layer-comment block) per Interpreter.execute
- * call: the LayersMetadataIndexer strategy lock (tolerance fallback until the
- * first path sorted after slicer layer metadata exists, metadata mode forever
- * after, with adoption rewriting the fallback-made layers), the monotone
- * metadata layer pointer, tolerance-based layer creation in fallback mode,
- * and the non-planar collapse that empties the layer array and removes the
- * layer indexer for good (src/indexers.ts, driven through src/job.ts).
+ * Models the library's layer bookkeeping as it executes one G-code line (or
+ * one slicer layer-comment block) at a time: the indexing-strategy lock
+ * (tolerance fallback until the first path sorted after slicer layer
+ * metadata exists, metadata mode forever after, with adoption rewriting the
+ * fallback-made layers), the monotone metadata layer pointer, tolerance-based
+ * layer creation in fallback mode, and the non-planar collapse that empties
+ * the layer array and removes the layer indexer for good.
  *
  * All lengths are integers in centi-millimeters (mm * 100). Event words carry
  * whole millimeters, so the real tolerances (0.05 mm fallback break, 0.01 mm
@@ -18,8 +17,8 @@
  * The cmd/word variables record WHICH event was taken on each step, so an ITF
  * trace doubles as an input program: a replay harness rebuilds each step as a
  * G-code line (travel/extrude moves) or a PrusaSlicer-style layer-comment
- * block, feeds it chunk-by-chunk through the real Parser + Interpreter into
- * one Job, and compares the job's layers (count, z, height) and the layer the
+ * block, feeds it chunk-by-chunk through the real parse-and-execute pipeline
+ * into one job, and compares the job's layers (count, z, height) and the layer the
  * step's path joined after every step. "stutter" steps feed no input.
  */
 module layer_indexer {
@@ -41,23 +40,24 @@ module layer_indexer {
   var layersH: List[int]
 
   // --- internal model state (not compared directly by the replay) ---
-  /// LayersMetadataIndexer.useMetadata === true (strategy locked to metadata)
+  /// Indexing strategy locked to metadata mode
   var locked: bool
-  /// Layer indexer removed after NonPlanarExtrusionError; layers emptied
+  /// Layer indexer removed after a non-planar extrusion; layers emptied
   var collapsed: bool
   /// Slicer layer metadata entries (hz/hh say whether z/h were declared)
   var metaLayers: List[{ hz: bool, z: int, hh: bool, h: int }]
-  /// LayersMetadataIndexer.currentMetadataLayerIndex
+  /// Monotone scan pointer into the slicer layer metadata
   var pointer: int
   /// Current nozzle z (centi-mm); starts at 0 (unhomed axes resolve to 0)
   var curZ: int
-  /// state.lineHeight * 100; -1 encodes undefined (State.initial default)
+  /// Current declared line height * 100; -1 encodes "never declared"
   var stateH: int
   /// Type of the last finished path: "none" | "travel" | "extrusion"
   var lastPathType: str
-  /// Seed z of the last finished path (its vertices[2], what sortIn reads)
+  /// Seed z of the last finished path (the z its first point was laid at,
+  /// which is the z that layer filing reads)
   var lastPathZ: int
-  /// lineHeight the last finished path was created with; -1 = undefined
+  /// Line height the last finished path was created with; -1 = undeclared
   var lastPathH: int
 
   type MetaEntry = { hz: bool, z: int, hh: bool, h: int }
@@ -67,16 +67,17 @@ module layer_indexer {
   pure val ZWords: Set[int] = 0.to(6)
   pure val HWords: Set[int] = 1.to(3)
 
-  /// LayersIndexer.DEFAULT_TOLERANCE = 0.05 mm
+  /// Fallback-mode layer-break tolerance: 0.05 mm
   pure val FALLBACK_TOL: int = 5
-  /// LayersMetadataIndexer.Z_MATCH_TOLERANCE = 0.01 mm
+  /// Metadata-mode z-match tolerance: 0.01 mm
   pure val Z_MATCH_TOL: int = 1
-  /// LayersMetadataIndexer.DEFAULT_LAYER_HEIGHT = 0.2 mm
+  /// Default layer height when metadata declares none: 0.2 mm
   pure val DEFAULT_H: int = 20
 
-  /// findLayerIndexForZ: forward scan from the pointer; an entry without a
-  /// declared z reads the z its layer was pinned with, and claims the path
-  /// outright when no such layer exists yet. -1 = above everything known.
+  /// Metadata-mode target lookup: forward scan from the pointer; an entry
+  /// without a declared z reads the z its layer was pinned with, and claims
+  /// the path outright when no such layer exists yet. -1 = above everything
+  /// known.
   pure def findTarget(pz: int, start: int, meta: List[MetaEntry], lz: List[int]): int =
     range(start, meta.length()).foldl(-1, (acc, i) =>
       if (acc >= 0) acc
@@ -86,14 +87,14 @@ module layer_indexer {
         if (pz <= zi + Z_MATCH_TOL) i else -1
       })
 
-  /// ensureLayersUpTo: materialize metadata layers up to and including target
+  /// Materialize metadata layers up to and including the target
   pure def ensureUpTo(target: int, pz: int, meta: List[MetaEntry], lz: List[int], lh: List[int]): (List[int], List[int]) =
     range(lz.length(), target + 1).foldl((lz, lh), (acc, k) =>
       (acc._1.append(if (meta[k].hz) meta[k].z else pz),
         acc._2.append(if (meta[k].hh) meta[k].h else DEFAULT_H)))
 
-  /// adoptMetadataLayers: declared z/height replace the observed values on
-  /// the layers the fallback made before the metadata arrived (prefix only)
+  /// Adoption: declared z/height replace the observed values on the layers
+  /// the fallback made before the metadata arrived (prefix only)
   pure def adoptLayers(meta: List[MetaEntry], lz: List[int], lh: List[int]): (List[int], List[int]) = {
     val n = if (meta.length() < lz.length()) meta.length() else lz.length()
     range(0, n).foldl((lz, lh), (acc, i) =>
@@ -101,9 +102,9 @@ module layer_indexer {
         if (meta[i].hh) acc._2.replaceAt(i, meta[i].h) else acc._2))
   }
 
-  /// One LayersMetadataIndexer.sortIn of a planar path: lock-and-adopt when
-  /// metadata exists and the strategy is still unset, then metadata-mode or
-  /// fallback filing. The non-planar throw is handled by the calling action.
+  /// One filing of a planar path: lock-and-adopt when metadata exists and
+  /// the strategy is still unset, then metadata-mode or fallback filing.
+  /// The non-planar case is handled by the calling action.
   pure def sortPath(ty: str, pz: int, lk0: bool, meta: List[MetaEntry], lz0: List[int], lh0: List[int], ptr0: int): SortResult = {
     val willLock = not(lk0) and meta.length() > 0
     val adopted = if (willLock) adoptLayers(meta, lz0, lh0) else (lz0, lh0)
@@ -127,7 +128,7 @@ module layer_indexer {
         { lz: grown._1, lh: grown._2, ptr: target, asg: target, lk: lk }
       }
     } else {
-      // fallback LayersIndexer: a new layer only for an extrusion more than
+      // fallback mode: a new layer only for an extrusion more than
       // the tolerance ABOVE the last one; lower z silently joins the last
       if (lz.length() == 0)
         { lz: List(pz), lh: List(pz), ptr: ptr0, asg: 0, lk: lk }
@@ -150,8 +151,8 @@ module layer_indexer {
   }
 
   /// One replayed move line (G0/G1). The in-progress path continues only
-  /// while its type and lineHeight still match the state (Job.continuePath);
-  /// a continued path keeps its seed z, which is what sortIn reads. An
+  /// while its type and line height still match the current state; a
+  /// continued path keeps its seed z, which is what layer filing reads. An
   /// extrusion whose destination z differs from the current z is non-planar:
   /// in fallback mode that collapses the layer index for good, in metadata
   /// mode it is filed by seed z without complaint.
@@ -192,10 +193,10 @@ module layer_indexer {
   /// One PrusaSlicer-style layer-comment block (;LAYER_CHANGE [;Z:n]
   /// [;HEIGHT:n]) parsed and executed as its own chunk. The block appends a
   /// metadata entry; a HEIGHT line doubles as an extrusion-dimension event
-  /// that updates state.lineHeight. The streaming parser derives a missing
-  /// height for the first layer of a chunk — which here is every layer —
-  /// from the previous accumulated entry's z, when both z values exist
-  /// (Parser.parseGCode layer accumulation). Executing the chunk resumes and
+  /// that updates the declared line height. The streaming parse derives a
+  /// missing height for the first layer of a chunk — which here is every
+  /// layer — from the previous accumulated entry's z, when both z values
+  /// exist. Executing the chunk resumes and
   /// re-files the last path, and THAT re-sort is what locks the strategy to
   /// metadata (adopting the fallback-made layers) when it is still unset.
   action layerCommentWith(hz: bool, zwMm: int, hh: bool, hwMm: int): bool = {
@@ -335,8 +336,8 @@ module layer_indexer {
   val collapsedNoAssignment = collapsed implies assignedLayer == -1
 
   /// while the fallback owns the array: z strictly increasing (beyond the
-  /// tolerance) and heights telescoping from z=0, exactly as createLayerAt
-  /// computes them; metadata adoption is allowed to break both
+  /// tolerance) and heights telescoping from z=0 (each height is its layer's
+  /// z minus the previous layer's z); metadata adoption is allowed to break both
   val fallbackLayersTelescope = (not(locked) and not(collapsed)) implies
     range(0, layersZ.length()).foldl(true, (ok, i) =>
       ok and (

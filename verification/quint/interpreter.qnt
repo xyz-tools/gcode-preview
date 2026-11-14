@@ -4,16 +4,17 @@
  *
  * Models the printer-state effects of the position/extrusion G-codes
  * (G0/G1, G2/G3 arcs, G20/G21, G28, G31/G38.2-G38.5 probes, G92, G92.1,
- * M82/M83, T0..T7) exactly as implemented by the TypeScript handlers in
- * src/interpreter/commands/*, plus the job statistics counters those handlers
- * tally (src/job-stats.ts). All lengths are kept as integers in
+ * M82/M83, T0..T7) as the library observably executes them, plus the job
+ * statistics counters tallied alongside; the vitest ITF replay suite keeps
+ * the spec bound to the implementation. All lengths are kept as integers in
  * centi-millimeters (mm * 100) so the spec stays in Int; F words are feedrates
- * the handlers never convert or store, so wordF carries the raw word value.
+ * the library never converts or stores, so wordF carries the raw word value.
  *
  * The cmd, has and word variables record WHICH command was taken on each step,
  * so an ITF trace of this spec doubles as a G-code program: a replay harness
  * can rebuild the line (e.g. "G2 X10 I5 E-3"), feed it to the real
- * interpreter, and compare the real State and JobStats against the spec.
+ * interpreter, and compare the real printer state and job statistics
+ * against the spec.
  */
 module interpreter {
   // --- trace-contract variables: the command taken on this step ---
@@ -27,7 +28,7 @@ module interpreter {
   var wordZ: int
   var wordE: int
   // F word (feedrate): only its presence matters to the interpreter state,
-  // where it decides the zero-length move classification in linear-move.ts
+  // where it decides the zero-length move classification
   var hasF: bool
   var wordF: int
   // Arc words (G2/G3). They shape the tessellated polyline only, never the
@@ -38,7 +39,7 @@ module interpreter {
   var wordI: int
   var wordJ: int
   var wordR: int
-  // P word: RepRapFirmware's set-trigger-values form of G31 (probe.ts no-op)
+  // P word: RepRapFirmware's set-trigger-values form of G31 (a probe no-op)
   var hasP: bool
 
   // --- trace-contract variables: printer state (lengths in centi-mm) ---
@@ -57,10 +58,10 @@ module interpreter {
   var homed: bool
   var tool: int
 
-  // --- trace-contract variables: job statistics (src/job-stats.ts) ---
+  // --- trace-contract variables: job statistics ---
   // points counts linear moves with at least one axis word plus probe moves;
-  // arc moves deliberately leave it alone, mirroring arc-move.ts, which never
-  // touches the counter. The other four classify zero-length G0/G1 moves.
+  // arc moves deliberately leave it alone — pinned behavior: an arc never
+  // counts a point. The other four classify zero-length G0/G1 moves.
   var points: int
   var retractions: int
   var deretractions: int
@@ -74,16 +75,17 @@ module interpreter {
   pure val IjWords: Set[int] = (-20).to(20)
   pure val RWords: Set[int] = (-10).to(10)
 
-  /// Current-units -> centi-mm factor (src/units.ts toMillimeters, scaled by 100)
+  /// Current-units -> centi-mm factor (1 inch = 25.4 mm, scaled by 100)
   val fac: int = if (inches) 2540 else 100
 
-  /// E accounting of a move (src/state.ts State.applyExtrusion)
+  /// E accounting of a move: a relative-mode E word accumulates, an
+  /// absolute-mode E word is the new extruder position
   def nextE(he: bool, we: int): int =
     if (not(he)) e100
     else if (relExtrude) e100 + we * fac
     else we * fac
 
-  /// Probe Z target with the clamp from probe.ts: a probe below the origin
+  /// Probe Z target with the probe clamp rule: a probe below the origin
   /// plane (shifted target < 0) from a known Z at or above it triggers at
   /// physical Z0; every other probe travels to the commanded shifted target.
   def probeTargetZ(wz: int): int = {
@@ -141,7 +143,7 @@ module interpreter {
 
   // --- one action per command class ---
 
-  /// G0/G1 linear move — src/interpreter/commands/linear-move.ts
+  /// G0/G1 linear move
   action linearMoveFullWith(g: str, hx: bool, wx: int, hy: bool, wy: int, hz: bool, wz: int, he: bool, we: int, hf: bool, wf: int): bool = all {
     recordXyzE(g, hx, wx, hy, wy, hz, wz, he, we),
     recordF(hf, wf),
@@ -156,7 +158,7 @@ module interpreter {
     yKnown' = (hy or yKnown),
     zKnown' = (hz or zKnown),
     e100' = nextE(he, we),
-    // Stats, exactly as linear-move.ts tallies them. A move without axis words
+    // Stats, exactly as the library tallies them. A move without axis words
     // is classified by the RAW E word's sign (not the extruded delta, so in
     // absolute mode a positive E that decreases the extruder position still
     // counts as a retraction), falling back to the F word, then "others".
@@ -178,16 +180,16 @@ module interpreter {
   action linearMoveWith(g: str, hx: bool, wx: int, hy: bool, wy: int, hz: bool, wz: int, he: bool, we: int): bool =
     linearMoveFullWith(g, hx, wx, hy, wy, hz, wz, he, we, false, 0)
 
-  /// G2/G3 arc move — src/interpreter/commands/arc-move.ts, State effects only.
+  /// G2/G3 arc move, printer-state effects only.
   /// The endpoint and E accounting are exactly a linear move's; the I/J/R words
-  /// feed the tessellator, which emits path points but never writes the State.
-  /// Degenerate parameter investigation: ArcTessellator guards an R-mode whole
-  /// circle (dSquared == 0), a zero radius (I and J absent or zero), and
-  /// non-finite segment counts by emitting only the endpoint, so within the
-  /// bounded integer word domains above NO combination of present/absent
-  /// I/J/R/X/Y/Z/E words aborts the real pipeline — the only generation
-  /// constraint the replay needs is those bounded domains themselves.
-  /// Stats: arc-move.ts increments none of the modeled counters (no points++).
+  /// feed the arc tessellation, which emits path points but never writes the
+  /// printer state. Degenerate parameter investigation: the tessellation guards
+  /// an R-mode whole circle (coincident start and end), a zero radius (I and J
+  /// absent or zero), and non-finite segment counts by emitting only the
+  /// endpoint, so within the bounded integer word domains above NO combination
+  /// of present/absent I/J/R/X/Y/Z/E words aborts the real pipeline — the only
+  /// generation constraint the replay needs is those bounded domains themselves.
+  /// Stats: an arc increments none of the modeled counters (no points++).
   action arcMoveWith(g: str, hx: bool, wx: int, hy: bool, wy: int, hz: bool, wz: int, he: bool, we: int, hi: bool, wi: int, hj: bool, wj: int, hr: bool, wr: int): bool = all {
     recordXyzE(g, hx, wx, hy, wy, hz, wz, he, we),
     recordF(false, 0),
@@ -204,11 +206,11 @@ module interpreter {
     keepShift, keepRel, keepUnits, keepHomed, keepTool
   }
 
-  /// G31/G38.2-G38.5 straight probe — src/interpreter/commands/probe.ts.
+  /// G31/G38.2-G38.5 straight probe.
   /// A P word (RRF set-trigger-values form) is a no-op before anything else;
   /// so is a probe without any axis words. Otherwise the probe travels to the
   /// shifted targets, with the Z clamp of probeTargetZ, counts a point, and
-  /// never touches E (the handler reads no E or F word at all).
+  /// never touches E (a probe reads no E or F word at all).
   action probeWith(c: str, hp: bool, hx: bool, wx: int, hy: bool, wy: int, hz: bool, wz: int): bool = all {
     recordXyzE(c, hx, wx, hy, wy, hz, wz, false, 0),
     recordF(false, 0),
@@ -230,7 +232,8 @@ module interpreter {
     keepE, keepShift, keepRel, keepUnits, keepHomed, keepTool
   }
 
-  /// G92 set position — src/interpreter/commands/set-position.ts
+  /// G92 set position — mirrors Marlin's position_shift model: redefines the
+  /// logical coordinates without any physical motion
   action setPositionWith(hx: bool, wx: int, hy: bool, wy: int, hz: bool, wz: int, he: bool, we: int): bool = all {
     recordCmd("g92", hx, wx, hy, wy, hz, wz, he, we),
     if (not(hx or hy or hz or he)) all {
@@ -246,19 +249,19 @@ module interpreter {
     keepPose, keepRel, keepUnits, keepHomed, keepTool, keepStats
   }
 
-  /// G20 inches — src/interpreter/commands/set-units.ts (setInchUnits)
+  /// G20 — interpret length words as inches
   action inchUnits = all {
     recordBare("g20"), inches' = true,
     keepPose, keepShift, keepE, keepRel, keepHomed, keepTool, keepStats
   }
 
-  /// G21 millimeters — src/interpreter/commands/set-units.ts (setMillimeterUnits)
+  /// G21 — interpret length words as millimeters
   action mmUnits = all {
     recordBare("g21"), inches' = false,
     keepPose, keepShift, keepE, keepRel, keepHomed, keepTool, keepStats
   }
 
-  /// G28 home all axes — src/interpreter/commands/home.ts
+  /// G28 — home all axes to the physical origin
   action homeAll = all {
     recordBare("g28"),
     posX' = 0, posY' = 0, posZ' = 0,
@@ -267,26 +270,27 @@ module interpreter {
     keepShift, keepE, keepRel, keepUnits, keepTool, keepStats
   }
 
-  /// G92.1 reset workspace shift — src/interpreter/commands/reset-position-shift.ts
+  /// G92.1 — RepRap bare-reset semantics: clear the workspace shift so
+  /// logical coordinates are purely physical again
   action resetShift = all {
     recordBare("g92_1"),
     shiftX' = 0, shiftY' = 0, shiftZ' = 0,
     keepPose, keepE, keepRel, keepUnits, keepHomed, keepTool, keepStats
   }
 
-  /// M82 absolute E — src/interpreter/commands/set-extrusion-mode.ts (setAbsoluteExtrusion)
+  /// M82 — absolute extruder addressing
   action absoluteE = all {
     recordBare("m82"), relExtrude' = false,
     keepPose, keepShift, keepE, keepUnits, keepHomed, keepTool, keepStats
   }
 
-  /// M83 relative E — src/interpreter/commands/set-extrusion-mode.ts (setRelativeExtrusion)
+  /// M83 — relative extruder addressing
   action relativeE = all {
     recordBare("m83"), relExtrude' = true,
     keepPose, keepShift, keepE, keepUnits, keepHomed, keepTool, keepStats
   }
 
-  /// T0..T7 tool select — src/interpreter/commands/select-tool.ts
+  /// T0..T7 — select the active tool
   action selectToolWith(c: str, t: int): bool = all {
     recordBare(c), tool' = t,
     keepPose, keepShift, keepE, keepRel, keepUnits, keepHomed, keepStats
@@ -508,9 +512,9 @@ module interpreter {
       .then(setPositionWith(false, 0, false, 0, false, 0, false, 0))
       .expect(and { shiftX == 0, shiftY == 0, shiftZ == 0, e100 == 0, not(homed) })
 
-  /// The zero-length classification grid of linear-move.ts: raw E word sign
-  /// first (even when the absolute-mode delta has the opposite sign), then F
-  /// presence, then "others"; a move with an axis word only counts a point.
+  /// The zero-length move classification grid: raw E word sign first (even
+  /// when the absolute-mode delta has the opposite sign), then F presence,
+  /// then "others"; a move with an axis word only counts a point.
   run zeroLengthStatsTest =
     init
       .then(linearMoveFullWith("g1", false, 0, false, 0, false, 0, true, 5, false, 0))
@@ -567,8 +571,8 @@ module interpreter {
       .expect(posX == 1000 and shiftX == 500)
 
   /// Arc endpoint/E semantics: shifted endpoints, absent axes untouched, E
-  /// accounted like a linear move, I/J/R ignored by the State, and the points
-  /// counter untouched by arcs (arc-move.ts never increments it).
+  /// accounted like a linear move, I/J/R ignored by the printer state, and the
+  /// points counter untouched by arcs (pinned: an arc never counts a point).
   run arcStateTest =
     init
       .then(homeAll)
@@ -584,7 +588,7 @@ module interpreter {
       .then(arcMoveWith("g2", true, 1, false, 0, false, 0, true, 1, true, 1, false, 0, false, 0))
       .expect(and { posX == 4540, e100 == 2540, points == 1 })
 
-  /// Probe no-op forms and the Z clamp of probe.ts: a P word or a lack of axis
+  /// Probe no-op forms and the probe Z clamp: a P word or a lack of axis
   /// words leaves everything untouched; a probe below the origin plane from a
   /// known Z at or above it lands on physical Z0; probes from a negative or
   /// unknown Z travel to the commanded target; each probe move counts a point.

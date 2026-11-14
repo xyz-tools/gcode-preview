@@ -2,9 +2,8 @@
 /**
  * Formal specification of the embedded-thumbnail comment protocol.
  *
- * Models the online state machine in Parser.parseMetadata
- * (src/parser/gcode-parser.ts) together with Thumbnail.isValid
- * (src/thumbnail.ts), exactly as implemented:
+ * Models the library's online thumbnail-collection machine together with
+ * its stored-thumbnail validity check, as pinned observable behavior:
  *
  *   - 'thumbnail begin WxH N' always starts a fresh in-progress thumbnail,
  *     even while one is already collecting (the old one is discarded).
@@ -32,7 +31,7 @@
  * The cmd/evWidth/evHeight/evCount/evN variables record WHICH event was taken
  * on each step, so an ITF trace of this spec doubles as a comment stream: a
  * replay harness can rebuild each line (e.g. '; thumbnail begin 16x16 8'),
- * feed it to the real Parser, and compare the machine's observable state.
+ * feed it to the real parser, and compare the machine's observable state.
  */
 module thumbnail {
   // --- trace-contract variables: the event taken on this step ---
@@ -43,7 +42,7 @@ module thumbnail {
   var evN: int // data: number of filler chars on the line (0 otherwise)
 
   // --- trace-contract variables: machine state ---
-  var phase: str // "idle" | "collecting" (Parser.thumb undefined / set)
+  var phase: str // "idle" | "collecting" (no in-progress thumbnail / one open)
   var width: int // in-progress thumbnail width (0 while idle)
   var height: int // in-progress thumbnail height (0 while idle)
   var expected: int // in-progress declared char count (0 while idle)
@@ -84,7 +83,7 @@ module thumbnail {
   // --- one action per event ---
 
   /// 'thumbnail begin WxH N' — unconditionally replaces the in-progress
-  /// thumbnail (gcode-parser.ts: the begin branch never checks this.thumb)
+  /// thumbnail (pinned: a begin never checks whether one is already open)
   action beginWith(w: int, h: int, cnt: int): bool = all {
     recordEvent("begin", w, h, cnt, 0),
     phase' = "collecting",
@@ -127,7 +126,8 @@ module thumbnail {
     keepStored
   }
 
-  /// A non-comment G-code line: filtered out before parseMetadata ever runs
+  /// A non-comment G-code line: the thumbnail protocol only ever sees
+  /// comments, so it is ignored entirely
   action neutral = all {
     recordEvent("neutral", 0, 0, 0, 0),
     keepProgress,
@@ -215,7 +215,7 @@ module thumbnail {
     (phase == "idle") implies
       and { width == 0, height == 0, expected == 0, collected == 0, clean }
 
-  // Deliberately NOT an invariant: collected <= expected. The source appends
+  // Deliberately NOT an invariant: collected <= expected. The collector appends
   // without a cap and only checks the length at 'thumbnail end', so the
   // collected count can legitimately exceed the declared count.
   val countersNonNegative = expected >= 0 and collected >= 0
