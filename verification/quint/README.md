@@ -20,6 +20,8 @@ The spec text reads as implementation-independent semantics on purpose: comments
 
 When a spec and its sources drift apart, the replay suite fails CI — not a comment.
 
+Each spec also has a sibling Markdown file (`interpreter.md`, `streaming.md`, …) with Mermaid diagrams of its state machine, rendered inline by GitHub for an at-a-glance view of the model.
+
 ## Running everything
 
 Every spec follows the same conventions: an `init` and `step` action, an `allInvariants` value, and semantic runs named `*Test`. One script runs all semantic tests plus a seeded invariant simulation for every spec, and CI runs it on each pull request:
