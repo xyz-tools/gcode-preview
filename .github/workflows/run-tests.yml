@@ -35,6 +35,10 @@ jobs:
       - run: npm run test:coverage
       - run: npm run typeCheck
       - run: npm run lint
+      # Checks the Quint formal spec itself (node-only, seconds). The spec's
+      # committed ITF traces are replayed against the real interpreter by the
+      # vitest suite above, in this job and in every matrix leg.
+      - run: npm run quint:test
 
   matrix:
     if: github.event_name == 'push'
