@@ -5,6 +5,16 @@ import { GCodeCommand, Parser } from '../parser/gcode-parser';
 import { Interpreter, handlers } from '../interpreter';
 import { Job } from '../job';
 import type { State } from '../state';
+import {
+  listTraceFiles,
+  readTrace,
+  itfInt,
+  itfBool,
+  itfStr,
+  itfRecord,
+  centiMismatch,
+  type ItfState
+} from './helpers/itf-replay';
 
 describe('.execute', () => {
   test('returns a stateful job', () => {
@@ -628,6 +638,230 @@ describe('Quint spec trace replay', () => {
       for (let step = 1; step < states.length; step++) {
         const spec = states[step];
         const line = buildLine(spec);
+        const { commands } = parser.parseGCode(line);
+        interpreter.execute(commands, job);
+        compareStep(traceFile, step, line, job, spec);
+      }
+    });
+  }
+});
+
+describe('interpreter v2 spec trace replay', () => {
+  // Replays ITF traces produced from verification/quint-v2/interpreter.qnt
+  // against the real parser + interpreter pipeline. Each trace state holds
+  // exactly two records: `ev` (the command taken on this step: canonical tag
+  // plus word presence/values, so a trace doubles as a G-code program) and
+  // `s` (the machine state: the shared printer-core record under s.p, the
+  // five job-statistics counters under s.stats, and ghost fields the spec
+  // uses for its invariants, which this replay deliberately never decodes).
+  // Lengths are integers in centi-millimeters and every millimeter
+  // comparison is integer-exact via centiMismatch — no epsilon.
+  const tracesDir = join(process.cwd(), 'verification', 'quint-v2', 'traces', 'interpreter');
+
+  type V2Event = {
+    cmd: string;
+    hasX: boolean;
+    wordX: number;
+    hasY: boolean;
+    wordY: number;
+    hasZ: boolean;
+    wordZ: number;
+    hasE: boolean;
+    wordE: number;
+    hasF: boolean;
+    wordF: number;
+    hasI: boolean;
+    wordI: number;
+    hasJ: boolean;
+    wordJ: number;
+    hasR: boolean;
+    wordR: number;
+    hasP: boolean;
+    wordP: number;
+  };
+
+  type V2Axis = { known: boolean; pos: number };
+
+  type V2Step = {
+    ev: V2Event;
+    x: V2Axis;
+    y: V2Axis;
+    z: V2Axis;
+    e: number;
+    shiftX: number;
+    shiftY: number;
+    shiftZ: number;
+    relExtrude: boolean;
+    inches: boolean;
+    homed: boolean;
+    tool: number;
+    points: number;
+    retractions: number;
+    deretractions: number;
+    feedrateChanges: number;
+    others: number;
+  };
+
+  const decodeAxis = (raw: ItfState, key: string): V2Axis => {
+    const axis = itfRecord(raw[key], key);
+    return { known: itfBool(axis.known, `${key}.known`), pos: itfInt(axis.pos, `${key}.pos`) };
+  };
+
+  const decodeStep = (raw: ItfState): V2Step => {
+    const s = itfRecord(raw.s, 's');
+    const ev = itfRecord(raw.ev, 'ev');
+    const p = itfRecord(s.p, 's.p');
+    const shift = itfRecord(p.shift, 's.p.shift');
+    const stats = itfRecord(s.stats, 's.stats');
+    return {
+      ev: {
+        cmd: itfStr(ev.cmd, 'ev.cmd'),
+        hasX: itfBool(ev.hasX, 'ev.hasX'),
+        wordX: itfInt(ev.wordX, 'ev.wordX'),
+        hasY: itfBool(ev.hasY, 'ev.hasY'),
+        wordY: itfInt(ev.wordY, 'ev.wordY'),
+        hasZ: itfBool(ev.hasZ, 'ev.hasZ'),
+        wordZ: itfInt(ev.wordZ, 'ev.wordZ'),
+        hasE: itfBool(ev.hasE, 'ev.hasE'),
+        wordE: itfInt(ev.wordE, 'ev.wordE'),
+        hasF: itfBool(ev.hasF, 'ev.hasF'),
+        wordF: itfInt(ev.wordF, 'ev.wordF'),
+        hasI: itfBool(ev.hasI, 'ev.hasI'),
+        wordI: itfInt(ev.wordI, 'ev.wordI'),
+        hasJ: itfBool(ev.hasJ, 'ev.hasJ'),
+        wordJ: itfInt(ev.wordJ, 'ev.wordJ'),
+        hasR: itfBool(ev.hasR, 'ev.hasR'),
+        wordR: itfInt(ev.wordR, 'ev.wordR'),
+        hasP: itfBool(ev.hasP, 'ev.hasP'),
+        wordP: itfInt(ev.wordP, 'ev.wordP')
+      },
+      x: decodeAxis(p, 'x'),
+      y: decodeAxis(p, 'y'),
+      z: decodeAxis(p, 'z'),
+      e: itfInt(p.e, 's.p.e'),
+      shiftX: itfInt(shift.x, 's.p.shift.x'),
+      shiftY: itfInt(shift.y, 's.p.shift.y'),
+      shiftZ: itfInt(shift.z, 's.p.shift.z'),
+      relExtrude: itfBool(p.relExtrude, 's.p.relExtrude'),
+      inches: itfBool(p.inches, 's.p.inches'),
+      homed: itfBool(p.homed, 's.p.homed'),
+      tool: itfInt(p.tool, 's.p.tool'),
+      points: itfInt(stats.points, 's.stats.points'),
+      retractions: itfInt(stats.retractions, 's.stats.retractions'),
+      deretractions: itfInt(stats.deretractions, 's.stats.deretractions'),
+      feedrateChanges: itfInt(stats.feedrateChanges, 's.stats.feedrateChanges'),
+      others: itfInt(stats.others, 's.stats.others')
+    };
+  };
+
+  // Builds the G-code line an event describes: underscores become dots
+  // ("g92_1" -> "G92.1", "g38_2" -> "G38.2"), then the words follow. A G28's
+  // axis flags are word-presence flags rendered as bare letters ("G28 X") —
+  // the implementation ignores them (pinned: G28 homes all axes). A probe's
+  // P word carries its rendered value (P0 or P1), both of which are the
+  // set-trigger-values no-op by the pinned presence-only rule.
+  const buildLine = (ev: V2Event): string => {
+    let line = ev.cmd.toUpperCase().replace('_', '.');
+    if (ev.cmd === 'g28') {
+      if (ev.hasX) line += ' X';
+      if (ev.hasY) line += ' Y';
+      if (ev.hasZ) line += ' Z';
+      return line;
+    }
+    if (ev.hasP) line += ` P${ev.wordP}`;
+    if (ev.hasX) line += ` X${ev.wordX}`;
+    if (ev.hasY) line += ` Y${ev.wordY}`;
+    if (ev.hasZ) line += ` Z${ev.wordZ}`;
+    if (ev.hasI) line += ` I${ev.wordI}`;
+    if (ev.hasJ) line += ` J${ev.wordJ}`;
+    if (ev.hasR) line += ` R${ev.wordR}`;
+    if (ev.hasE) line += ` E${ev.wordE}`;
+    if (ev.hasF) line += ` F${ev.wordF}`;
+    return line;
+  };
+
+  // The full per-step comparison from the trace contract: the complete State
+  // (axes with knownness, E, the workspace shift, the four mode flags) and
+  // the five job-statistics counters. Millimeter values are compared
+  // integer-exactly against the spec's centi-mm integers.
+  const compareStep = (traceFile: string, stepIndex: number, line: string, job: Job, spec: V2Step): void => {
+    const state: State = job.state;
+    const at = (field: string, detail: string): string =>
+      `${traceFile} step ${stepIndex} (${line}) field ${field}: ${detail}`;
+
+    const centi = (field: string, actual: number | undefined, expectedCenti: number): void => {
+      expect(actual, at(field, `expected ${expectedCenti / 100}, actual undefined`)).toBeDefined();
+      const mismatch = centiMismatch(actual as number, expectedCenti);
+      expect(mismatch, at(field, mismatch ?? '')).toBeNull();
+    };
+
+    const axes = [
+      { field: 'x', actual: state.x, spec: spec.x },
+      { field: 'y', actual: state.y, spec: spec.y },
+      { field: 'z', actual: state.z, spec: spec.z }
+    ];
+    for (const axis of axes) {
+      if (!axis.spec.known) {
+        expect(
+          axis.actual,
+          at(axis.field, `expected undefined (axis unknown), actual ${String(axis.actual)}`)
+        ).toBeUndefined();
+      } else {
+        centi(axis.field, axis.actual, axis.spec.pos);
+      }
+    }
+
+    centi('e', state.e, spec.e);
+    centi('positionShift.x', state.positionShift.x, spec.shiftX);
+    centi('positionShift.y', state.positionShift.y, spec.shiftY);
+    centi('positionShift.z', state.positionShift.z, spec.shiftZ);
+
+    expect(
+      state.relativeExtrusion,
+      at('relativeExtrusion', `expected ${spec.relExtrude}, actual ${state.relativeExtrusion}`)
+    ).toBe(spec.relExtrude);
+    const expectedUnits = spec.inches ? 'in' : 'mm';
+    expect(state.units, at('units', `expected ${expectedUnits}, actual ${state.units}`)).toBe(expectedUnits);
+    expect(state.isHomed, at('isHomed', `expected ${spec.homed}, actual ${state.isHomed}`)).toBe(spec.homed);
+    expect(state.tool, at('tool', `expected ${spec.tool}, actual ${state.tool}`)).toBe(spec.tool);
+
+    const counters = [
+      { field: 'stats.points', actual: job.stats.points, expected: spec.points },
+      { field: 'stats.retractions', actual: job.stats.retractions, expected: spec.retractions },
+      { field: 'stats.deretractions', actual: job.stats.deretractions, expected: spec.deretractions },
+      { field: 'stats.feedrateChanges', actual: job.stats.feedrateChanges, expected: spec.feedrateChanges },
+      { field: 'stats.others', actual: job.stats.others, expected: spec.others }
+    ];
+    for (const counter of counters) {
+      expect(counter.actual, at(counter.field, `expected ${counter.expected}, actual ${counter.actual}`)).toBe(
+        counter.expected
+      );
+    }
+  };
+
+  const traceFiles = listTraceFiles(tracesDir);
+
+  test('the v2 traces directory exists and holds at least one ITF trace', () => {
+    // Fails (rather than silently skipping the replay) when the Quint traces
+    // have not been generated into verification/quint-v2/traces/interpreter.
+    expect(traceFiles.length, `expected *.itf.json traces in ${tracesDir}`).toBeGreaterThan(0);
+  });
+
+  for (const traceFile of traceFiles) {
+    test(`replays ${traceFile} through the parser + interpreter`, () => {
+      const states = readTrace(tracesDir, traceFile).map(decodeStep);
+
+      // One job and interpreter per trace: state persists across the steps.
+      const job = new Job();
+      const interpreter = new Interpreter();
+      const parser = new Parser();
+
+      expect(states[0].ev.cmd, `${traceFile} step 0: the first state must be the init state`).toBe('init');
+      compareStep(traceFile, 0, '<init>', job, states[0]);
+
+      for (let step = 1; step < states.length; step++) {
+        const spec = states[step];
+        const line = buildLine(spec.ev);
         const { commands } = parser.parseGCode(line);
         interpreter.execute(commands, job);
         compareStep(traceFile, step, line, job, spec);

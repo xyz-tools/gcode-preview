@@ -1,44 +1,77 @@
-// Runs every Quint spec under verification/quint/: the semantic test runs
-// (quint test) and a seeded random simulation of the spec's `allInvariants`
-// value (quint run). House conventions for every spec file: define `init`,
-// `step`, `allInvariants`, and name the semantic runs `*Test`.
-import { spawnSync } from 'node:child_process';
-import { readdirSync } from 'node:fs';
+// Checks every Quint spec in the manifest, three gates per spec:
+// 1. `quint test` — the semantic *Test runs.
+// 2. Invariant simulation — a pinned-seed lane (reproducible baseline) plus a
+//    fresh-seed lane (CI accumulates exploration over time; the seed is
+//    printed so any failure is reproducible with --seed).
+// 3. Trace freshness — regenerates the committed ITF traces into a temp dir
+//    and compares the state sequences, so a spec edit cannot land with stale
+//    committed traces.
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { BASE_SEED, SPECS, quint, traceGenArgs } from './quint-specs.mjs';
 
-export const QUINT_DIR = 'verification/quint';
-export const SEED = '0x67c0de2026';
+const freshSeed = `0x${Date.now().toString(16)}`;
+let failed = false;
 
-export const specs = () =>
-  readdirSync(QUINT_DIR)
-    .filter((file) => file.endsWith('.qnt'))
-    .sort()
-    .map((file) => ({ name: file.replace(/\.qnt$/, ''), path: join(QUINT_DIR, file) }));
+const statesOf = (dir, file) => JSON.stringify(JSON.parse(readFileSync(join(dir, file), 'utf8')).states);
 
-export const quint = (args) => {
-  const result = spawnSync('npx', ['quint', ...args], { stdio: 'inherit' });
-  if (result.status !== 0) process.exit(result.status ?? 1);
-};
+for (const spec of SPECS) {
+  console.log(`\n=== ${spec.name} ===`);
 
-// Import guard so quint-traces.mjs can reuse the helpers above without
-// triggering the checks.
-if (process.argv[1].endsWith('quint-check.mjs')) {
-  for (const spec of specs()) {
-    console.log(`\n=== ${spec.name} ===`);
-    quint(['test', spec.path]);
-    quint([
-      'run',
-      spec.path,
-      '--invariant',
-      'allInvariants',
-      '--max-samples',
-      '200',
-      '--max-steps',
-      '30',
-      '--seed',
-      SEED,
-      '--verbosity',
-      '1'
-    ]);
+  quint(['test', spec.path, ...(spec.testMain ? ['--main', spec.testMain] : [])]);
+
+  if (spec.invariant) {
+    const simulate = (seed) =>
+      quint([
+        'run',
+        spec.path,
+        ...(spec.main ? ['--main', spec.main] : []),
+        '--invariant',
+        spec.invariant,
+        '--max-samples',
+        '200',
+        '--max-steps',
+        '30',
+        `--seed=${seed}`,
+        '--verbosity',
+        '1'
+      ]);
+    simulate(BASE_SEED);
+    console.log(`fresh-seed lane: ${freshSeed}`);
+    simulate(freshSeed);
+  }
+
+  if (spec.traces) {
+    const temp = mkdtempSync(join(tmpdir(), 'quint-fresh-'));
+    try {
+      for (const args of traceGenArgs(spec, temp)) quint(args);
+      const committed = readdirSync(spec.traces.dir)
+        .filter((f) => f.endsWith('.itf.json'))
+        .sort();
+      const regenerated = readdirSync(temp)
+        .filter((f) => f.endsWith('.itf.json'))
+        .sort();
+      if (committed.join() !== regenerated.join()) {
+        console.error(
+          `STALE TRACES for ${spec.name}: file sets differ (committed ${committed.length}, regenerated ${regenerated.length}). Run: npm run quint:traces`
+        );
+        failed = true;
+      } else {
+        const stale = committed.filter((f) => statesOf(spec.traces.dir, f) !== statesOf(temp, f));
+        if (stale.length > 0) {
+          console.error(
+            `STALE TRACES for ${spec.name}: ${stale.join(', ')} differ from the current spec. Run: npm run quint:traces`
+          );
+          failed = true;
+        } else {
+          console.log(`traces fresh (${committed.length} files)`);
+        }
+      }
+    } finally {
+      rmSync(temp, { recursive: true, force: true });
+    }
   }
 }
+
+if (failed) process.exit(1);

@@ -1,5 +1,7 @@
 # Quint specs of gcode-preview's state machines
 
+> **Version note:** this is the v1 bank. A critique-driven second generation is growing in [`../quint-v2/`](../quint-v2/README.md) — shared core semantics, ghost-state invariants, authority annotations, sized trace corpora. v1 specs stay green and bound until their v2 replacements land; see the migration status in the v2 README.
+
 This directory holds [Quint](https://quint-lang.org) formal specifications of the library's discrete state machines. Each `.qnt` file is one spec; each models what the TypeScript source actually does, with integer-only state (lengths are centi-millimeters, mm × 100).
 
 The specs are the intended semantics; the vitest replay keeps them honest against the real code. Every state in a trace records which input produced it, so a trace doubles as a program — a G-code snippet, a chunk sequence, or an API call sequence — that a replay suite feeds to the real implementation and compares step by step. Neither the spec nor the implementation can drift without CI failing.

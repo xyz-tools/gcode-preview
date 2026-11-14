@@ -1,3 +1,4 @@
 # Quint ITF traces are generated test vectors (npm run quint:traces, fixed
 # seed): collapsed in GitHub PR views and excluded from local diffs.
 verification/quint/traces/**/*.itf.json linguist-generated=true -diff
+verification/quint-v2/traces/**/*.itf.json linguist-generated=true -diff
