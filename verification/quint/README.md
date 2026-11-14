@@ -14,7 +14,7 @@ npm run quint:test
 
 ## Regenerating the traces
 
-The ITF traces in `traces/` are committed and reproducible. They were produced with a fixed seed, so regenerating them yields the same states (only the `#meta` timestamp in the file header changes):
+The ITF traces in `traces/<spec name>/` are committed and reproducible. They were produced with a fixed seed, so regenerating them yields the same states (only the `#meta` timestamp in the file header changes):
 
 ```sh
 npm run quint:traces

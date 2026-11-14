@@ -418,7 +418,7 @@ describe('Quint spec trace replay', () => {
   // the real parser + interpreter pipeline. Each trace state carries the command
   // that produced it (cmd/has*/word*) and the spec's resulting printer state,
   // with lengths in centi-millimeters (mm * 100) as integers.
-  const tracesDir = join(process.cwd(), 'verification', 'quint', 'traces');
+  const tracesDir = join(process.cwd(), 'verification', 'quint', 'traces', 'interpreter');
 
   // An ITF value: booleans and strings are plain JSON; integers arrive either
   // as plain numbers or in Apalache's { "#bigint": "123" } wrapping.

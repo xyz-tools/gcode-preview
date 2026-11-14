@@ -60,8 +60,8 @@
     "typedoc": "typedoc",
     "typedoc:watch": "typedoc --watch",
     "check": "npm run test && npm run typeCheck && npm run lint && echo '😅 All checks passed!'",
-    "quint:test": "quint test verification/quint/interpreter.qnt && quint run verification/quint/interpreter.qnt --invariant allInvariants --max-samples 200 --max-steps 30 --seed 0x67c0de2026 --verbosity 1",
-    "quint:traces": "quint run verification/quint/interpreter.qnt --out-itf 'verification/quint/traces/trace_{seq}.itf.json' --n-traces 15 --max-samples 15 --max-steps 24 --seed 0x67c0de2026 --verbosity 1",
+    "quint:test": "node scripts/quint-check.mjs",
+    "quint:traces": "node scripts/quint-traces.mjs",
     "evals": "node --no-warnings --experimental-strip-types evals/run.ts",
     "evals:grade": "node --no-warnings --experimental-strip-types evals/grade.ts",
     "test:packaging": "npm run build && node scripts/test-packaging.mjs"
