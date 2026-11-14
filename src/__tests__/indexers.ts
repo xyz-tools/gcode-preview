@@ -1,4 +1,6 @@
-import { test, expect, describe } from 'vitest';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { test, expect, describe, vi } from 'vitest';
 import { Path, PathType } from '../path';
 import { Layer } from '../layer';
 import {
@@ -10,6 +12,9 @@ import {
   TravelTypeIndexer
 } from '../indexers';
 import { LayerMetadata } from '../parser/metadata-parser-base';
+import { Parser } from '../parser/gcode-parser';
+import { Interpreter } from '../interpreter';
+import { Job } from '../job';
 
 function makePath(travelType: PathType, points: [number, number, number][] = [], tool: number = 0): Path {
   const path = new Path(travelType, 0.6, 0.2, tool);
@@ -548,4 +553,182 @@ describe('LayersMetadataIndexer strategy selection', () => {
     expect(layers[0].z).toBe(0.28);
     expect(layers[0].height).toBe(0.28);
   });
+});
+
+describe('Quint layer-indexer spec trace replay', () => {
+  // Replays ITF traces produced from verification/quint/layer-indexer.qnt
+  // against the real parser + interpreter + job pipeline. Each trace state
+  // carries the event that produced it (cmd plus z/height words) and the
+  // spec's expected layer observables, with lengths in centi-millimeters
+  // (mm * 100) as integers. Each step is rebuilt as its own chunk — a move
+  // line or a PrusaSlicer-style layer-comment block — and fed through one
+  // streaming Parser/Job, which is exactly how GCodePreview.processGCode
+  // drives the layer indexer.
+  const tracesDir = join(process.cwd(), 'verification', 'quint', 'traces', 'layer-indexer');
+
+  // An ITF value: booleans and strings are plain JSON; integers arrive either
+  // as plain numbers or in Apalache's { "#bigint": "123" } wrapping; lists
+  // arrive as JSON arrays of ITF values.
+  type ItfScalar = boolean | string | number | { '#bigint': string };
+  type ItfValue = ItfScalar | ItfValue[] | { [key: string]: ItfValue } | undefined;
+  type ItfState = Record<string, ItfValue>;
+
+  const itfInt = (value: ItfValue, key: string): number => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'object' && value !== null && !Array.isArray(value) && typeof value['#bigint'] === 'string') {
+      return Number(value['#bigint']);
+    }
+    throw new Error(`expected an ITF integer for "${key}", got ${JSON.stringify(value)}`);
+  };
+  const itfBool = (value: ItfValue, key: string): boolean => {
+    if (typeof value !== 'boolean') throw new Error(`expected a boolean for "${key}", got ${JSON.stringify(value)}`);
+    return value;
+  };
+  const itfStr = (value: ItfValue, key: string): string => {
+    if (typeof value !== 'string') throw new Error(`expected a string for "${key}", got ${JSON.stringify(value)}`);
+    return value;
+  };
+  const itfIntList = (value: ItfValue, key: string): number[] => {
+    if (!Array.isArray(value)) throw new Error(`expected an ITF list for "${key}", got ${JSON.stringify(value)}`);
+    return value.map((element, i) => itfInt(element, `${key}[${i}]`));
+  };
+
+  // The spec's trace-contract variables, decoded; internal model variables
+  // (locked, pointer, metaLayers, ...) and keys starting with '#' (like
+  // '#meta') are never read and are thereby ignored.
+  type SpecState = {
+    cmd: string;
+    hasZWord: boolean;
+    zWord: number;
+    hasHWord: boolean;
+    hWord: number;
+    assignedLayer: number;
+    layersZ: number[];
+    layersH: number[];
+  };
+
+  const decodeState = (raw: ItfState): SpecState => ({
+    cmd: itfStr(raw.cmd, 'cmd'),
+    hasZWord: itfBool(raw.hasZWord, 'hasZWord'),
+    zWord: itfInt(raw.zWord, 'zWord'),
+    hasHWord: itfBool(raw.hasHWord, 'hasHWord'),
+    hWord: itfInt(raw.hWord, 'hWord'),
+    assignedLayer: itfInt(raw.assignedLayer, 'assignedLayer'),
+    layersZ: itfIntList(raw.layersZ, 'layersZ'),
+    layersH: itfIntList(raw.layersH, 'layersH')
+  });
+
+  // Builds the input chunk a spec state's event describes. Moves get a fresh
+  // X destination and a monotonically growing absolute E from the step index,
+  // so every move adds a vertex and every E word reads as a real extrusion.
+  // "stutter" steps feed nothing (null).
+  const buildChunk = (spec: SpecState, stepIndex: number): string | null => {
+    switch (spec.cmd) {
+      case 'travel':
+        return `G0 X${stepIndex} Z${spec.zWord}`;
+      case 'extrude':
+        return `G1 X${stepIndex} E${stepIndex}`;
+      case 'extrudeup':
+        return `G1 X${stepIndex} Z${spec.zWord} E${stepIndex}`;
+      case 'layercomment': {
+        const lines = [';LAYER_CHANGE'];
+        if (spec.hasZWord) lines.push(`;Z:${spec.zWord}`);
+        if (spec.hasHWord) lines.push(`;HEIGHT:${spec.hWord}`);
+        return lines.join('\n');
+      }
+      case 'stutter':
+        return null;
+      default:
+        throw new Error(`unknown spec event "${spec.cmd}"`);
+    }
+  };
+
+  // The full per-step comparison from the trace contract: the job's layer
+  // partition (count, z, height per layer) and, when the spec filed a path
+  // into a layer, the layerIndex the last finished path was assigned. Every
+  // assertion message names the trace file, step index, input, field, and
+  // the expected vs actual values.
+  const compareStep = (traceFile: string, stepIndex: number, input: string, job: Job, spec: SpecState): void => {
+    const at = (field: string, expected: unknown, actual: unknown) =>
+      `${traceFile} step ${stepIndex} (${input}) field ${field}: expected ${String(expected)}, actual ${String(actual)}`;
+
+    expect(job.layers.length, at('layers.length', spec.layersZ.length, job.layers.length)).toBe(spec.layersZ.length);
+
+    for (let i = 0; i < spec.layersZ.length; i++) {
+      const expectedZ = spec.layersZ[i] / 100;
+      const actualZ = job.layers[i].z;
+      expect(Math.abs(actualZ - expectedZ) <= 1e-6, at(`layers[${i}].z`, expectedZ, actualZ)).toBe(true);
+
+      const expectedHeight = spec.layersH[i] / 100;
+      const actualHeight = job.layers[i].height;
+      expect(
+        Math.abs(actualHeight - expectedHeight) <= 1e-6,
+        at(`layers[${i}].height`, expectedHeight, actualHeight)
+      ).toBe(true);
+    }
+
+    // assignedLayer == -1 means no layer received the step's path (dropped
+    // travel, collapsed index, or a comment step with nothing to re-file);
+    // a stale layerIndex from an earlier assignment may remain on the path,
+    // so only positive assignments are asserted.
+    if (spec.assignedLayer >= 0) {
+      const lastPath = job.paths[job.paths.length - 1];
+      expect(lastPath, at('paths[last]', 'a finished path', lastPath)).toBeDefined();
+      expect(lastPath.layerIndex, at('paths[last].layerIndex', spec.assignedLayer, lastPath.layerIndex)).toBe(
+        spec.assignedLayer
+      );
+    }
+  };
+
+  let traceFiles: string[] = [];
+  try {
+    traceFiles = readdirSync(tracesDir)
+      .filter((file) => file.endsWith('.itf.json'))
+      .sort();
+  } catch {
+    // Missing directory: the guard test below fails with a clear message.
+  }
+
+  test('the traces directory exists and holds at least one ITF trace', () => {
+    // Fails (rather than silently skipping the replay) when the Quint traces
+    // have not been generated into verification/quint/traces.
+    expect(traceFiles.length, `expected *.itf.json traces in ${tracesDir}`).toBeGreaterThan(0);
+  });
+
+  for (const traceFile of traceFiles) {
+    test(`replays ${traceFile} through the parser + interpreter + job`, () => {
+      const parsed = JSON.parse(readFileSync(join(tracesDir, traceFile), 'utf8')) as { states: ItfState[] };
+      expect(Array.isArray(parsed.states), `${traceFile}: ITF file has no states array`).toBe(true);
+      expect(parsed.states.length, `${traceFile}: trace has no states`).toBeGreaterThan(0);
+      const states = parsed.states.map(decodeState);
+
+      // One job, parser and interpreter per trace: layer state, the streaming
+      // metadata array and the strategy lock all persist across the steps.
+      const job = new Job();
+      const interpreter = new Interpreter();
+      const parser = new Parser();
+
+      // A non-planar extrusion makes the job warn once while it clears the
+      // layer index; that collapse is part of the modeled behavior.
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        expect(states[0].cmd, `${traceFile} step 0: the first state must be the init state`).toBe('init');
+        compareStep(traceFile, 0, '<init>', job, states[0]);
+
+        for (let step = 1; step < states.length; step++) {
+          const spec = states[step];
+          const input = buildChunk(spec, step);
+          if (input !== null) {
+            const { commands, metadata } = parser.parseGCode(input);
+            // forward metadata before executing, like GCodePreview.processGCode
+            job.metadata = metadata;
+            interpreter.execute(commands, job);
+          }
+          compareStep(traceFile, step, input ?? '<stutter>', job, spec);
+        }
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+  }
 });

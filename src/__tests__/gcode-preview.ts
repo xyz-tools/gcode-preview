@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, it, test, expect, vi, beforeAll, beforeEach, afterAll, afterEach } from 'vitest';
 import { GCodePreview } from '../gcode-preview';
 import { SceneManager } from '../scene-manager';
 import { Parser } from '../parser/gcode-parser';
@@ -520,4 +522,214 @@ describe('GCodePreview', () => {
       expect(preview.sceneManager.renderTubes).toBe(true);
     });
   });
+});
+
+describe('Quint lifecycle spec trace replay', () => {
+  // Replays ITF traces produced from verification/quint/lifecycle.qnt against
+  // a REAL GCodePreview. The module mocks at the top of this file are undone
+  // for this suite (vi.doUnmock + vi.resetModules + a fresh dynamic import),
+  // so the real SceneManager, ObjectsManager, Parser, Interpreter and Job are
+  // driven; only three's WebGLRenderer is replaced — the same stubbing the
+  // renderer smoke test uses — so the suite runs without a GPU. Each trace
+  // state carries the lifecycle call that produced it (cmd), the spec's
+  // predicted outcome ("ok" vs "throws"), and the observable counters.
+  const tracesDir = join(process.cwd(), 'verification', 'quint', 'traces', 'lifecycle');
+
+  // The fixed snippet the spec's "process" action stands for: one extrusion
+  // move, which adds exactly one path to the job per processGCode call.
+  const PROCESS_SNIPPET = 'G1 X10 Y10 E1';
+
+  // An ITF value: strings are plain JSON; integers arrive either as plain
+  // numbers or in Apalache's { "#bigint": "123" } wrapping.
+  type ItfValue = boolean | string | number | { '#bigint': string } | undefined;
+  type ItfState = Record<string, ItfValue>;
+
+  const itfInt = (value: ItfValue, key: string): number => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'object' && value !== null && typeof value['#bigint'] === 'string') {
+      return Number(value['#bigint']);
+    }
+    throw new Error(`expected an ITF integer for "${key}", got ${JSON.stringify(value)}`);
+  };
+  const itfStr = (value: ItfValue, key: string): string => {
+    if (typeof value !== 'string') throw new Error(`expected a string for "${key}", got ${JSON.stringify(value)}`);
+    return value;
+  };
+
+  // The spec's state variables, decoded; keys starting with '#' (like '#meta')
+  // are never read and are thereby ignored.
+  type SpecState = {
+    cmd: string;
+    outcome: string;
+    phase: string;
+    processedCount: number;
+    pathCount: number;
+    managerGen: number;
+  };
+
+  const decodeState = (raw: ItfState): SpecState => ({
+    cmd: itfStr(raw.cmd, 'cmd'),
+    outcome: itfStr(raw.outcome, 'outcome'),
+    phase: itfStr(raw.phase, 'phase'),
+    processedCount: itfInt(raw.processedCount, 'processedCount'),
+    pathCount: itfInt(raw.pathCount, 'pathCount'),
+    managerGen: itfInt(raw.managerGen, 'managerGen')
+  });
+
+  // Every WebGLRenderer the stub hands out, in construction order: the spec's
+  // managerGen counts SceneManager/renderer pairs, so resurrection after
+  // dispose() is observable as this list growing.
+  const createdRenderers: object[] = [];
+  let RealGCodePreview: typeof GCodePreview;
+
+  beforeAll(async () => {
+    vi.doUnmock('../scene-manager');
+    vi.doUnmock('../parser/gcode-parser');
+    vi.doUnmock('../job');
+    vi.doUnmock('../interpreter');
+    vi.doUnmock('../extra/dom-utils');
+    // Only the WebGLRenderer is replaced so the replay can run without a GPU.
+    // Every other three.js class stays real, as in renderer-smoke.ts.
+    vi.doMock('three', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('three')>();
+      class MockWebGLRenderer {
+        domElement: HTMLElement;
+        info = {
+          render: { triangles: 0, calls: 0, lines: 0, points: 0 },
+          memory: { geometries: 0, textures: 0 }
+        };
+        localClippingEnabled = false;
+        setPixelRatio = vi.fn();
+        setSize = vi.fn();
+        render = vi.fn();
+        dispose = vi.fn();
+
+        constructor(opts: { canvas?: HTMLElement } = {}) {
+          this.domElement = opts.canvas ?? document.createElement('canvas');
+          createdRenderers.push(this);
+        }
+      }
+      return { ...actual, WebGLRenderer: MockWebGLRenderer };
+    });
+    vi.resetModules();
+    RealGCodePreview = (await import('../gcode-preview')).GCodePreview;
+  });
+
+  afterAll(() => {
+    vi.doUnmock('three');
+    vi.resetModules();
+  });
+
+  // The real SceneManager logs its three.js revision and options on every
+  // construction (including each resurrection); keep the test output clean.
+  let consoleSpies: Array<{ mockRestore: () => void }> = [];
+  beforeEach(() => {
+    consoleSpies = [
+      vi.spyOn(console, 'info').mockImplementation(() => {}),
+      vi.spyOn(console, 'debug').mockImplementation(() => {})
+    ];
+  });
+  afterEach(() => {
+    consoleSpies.forEach((spy) => spy.mockRestore());
+  });
+
+  /** dispose() nulls the private _sceneManager; "disposed" means exactly that. */
+  const managerLive = (preview: GCodePreview): boolean =>
+    (preview as unknown as { _sceneManager: unknown })._sceneManager !== null;
+
+  const LIFECYCLE_CALLS = ['process', 'clear', 'render', 'resize', 'dispose'];
+
+  /** Applies one spec action to the real preview, observing ok vs throws. */
+  const applyAction = async (preview: GCodePreview, cmd: string): Promise<'ok' | 'throws'> => {
+    if (!LIFECYCLE_CALLS.includes(cmd)) throw new Error(`unknown spec command "${cmd}"`);
+    try {
+      if (cmd === 'process') await preview.processGCode(PROCESS_SNIPPET);
+      else if (cmd === 'clear') preview.clear();
+      else if (cmd === 'render') preview.sceneManager.render();
+      else if (cmd === 'resize') preview.sceneManager.resize();
+      else preview.dispose();
+      return 'ok';
+    } catch {
+      return 'throws';
+    }
+  };
+
+  // The full per-step comparison from the trace contract. Every assertion
+  // message names the trace file, step index, lifecycle call, field, and the
+  // expected vs actual values.
+  const compareStep = (
+    traceFile: string,
+    stepIndex: number,
+    input: string,
+    preview: GCodePreview,
+    actualOutcome: string,
+    rendererBase: number,
+    spec: SpecState
+  ): void => {
+    const at = (field: string, expected: unknown, actual: unknown) =>
+      `${traceFile} step ${stepIndex} (${input}) field ${field}: expected ${String(expected)}, actual ${String(actual)}`;
+
+    expect(actualOutcome, at('outcome', spec.outcome, actualOutcome)).toBe(spec.outcome);
+
+    const paths = preview.job.paths.length;
+    expect(paths, at('pathCount', spec.pathCount, paths)).toBe(spec.pathCount);
+
+    const gen = createdRenderers.length - rendererBase;
+    expect(gen, at('managerGen', spec.managerGen, gen)).toBe(spec.managerGen);
+
+    // phase: "disposed" iff no scene manager is live; "hasContent" iff one is
+    // live and the job holds paths; "fresh" otherwise
+    const live = managerLive(preview);
+    const expectedLive = spec.phase !== 'disposed';
+    expect(live, at('phase/managerLive', expectedLive, live)).toBe(expectedLive);
+    const expectedHasContent = spec.phase === 'hasContent';
+    const actualHasContent = live && paths > 0;
+    expect(actualHasContent, at('phase/hasContent', expectedHasContent, actualHasContent)).toBe(expectedHasContent);
+  };
+
+  let traceFiles: string[] = [];
+  try {
+    traceFiles = readdirSync(tracesDir)
+      .filter((file) => file.endsWith('.itf.json'))
+      .sort();
+  } catch {
+    // Missing directory: the guard test below fails with a clear message.
+  }
+
+  test('the traces directory exists and holds at least one ITF trace', () => {
+    // Fails (rather than silently skipping the replay) when the Quint traces
+    // have not been generated into verification/quint/traces.
+    expect(traceFiles.length, `expected *.itf.json traces in ${tracesDir}`).toBeGreaterThan(0);
+  });
+
+  for (const traceFile of traceFiles) {
+    test(`replays ${traceFile} against a real stubbed GCodePreview`, async () => {
+      const parsed = JSON.parse(readFileSync(join(tracesDir, traceFile), 'utf8')) as { states: ItfState[] };
+      expect(Array.isArray(parsed.states), `${traceFile}: ITF file has no states array`).toBe(true);
+      expect(parsed.states.length, `${traceFile}: trace has no states`).toBeGreaterThan(0);
+      const states = parsed.states.map(decodeState);
+
+      // One real preview per trace: lifecycle state persists across the steps.
+      const rendererBase = createdRenderers.length;
+      const canvas = document.createElement('canvas');
+      Object.defineProperty(canvas, 'offsetWidth', { value: 800, configurable: true });
+      Object.defineProperty(canvas, 'offsetHeight', { value: 600, configurable: true });
+      const preview = new RealGCodePreview({ canvas, buildVolume: { x: 200, y: 200, z: 200 } });
+
+      try {
+        expect(states[0].cmd, `${traceFile} step 0: the first state must be the init state`).toBe('init');
+        compareStep(traceFile, 0, '<init>', preview, 'ok', rendererBase, states[0]);
+
+        for (let step = 1; step < states.length; step++) {
+          const spec = states[step];
+          // a stutter step feeds no input: the preview must simply stay put
+          const actualOutcome = spec.cmd === 'stutter' ? 'ok' : await applyAction(preview, spec.cmd);
+          compareStep(traceFile, step, spec.cmd, preview, actualOutcome, rendererBase, spec);
+        }
+      } finally {
+        // stop the animation loop of whichever SceneManager is currently live
+        preview.dispose();
+      }
+    });
+  }
 });

@@ -3,14 +3,17 @@
  * Formal specification of the gcode-preview interpreter state machine.
  *
  * Models the printer-state effects of the position/extrusion G-codes
- * (G0/G1, G20/G21, G28, G92, G92.1, M82/M83, T0..T7) exactly as implemented
- * by the TypeScript handlers in src/interpreter/commands/*. All lengths are
- * kept as integers in centi-millimeters (mm * 100) so the spec stays in Int.
+ * (G0/G1, G2/G3 arcs, G20/G21, G28, G31/G38.2-G38.5 probes, G92, G92.1,
+ * M82/M83, T0..T7) exactly as implemented by the TypeScript handlers in
+ * src/interpreter/commands/*, plus the job statistics counters those handlers
+ * tally (src/job-stats.ts). All lengths are kept as integers in
+ * centi-millimeters (mm * 100) so the spec stays in Int; F words are feedrates
+ * the handlers never convert or store, so wordF carries the raw word value.
  *
  * The cmd, has and word variables record WHICH command was taken on each step,
  * so an ITF trace of this spec doubles as a G-code program: a replay harness
- * can rebuild the line (e.g. "G1 X10 E-3"), feed it to the real interpreter,
- * and compare the real State against the spec's printer state.
+ * can rebuild the line (e.g. "G2 X10 I5 E-3"), feed it to the real
+ * interpreter, and compare the real State and JobStats against the spec.
  */
 module interpreter {
   // --- trace-contract variables: the command taken on this step ---
@@ -23,6 +26,20 @@ module interpreter {
   var wordY: int
   var wordZ: int
   var wordE: int
+  // F word (feedrate): only its presence matters to the interpreter state,
+  // where it decides the zero-length move classification in linear-move.ts
+  var hasF: bool
+  var wordF: int
+  // Arc words (G2/G3). They shape the tessellated polyline only, never the
+  // printer State, but the replay needs them to rebuild the real arc line.
+  var hasI: bool
+  var hasJ: bool
+  var hasR: bool
+  var wordI: int
+  var wordJ: int
+  var wordR: int
+  // P word: RepRapFirmware's set-trigger-values form of G31 (probe.ts no-op)
+  var hasP: bool
 
   // --- trace-contract variables: printer state (lengths in centi-mm) ---
   var xKnown: bool
@@ -40,9 +57,22 @@ module interpreter {
   var homed: bool
   var tool: int
 
+  // --- trace-contract variables: job statistics (src/job-stats.ts) ---
+  // points counts linear moves with at least one axis word plus probe moves;
+  // arc moves deliberately leave it alone, mirroring arc-move.ts, which never
+  // touches the counter. The other four classify zero-length G0/G1 moves.
+  var points: int
+  var retractions: int
+  var deretractions: int
+  var feedrateChanges: int
+  var others: int
+
   // Word domains per the trace contract
   pure val XyzWords: Set[int] = (-50).to(50)
   pure val EWords: Set[int] = (-20).to(20)
+  pure val FWords: Set[int] = 0.to(60)
+  pure val IjWords: Set[int] = (-20).to(20)
+  pure val RWords: Set[int] = (-10).to(10)
 
   /// Current-units -> centi-mm factor (src/units.ts toMillimeters, scaled by 100)
   val fac: int = if (inches) 2540 else 100
@@ -53,15 +83,41 @@ module interpreter {
     else if (relExtrude) e100 + we * fac
     else we * fac
 
+  /// Probe Z target with the clamp from probe.ts: a probe below the origin
+  /// plane (shifted target < 0) from a known Z at or above it triggers at
+  /// physical Z0; every other probe travels to the commanded shifted target.
+  def probeTargetZ(wz: int): int = {
+    val raw = wz * fac + shiftZ
+    if (raw < 0 and zKnown and posZ >= 0) 0 else raw
+  }
+
   // --- bookkeeping helpers ---
 
-  /// Record which command (and which words) this step takes
-  action recordCmd(c: str, hx: bool, wx: int, hy: bool, wy: int, hz: bool, wz: int, he: bool, we: int): bool = all {
+  /// Record the command and its X/Y/Z/E words
+  action recordXyzE(c: str, hx: bool, wx: int, hy: bool, wy: int, hz: bool, wz: int, he: bool, we: int): bool = all {
     cmd' = c,
     hasX' = hx, wordX' = wx,
     hasY' = hy, wordY' = wy,
     hasZ' = hz, wordZ' = wz,
     hasE' = he, wordE' = we
+  }
+
+  action recordF(hf: bool, wf: int): bool = all { hasF' = hf, wordF' = wf }
+
+  action recordArcWords(hi: bool, wi: int, hj: bool, wj: int, hr: bool, wr: int): bool = all {
+    hasI' = hi, wordI' = wi,
+    hasJ' = hj, wordJ' = wj,
+    hasR' = hr, wordR' = wr
+  }
+
+  action recordP(hp: bool): bool = hasP' = hp
+
+  /// Record a command that carries X/Y/Z/E words at most
+  action recordCmd(c: str, hx: bool, wx: int, hy: bool, wy: int, hz: bool, wz: int, he: bool, we: int): bool = all {
+    recordXyzE(c, hx, wx, hy, wy, hz, wz, he, we),
+    recordF(false, 0),
+    recordArcWords(false, 0, false, 0, false, 0),
+    recordP(false)
   }
 
   /// Record a command that carries no words
@@ -77,14 +133,22 @@ module interpreter {
   action keepUnits = inches' = inches
   action keepHomed = homed' = homed
   action keepTool = tool' = tool
+  action keepCounts = all {
+    retractions' = retractions, deretractions' = deretractions,
+    feedrateChanges' = feedrateChanges, others' = others
+  }
+  action keepStats = all { points' = points, keepCounts }
 
   // --- one action per command class ---
 
   /// G0/G1 linear move — src/interpreter/commands/linear-move.ts
-  action linearMoveWith(g: str, hx: bool, wx: int, hy: bool, wy: int, hz: bool, wz: int, he: bool, we: int): bool = all {
-    recordCmd(g, hx, wx, hy, wy, hz, wz, he, we),
+  action linearMoveFullWith(g: str, hx: bool, wx: int, hy: bool, wy: int, hz: bool, wz: int, he: bool, we: int, hf: bool, wf: int): bool = all {
+    recordXyzE(g, hx, wx, hy, wy, hz, wz, he, we),
+    recordF(hf, wf),
+    recordArcWords(false, 0, false, 0, false, 0),
+    recordP(false),
     // each present axis moves to word*fac + shift and becomes known; absent
-    // axes are untouched (also covers the zero-length early return in TS)
+    // axes are untouched
     posX' = if (hx) wx * fac + shiftX else posX,
     posY' = if (hy) wy * fac + shiftY else posY,
     posZ' = if (hz) wz * fac + shiftZ else posZ,
@@ -92,7 +156,78 @@ module interpreter {
     yKnown' = (hy or yKnown),
     zKnown' = (hz or zKnown),
     e100' = nextE(he, we),
+    // Stats, exactly as linear-move.ts tallies them. A move without axis words
+    // is classified by the RAW E word's sign (not the extruded delta, so in
+    // absolute mode a positive E that decreases the extruder position still
+    // counts as a retraction), falling back to the F word, then "others".
+    // A move with at least one axis word only counts a point.
+    if (not(hx or hy or hz)) all {
+      points' = points,
+      retractions' = if (he and we > 0) retractions + 1 else retractions,
+      deretractions' = if (he and we < 0) deretractions + 1 else deretractions,
+      feedrateChanges' = if (not(he and we != 0) and hf) feedrateChanges + 1 else feedrateChanges,
+      others' = if (not(he and we != 0) and not(hf)) others + 1 else others
+    } else all {
+      points' = points + 1,
+      keepCounts
+    },
     keepShift, keepRel, keepUnits, keepHomed, keepTool
+  }
+
+  /// G0/G1 without an F word, the form the older runs use
+  action linearMoveWith(g: str, hx: bool, wx: int, hy: bool, wy: int, hz: bool, wz: int, he: bool, we: int): bool =
+    linearMoveFullWith(g, hx, wx, hy, wy, hz, wz, he, we, false, 0)
+
+  /// G2/G3 arc move — src/interpreter/commands/arc-move.ts, State effects only.
+  /// The endpoint and E accounting are exactly a linear move's; the I/J/R words
+  /// feed the tessellator, which emits path points but never writes the State.
+  /// Degenerate parameter investigation: ArcTessellator guards an R-mode whole
+  /// circle (dSquared == 0), a zero radius (I and J absent or zero), and
+  /// non-finite segment counts by emitting only the endpoint, so within the
+  /// bounded integer word domains above NO combination of present/absent
+  /// I/J/R/X/Y/Z/E words aborts the real pipeline — the only generation
+  /// constraint the replay needs is those bounded domains themselves.
+  /// Stats: arc-move.ts increments none of the modeled counters (no points++).
+  action arcMoveWith(g: str, hx: bool, wx: int, hy: bool, wy: int, hz: bool, wz: int, he: bool, we: int, hi: bool, wi: int, hj: bool, wj: int, hr: bool, wr: int): bool = all {
+    recordXyzE(g, hx, wx, hy, wy, hz, wz, he, we),
+    recordF(false, 0),
+    recordArcWords(hi, wi, hj, wj, hr, wr),
+    recordP(false),
+    posX' = if (hx) wx * fac + shiftX else posX,
+    posY' = if (hy) wy * fac + shiftY else posY,
+    posZ' = if (hz) wz * fac + shiftZ else posZ,
+    xKnown' = (hx or xKnown),
+    yKnown' = (hy or yKnown),
+    zKnown' = (hz or zKnown),
+    e100' = nextE(he, we),
+    keepStats,
+    keepShift, keepRel, keepUnits, keepHomed, keepTool
+  }
+
+  /// G31/G38.2-G38.5 straight probe — src/interpreter/commands/probe.ts.
+  /// A P word (RRF set-trigger-values form) is a no-op before anything else;
+  /// so is a probe without any axis words. Otherwise the probe travels to the
+  /// shifted targets, with the Z clamp of probeTargetZ, counts a point, and
+  /// never touches E (the handler reads no E or F word at all).
+  action probeWith(c: str, hp: bool, hx: bool, wx: int, hy: bool, wy: int, hz: bool, wz: int): bool = all {
+    recordXyzE(c, hx, wx, hy, wy, hz, wz, false, 0),
+    recordF(false, 0),
+    recordArcWords(false, 0, false, 0, false, 0),
+    recordP(hp),
+    if (hp or not(hx or hy or hz)) all {
+      keepPose,
+      points' = points
+    } else all {
+      posX' = if (hx) wx * fac + shiftX else posX,
+      posY' = if (hy) wy * fac + shiftY else posY,
+      posZ' = if (hz) probeTargetZ(wz) else posZ,
+      xKnown' = (hx or xKnown),
+      yKnown' = (hy or yKnown),
+      zKnown' = (hz or zKnown),
+      points' = points + 1
+    },
+    keepCounts,
+    keepE, keepShift, keepRel, keepUnits, keepHomed, keepTool
   }
 
   /// G92 set position — src/interpreter/commands/set-position.ts
@@ -108,19 +243,19 @@ module interpreter {
       shiftZ' = if (hz) posZ - wz * fac else shiftZ,
       e100' = if (he) we * fac else e100
     },
-    keepPose, keepRel, keepUnits, keepHomed, keepTool
+    keepPose, keepRel, keepUnits, keepHomed, keepTool, keepStats
   }
 
   /// G20 inches — src/interpreter/commands/set-units.ts (setInchUnits)
   action inchUnits = all {
     recordBare("g20"), inches' = true,
-    keepPose, keepShift, keepE, keepRel, keepHomed, keepTool
+    keepPose, keepShift, keepE, keepRel, keepHomed, keepTool, keepStats
   }
 
   /// G21 millimeters — src/interpreter/commands/set-units.ts (setMillimeterUnits)
   action mmUnits = all {
     recordBare("g21"), inches' = false,
-    keepPose, keepShift, keepE, keepRel, keepHomed, keepTool
+    keepPose, keepShift, keepE, keepRel, keepHomed, keepTool, keepStats
   }
 
   /// G28 home all axes — src/interpreter/commands/home.ts
@@ -129,32 +264,32 @@ module interpreter {
     posX' = 0, posY' = 0, posZ' = 0,
     xKnown' = true, yKnown' = true, zKnown' = true,
     homed' = true,
-    keepShift, keepE, keepRel, keepUnits, keepTool
+    keepShift, keepE, keepRel, keepUnits, keepTool, keepStats
   }
 
   /// G92.1 reset workspace shift — src/interpreter/commands/reset-position-shift.ts
   action resetShift = all {
     recordBare("g92_1"),
     shiftX' = 0, shiftY' = 0, shiftZ' = 0,
-    keepPose, keepE, keepRel, keepUnits, keepHomed, keepTool
+    keepPose, keepE, keepRel, keepUnits, keepHomed, keepTool, keepStats
   }
 
   /// M82 absolute E — src/interpreter/commands/set-extrusion-mode.ts (setAbsoluteExtrusion)
   action absoluteE = all {
     recordBare("m82"), relExtrude' = false,
-    keepPose, keepShift, keepE, keepUnits, keepHomed, keepTool
+    keepPose, keepShift, keepE, keepUnits, keepHomed, keepTool, keepStats
   }
 
   /// M83 relative E — src/interpreter/commands/set-extrusion-mode.ts (setRelativeExtrusion)
   action relativeE = all {
     recordBare("m83"), relExtrude' = true,
-    keepPose, keepShift, keepE, keepUnits, keepHomed, keepTool
+    keepPose, keepShift, keepE, keepUnits, keepHomed, keepTool, keepStats
   }
 
   /// T0..T7 tool select — src/interpreter/commands/select-tool.ts
   action selectToolWith(c: str, t: int): bool = all {
     recordBare(c), tool' = t,
-    keepPose, keepShift, keepE, keepRel, keepUnits, keepHomed
+    keepPose, keepShift, keepE, keepRel, keepUnits, keepHomed, keepStats
   }
 
   // --- nondeterministic wrappers for simulation ---
@@ -165,15 +300,59 @@ module interpreter {
     nondet hy = Bool.oneOf()
     nondet hz = Bool.oneOf()
     nondet he = Bool.oneOf()
+    nondet hf = Bool.oneOf()
     nondet wx = XyzWords.oneOf()
     nondet wy = XyzWords.oneOf()
     nondet wz = XyzWords.oneOf()
     nondet we = EWords.oneOf()
-    linearMoveWith(g,
+    nondet wf = FWords.oneOf()
+    linearMoveFullWith(g,
       hx, if (hx) wx else 0,
       hy, if (hy) wy else 0,
       hz, if (hz) wz else 0,
-      he, if (he) we else 0)
+      he, if (he) we else 0,
+      hf, if (hf) wf else 0)
+  }
+
+  action anyArcMove = {
+    nondet g = Set("g2", "g3").oneOf()
+    nondet hx = Bool.oneOf()
+    nondet hy = Bool.oneOf()
+    nondet hz = Bool.oneOf()
+    nondet he = Bool.oneOf()
+    nondet hi = Bool.oneOf()
+    nondet hj = Bool.oneOf()
+    nondet hr = Bool.oneOf()
+    nondet wx = XyzWords.oneOf()
+    nondet wy = XyzWords.oneOf()
+    nondet wz = XyzWords.oneOf()
+    nondet we = EWords.oneOf()
+    nondet wi = IjWords.oneOf()
+    nondet wj = IjWords.oneOf()
+    nondet wr = RWords.oneOf()
+    arcMoveWith(g,
+      hx, if (hx) wx else 0,
+      hy, if (hy) wy else 0,
+      hz, if (hz) wz else 0,
+      he, if (he) we else 0,
+      hi, if (hi) wi else 0,
+      hj, if (hj) wj else 0,
+      hr, if (hr) wr else 0)
+  }
+
+  action anyProbe = {
+    nondet c = Set("g31", "g38_2", "g38_3", "g38_4", "g38_5").oneOf()
+    nondet hp = Bool.oneOf()
+    nondet hx = Bool.oneOf()
+    nondet hy = Bool.oneOf()
+    nondet hz = Bool.oneOf()
+    nondet wx = XyzWords.oneOf()
+    nondet wy = XyzWords.oneOf()
+    nondet wz = XyzWords.oneOf()
+    probeWith(c, hp,
+      hx, if (hx) wx else 0,
+      hy, if (hy) wy else 0,
+      hz, if (hz) wz else 0)
   }
 
   action anySetPosition = {
@@ -206,21 +385,31 @@ module interpreter {
     cmd' = "init",
     hasX' = false, hasY' = false, hasZ' = false, hasE' = false,
     wordX' = 0, wordY' = 0, wordZ' = 0, wordE' = 0,
+    hasF' = false, wordF' = 0,
+    hasI' = false, hasJ' = false, hasR' = false,
+    wordI' = 0, wordJ' = 0, wordR' = 0,
+    hasP' = false,
     xKnown' = false, yKnown' = false, zKnown' = false,
     posX' = 0, posY' = 0, posZ' = 0,
     e100' = 0,
     shiftX' = 0, shiftY' = 0, shiftZ' = 0,
-    relExtrude' = false, inches' = false, homed' = false, tool' = 0
+    relExtrude' = false, inches' = false, homed' = false, tool' = 0,
+    points' = 0, retractions' = 0, deretractions' = 0,
+    feedrateChanges' = 0, others' = 0
   }
 
-  /// Weighted command pick: moves 40%, G92 30%, the rest shares the remainder,
-  /// so traces exercise moves and workspace shifts heavily.
+  /// Weighted command pick: moves (linear + arc) ~42%, G92 ~17%, probes ~17%,
+  /// the rest shares the remainder, so traces exercise moves, workspace shifts
+  /// and probes heavily. Always enabled: a G-code stream never runs out of
+  /// commands to take, so no stutter step is needed.
   action step = {
-    nondet choice = 1.to(10).oneOf()
-    if (choice <= 4) anyLinearMove
+    nondet choice = 1.to(12).oneOf()
+    if (choice <= 3) anyLinearMove
+    else if (choice <= 5) anyArcMove
     else if (choice <= 7) anySetPosition
-    else if (choice == 8) any { inchUnits, mmUnits, absoluteE, relativeE }
-    else if (choice == 9) any { homeAll, resetShift }
+    else if (choice <= 9) anyProbe
+    else if (choice == 10) any { inchUnits, mmUnits, absoluteE, relativeE }
+    else if (choice == 11) any { homeAll, resetShift }
     else anySelectTool
   }
 
@@ -236,7 +425,12 @@ module interpreter {
 
   val homedImpliesKnown = homed implies (xKnown and yKnown and zKnown)
 
-  val allInvariants = and { toolInRange, unknownAxisIsZero, homedImpliesKnown }
+  val statsNonNegative = and {
+    points >= 0, retractions >= 0, deretractions >= 0,
+    feedrateChanges >= 0, others >= 0
+  }
+
+  val allInvariants = and { toolInRange, unknownAxisIsZero, homedImpliesKnown, statsNonNegative }
 
   // --- semantic tests (run with: npx quint test verification/quint/interpreter.qnt) ---
 
@@ -313,4 +507,109 @@ module interpreter {
       .expect(e100 == 600)
       .then(setPositionWith(false, 0, false, 0, false, 0, false, 0))
       .expect(and { shiftX == 0, shiftY == 0, shiftZ == 0, e100 == 0, not(homed) })
+
+  /// The zero-length classification grid of linear-move.ts: raw E word sign
+  /// first (even when the absolute-mode delta has the opposite sign), then F
+  /// presence, then "others"; a move with an axis word only counts a point.
+  run zeroLengthStatsTest =
+    init
+      .then(linearMoveFullWith("g1", false, 0, false, 0, false, 0, true, 5, false, 0))
+      .expect(retractions == 1 and points == 0 and e100 == 500)
+      .then(linearMoveFullWith("g1", false, 0, false, 0, false, 0, true, 2, true, 60))
+      // word E2 > 0 counts as a retraction even though the absolute-mode
+      // extruder position DROPS from 500 to 200; the F word is outranked
+      .expect(retractions == 2 and feedrateChanges == 0 and e100 == 200)
+      .then(linearMoveFullWith("g1", false, 0, false, 0, false, 0, true, -3, false, 0))
+      .expect(deretractions == 1 and e100 == -300)
+      .then(linearMoveFullWith("g1", false, 0, false, 0, false, 0, false, 0, true, 50))
+      .expect(feedrateChanges == 1)
+      .then(linearMoveFullWith("g1", false, 0, false, 0, false, 0, true, 0, true, 40))
+      // an explicit E0 is neither a retraction nor a deretraction: F wins
+      .expect(feedrateChanges == 2 and retractions == 2 and e100 == 0)
+      .then(linearMoveFullWith("g1", false, 0, false, 0, false, 0, false, 0, false, 0))
+      .expect(others == 1)
+      .then(linearMoveFullWith("g1", true, 4, false, 0, false, 0, true, 1, true, 30))
+      .expect(and {
+        points == 1, retractions == 2, deretractions == 1,
+        feedrateChanges == 2, others == 1, posX == 400, e100 == 100
+      })
+
+  /// M82 and G21 commute: from an inches/relative state, either order reaches
+  /// the same state, observed through an identical G1 X2 E3 afterwards.
+  run unitsModeCommuteTest =
+    init
+      .then(inchUnits)
+      .then(relativeE)
+      .then(absoluteE)
+      .then(mmUnits)
+      .then(linearMoveWith("g1", true, 2, false, 0, false, 0, true, 3))
+      .expect(and { posX == 200, e100 == 300, not(inches), not(relExtrude) })
+      .then(init)
+      .then(inchUnits)
+      .then(relativeE)
+      .then(mmUnits)
+      .then(absoluteE)
+      .then(linearMoveWith("g1", true, 2, false, 0, false, 0, true, 3))
+      .expect(and { posX == 200, e100 == 300, not(inches), not(relExtrude) })
+
+  /// G92 X5 and G1 X10 do NOT commute: two run prefixes from the same homed
+  /// state reach different physical positions depending on the order.
+  run g92MoveNonCommuteTest =
+    init
+      .then(homeAll)
+      .then(setPositionWith(true, 5, false, 0, false, 0, false, 0))
+      .then(linearMoveWith("g1", true, 10, false, 0, false, 0, false, 0))
+      .expect(posX == 500 and shiftX == -500)
+      .then(init)
+      .then(homeAll)
+      .then(linearMoveWith("g1", true, 10, false, 0, false, 0, false, 0))
+      .then(setPositionWith(true, 5, false, 0, false, 0, false, 0))
+      .expect(posX == 1000 and shiftX == 500)
+
+  /// Arc endpoint/E semantics: shifted endpoints, absent axes untouched, E
+  /// accounted like a linear move, I/J/R ignored by the State, and the points
+  /// counter untouched by arcs (arc-move.ts never increments it).
+  run arcStateTest =
+    init
+      .then(homeAll)
+      .then(linearMoveWith("g1", true, 10, true, 10, false, 0, true, 1))
+      .expect(posX == 1000 and posY == 1000 and e100 == 100 and points == 1)
+      .then(arcMoveWith("g2", true, 20, true, 10, false, 0, true, 3, true, 5, true, 0, false, 0))
+      .expect(and { posX == 2000, posY == 1000, posZ == 0, e100 == 300, points == 1 })
+      .then(setPositionWith(true, 0, false, 0, false, 0, false, 0))
+      .expect(shiftX == 2000)
+      .then(arcMoveWith("g3", true, 5, false, 0, false, 0, false, 0, false, 0, false, 0, true, 4))
+      .expect(and { posX == 2500, posY == 1000, e100 == 300, points == 1 })
+      .then(inchUnits)
+      .then(arcMoveWith("g2", true, 1, false, 0, false, 0, true, 1, true, 1, false, 0, false, 0))
+      .expect(and { posX == 4540, e100 == 2540, points == 1 })
+
+  /// Probe no-op forms and the Z clamp of probe.ts: a P word or a lack of axis
+  /// words leaves everything untouched; a probe below the origin plane from a
+  /// known Z at or above it lands on physical Z0; probes from a negative or
+  /// unknown Z travel to the commanded target; each probe move counts a point.
+  run probeTest =
+    init
+      .then(probeWith("g31", true, true, 5, false, 0, false, 0))
+      .expect(points == 0 and not(xKnown) and posX == 0)
+      .then(probeWith("g38_2", false, false, 0, false, 0, false, 0))
+      .expect(points == 0)
+      .then(homeAll)
+      .then(probeWith("g38_2", false, false, 0, false, 0, true, -5))
+      .expect(posZ == 0 and points == 1)
+      .then(linearMoveWith("g1", false, 0, false, 0, true, -3, false, 0))
+      .expect(posZ == -300 and points == 2)
+      .then(probeWith("g31", false, false, 0, false, 0, true, -5))
+      .expect(posZ == -500 and points == 3)
+      .then(probeWith("g38_4", false, true, 2, false, 0, true, 4))
+      .expect(posX == 200 and posZ == 400 and points == 4)
+      .then(setPositionWith(false, 0, false, 0, true, 10, false, 0))
+      .expect(shiftZ == -600)
+      .then(probeWith("g31", false, false, 0, false, 0, true, 2))
+      // shifted target 200 - 600 = -400 < 0 from posZ 400 >= 0: clamped to Z0
+      .expect(posZ == 0 and points == 5)
+      .then(init)
+      .then(probeWith("g38_3", false, false, 0, false, 0, true, -2))
+      // un-homed Z: the clamp needs a known starting Z, so the probe travels
+      .expect(posZ == -200 and zKnown and points == 1 and not(homed))
 }

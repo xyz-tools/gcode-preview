@@ -416,8 +416,9 @@ describe('extrusion bounding box', () => {
 describe('Quint spec trace replay', () => {
   // Replays ITF traces produced from verification/quint/interpreter.qnt against
   // the real parser + interpreter pipeline. Each trace state carries the command
-  // that produced it (cmd/has*/word*) and the spec's resulting printer state,
-  // with lengths in centi-millimeters (mm * 100) as integers.
+  // that produced it (cmd/has*/word*) and the spec's resulting printer state and
+  // job statistics, with lengths in centi-millimeters (mm * 100) as integers
+  // (the F word is a feedrate the interpreter never converts, so wordF is raw).
   const tracesDir = join(process.cwd(), 'verification', 'quint', 'traces', 'interpreter');
 
   // An ITF value: booleans and strings are plain JSON; integers arrive either
@@ -449,10 +450,19 @@ describe('Quint spec trace replay', () => {
     hasY: boolean;
     hasZ: boolean;
     hasE: boolean;
+    hasF: boolean;
+    hasI: boolean;
+    hasJ: boolean;
+    hasR: boolean;
+    hasP: boolean;
     wordX: number;
     wordY: number;
     wordZ: number;
     wordE: number;
+    wordF: number;
+    wordI: number;
+    wordJ: number;
+    wordR: number;
     xKnown: boolean;
     yKnown: boolean;
     zKnown: boolean;
@@ -467,6 +477,11 @@ describe('Quint spec trace replay', () => {
     inches: boolean;
     homed: boolean;
     tool: number;
+    points: number;
+    retractions: number;
+    deretractions: number;
+    feedrateChanges: number;
+    others: number;
   };
 
   const decodeState = (raw: ItfState): SpecState => ({
@@ -475,10 +490,19 @@ describe('Quint spec trace replay', () => {
     hasY: itfBool(raw.hasY, 'hasY'),
     hasZ: itfBool(raw.hasZ, 'hasZ'),
     hasE: itfBool(raw.hasE, 'hasE'),
+    hasF: itfBool(raw.hasF, 'hasF'),
+    hasI: itfBool(raw.hasI, 'hasI'),
+    hasJ: itfBool(raw.hasJ, 'hasJ'),
+    hasR: itfBool(raw.hasR, 'hasR'),
+    hasP: itfBool(raw.hasP, 'hasP'),
     wordX: itfInt(raw.wordX, 'wordX'),
     wordY: itfInt(raw.wordY, 'wordY'),
     wordZ: itfInt(raw.wordZ, 'wordZ'),
     wordE: itfInt(raw.wordE, 'wordE'),
+    wordF: itfInt(raw.wordF, 'wordF'),
+    wordI: itfInt(raw.wordI, 'wordI'),
+    wordJ: itfInt(raw.wordJ, 'wordJ'),
+    wordR: itfInt(raw.wordR, 'wordR'),
     xKnown: itfBool(raw.xKnown, 'xKnown'),
     yKnown: itfBool(raw.yKnown, 'yKnown'),
     zKnown: itfBool(raw.zKnown, 'zKnown'),
@@ -492,24 +516,37 @@ describe('Quint spec trace replay', () => {
     relExtrude: itfBool(raw.relExtrude, 'relExtrude'),
     inches: itfBool(raw.inches, 'inches'),
     homed: itfBool(raw.homed, 'homed'),
-    tool: itfInt(raw.tool, 'tool')
+    tool: itfInt(raw.tool, 'tool'),
+    points: itfInt(raw.points, 'points'),
+    retractions: itfInt(raw.retractions, 'retractions'),
+    deretractions: itfInt(raw.deretractions, 'deretractions'),
+    feedrateChanges: itfInt(raw.feedrateChanges, 'feedrateChanges'),
+    others: itfInt(raw.others, 'others')
   });
 
-  // Builds the G-code line a spec state's command words describe:
-  // "g92_1" -> "G92.1", everything else uppercased, then X/Y/Z/E in order.
+  // Builds the G-code line a spec state's command words describe: underscores
+  // become dots ("g92_1" -> "G92.1", "g38_2" -> "G38.2"), everything is
+  // uppercased, then the words follow. hasP carries no value in the spec (any
+  // P makes a probe the RRF set-trigger-values no-op), so it replays as P1.
   const buildLine = (spec: SpecState): string => {
-    let line = spec.cmd === 'g92_1' ? 'G92.1' : spec.cmd.toUpperCase();
+    let line = spec.cmd.toUpperCase().replace('_', '.');
+    if (spec.hasP) line += ' P1';
     if (spec.hasX) line += ` X${spec.wordX}`;
     if (spec.hasY) line += ` Y${spec.wordY}`;
     if (spec.hasZ) line += ` Z${spec.wordZ}`;
+    if (spec.hasI) line += ` I${spec.wordI}`;
+    if (spec.hasJ) line += ` J${spec.wordJ}`;
+    if (spec.hasR) line += ` R${spec.wordR}`;
     if (spec.hasE) line += ` E${spec.wordE}`;
+    if (spec.hasF) line += ` F${spec.wordF}`;
     return line;
   };
 
   // The full per-step comparison from the trace contract. Every assertion
   // message names the trace file, step index, G-code line, field, and the
   // expected vs actual values.
-  const compareStep = (traceFile: string, stepIndex: number, line: string, state: State, spec: SpecState): void => {
+  const compareStep = (traceFile: string, stepIndex: number, line: string, job: Job, spec: SpecState): void => {
+    const state: State = job.state;
     const at = (field: string, expected: unknown, actual: unknown) =>
       `${traceFile} step ${stepIndex} (${line}) field ${field}: expected ${String(expected)}, actual ${String(actual)}`;
 
@@ -544,6 +581,18 @@ describe('Quint spec trace replay', () => {
     expect(state.units, at('units', expectedUnits, state.units)).toBe(expectedUnits);
     expect(state.isHomed, at('isHomed', spec.homed, state.isHomed)).toBe(spec.homed);
     expect(state.tool, at('tool', spec.tool, state.tool)).toBe(spec.tool);
+
+    // Job statistics are exact integer counters, so no epsilon here.
+    const counters = [
+      { field: 'stats.points', actual: job.stats.points, expected: spec.points },
+      { field: 'stats.retractions', actual: job.stats.retractions, expected: spec.retractions },
+      { field: 'stats.deretractions', actual: job.stats.deretractions, expected: spec.deretractions },
+      { field: 'stats.feedrateChanges', actual: job.stats.feedrateChanges, expected: spec.feedrateChanges },
+      { field: 'stats.others', actual: job.stats.others, expected: spec.others }
+    ];
+    for (const { field, actual, expected } of counters) {
+      expect(actual, at(field, expected, actual)).toBe(expected);
+    }
   };
 
   let traceFiles: string[] = [];
@@ -574,14 +623,14 @@ describe('Quint spec trace replay', () => {
       const parser = new Parser();
 
       expect(states[0].cmd, `${traceFile} step 0: the first state must be the init state`).toBe('init');
-      compareStep(traceFile, 0, '<init>', job.state, states[0]);
+      compareStep(traceFile, 0, '<init>', job, states[0]);
 
       for (let step = 1; step < states.length; step++) {
         const spec = states[step];
         const line = buildLine(spec);
         const { commands } = parser.parseGCode(line);
         interpreter.execute(commands, job);
-        compareStep(traceFile, step, line, job.state, spec);
+        compareStep(traceFile, step, line, job, spec);
       }
     });
   }
