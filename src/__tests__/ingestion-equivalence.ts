@@ -286,6 +286,7 @@ describe.each(MODES)('ingestion via %s', (_name, ingest) => {
     expect(extrusion.hasVaryingDimensions).toBe(true);
     // ...with the height change on its 4th point and the width change on its 5th
     expect([0, 1, 2, 3, 4].map((point) => extrusion.lineHeightAt(point))).toEqual([0.16, 0.16, 0.16, 0.28, 0.28]);
+    expect([0, 1, 2, 3, 4].map((point) => extrusion.extrusionWidthAt(point))).toEqual([0.45, 0.45, 0.45, 0.45, 0.6]);
     expect(extrusion.extrusionWidth).toEqual(0.6);
   });
 

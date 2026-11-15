@@ -110,6 +110,7 @@ export class Path {
    * lets one path span slicer dimension changes (`;WIDTH:` / `;HEIGHT:`)
    * instead of being broken apart at every change — the path used to be
    * split here, which multiplied path counts on adaptive-layer-height files.
+   * @internal
    */
   updateDimensions(extrusionWidth?: number, lineHeight?: number): void {
     if (extrusionWidth === this.extrusionWidth && lineHeight === this.lineHeight) {
@@ -129,9 +130,25 @@ export class Path {
 
   /**
    * Whether the extrusion dimensions changed somewhere along the path
+   * @internal
    */
   get hasVaryingDimensions(): boolean {
     return this._pointDims !== undefined;
+  }
+
+  /**
+   * Gets the extrusion width at a given point of the path
+   * @param pointIndex - Index of the point (not the flat vertex offset)
+   * @returns The width the point was added under, or `undefined` when
+   * slicer metadata provided none
+   * @internal
+   */
+  extrusionWidthAt(pointIndex: number): number | undefined {
+    if (this._pointDims === undefined) {
+      return this.extrusionWidth;
+    }
+    const width = this._pointDims[pointIndex * 2];
+    return Number.isNaN(width) ? undefined : width;
   }
 
   /**
@@ -139,6 +156,7 @@ export class Path {
    * @param pointIndex - Index of the point (not the flat vertex offset)
    * @returns The height the point was added under, or `undefined` when
    * slicer metadata provided none
+   * @internal
    */
   lineHeightAt(pointIndex: number): number | undefined {
     if (this._pointDims === undefined) {

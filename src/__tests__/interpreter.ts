@@ -160,7 +160,8 @@ describe('extrusion dimension metadata (;WIDTH: / ;HEIGHT:)', () => {
     expect(job.paths[0].hasVaryingDimensions).toBe(true);
     // the scalar reflects the most recent width; the earlier points carry none
     expect(job.paths[0].extrusionWidth).toEqual(0.42);
-    expect(job.paths[0].lineHeightAt(0)).toBeUndefined();
+    // per point: the seed and the first move predate the comment
+    expect([0, 1, 2].map((point) => job.paths[0].extrusionWidthAt(point))).toEqual([undefined, undefined, 0.42]);
   });
 
   test('repeating the current value keeps the dimensions uniform', () => {

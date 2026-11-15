@@ -220,10 +220,13 @@ describe('.updateDimensions', () => {
     path.addPoint(0, 0, 0);
     path.addPoint(10, 0, 0);
 
-    path.updateDimensions(0.4, 0.3);
+    path.updateDimensions(0.5, 0.3);
     path.addPoint(20, 0, 0);
 
     expect(path.hasVaryingDimensions).toBe(true);
+    expect(path.extrusionWidthAt(0)).toEqual(0.4);
+    expect(path.extrusionWidthAt(1)).toEqual(0.4);
+    expect(path.extrusionWidthAt(2)).toEqual(0.5);
     expect(path.lineHeightAt(0)).toEqual(0.2);
     expect(path.lineHeightAt(1)).toEqual(0.2);
     expect(path.lineHeightAt(2)).toEqual(0.3);
@@ -245,6 +248,24 @@ describe('.updateDimensions', () => {
     path.addPoint(0, 0, 0);
 
     expect(path.lineHeightAt(0)).toEqual(0.2);
+  });
+
+  test('extrusionWidthAt reports unknown widths as undefined', () => {
+    const path = new Path(PathType.Extrusion, undefined, undefined, 0);
+    path.addPoint(0, 0, 0);
+
+    path.updateDimensions(undefined, 0.3);
+    path.addPoint(10, 0, 0);
+
+    expect(path.extrusionWidthAt(0)).toBeUndefined();
+    expect(path.extrusionWidthAt(1)).toBeUndefined();
+  });
+
+  test('extrusionWidthAt answers the single width of a uniform path', () => {
+    const path = new Path(PathType.Extrusion, 0.4, 0.2, 0);
+    path.addPoint(0, 0, 0);
+
+    expect(path.extrusionWidthAt(0)).toEqual(0.4);
   });
 });
 
