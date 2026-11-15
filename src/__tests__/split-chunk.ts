@@ -1,4 +1,3 @@
-import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test, expect, describe } from 'vitest';
 
@@ -134,150 +133,15 @@ describe('streaming across a chunk boundary', () => {
   });
 });
 
-describe('Quint spec trace replay', () => {
-  // Replays ITF traces produced from verification/quint/streaming.qnt against
-  // the real splitChunk. Each trace state records the chunk fed on that step
-  // (chunkTaken), the lines the spec says the step completed (stepLines), the
-  // cumulative emitted lines (lines) and the carry buffer (carry), all as
-  // token lists over the spec's 5-letter alphabet.
-  const tracesDir = join(process.cwd(), 'verification', 'quint', 'traces', 'streaming');
-
-  // The spec's token alphabet, mapped 1:1 to characters (token = array index)
-  const TOKEN_CHARS = ['a', 'b', ' ', ';', '\n'];
-
-  // An ITF value: strings are plain JSON, lists are plain JSON arrays, and
-  // integers arrive either as plain numbers or in Apalache's
-  // { "#bigint": "123" } wrapping.
-  type ItfValue = string | number | { '#bigint': string } | ItfValue[] | undefined;
-  type ItfState = Record<string, ItfValue>;
-
-  const itfInt = (value: ItfValue, key: string): number => {
-    if (typeof value === 'number') return value;
-    if (typeof value === 'object' && value !== null && !Array.isArray(value) && typeof value['#bigint'] === 'string') {
-      return Number(value['#bigint']);
-    }
-    throw new Error(`expected an ITF integer for "${key}", got ${JSON.stringify(value)}`);
-  };
-  const itfStr = (value: ItfValue, key: string): string => {
-    if (typeof value !== 'string') throw new Error(`expected a string for "${key}", got ${JSON.stringify(value)}`);
-    return value;
-  };
-  const itfList = (value: ItfValue, key: string): ItfValue[] => {
-    if (!Array.isArray(value)) throw new Error(`expected an ITF list for "${key}", got ${JSON.stringify(value)}`);
-    return value;
-  };
-  /** A token list decoded into the string it stands for */
-  const itfText = (value: ItfValue, key: string): string =>
-    itfList(value, key)
-      .map((token, i) => {
-        const char = TOKEN_CHARS[itfInt(token, `${key}[${i}]`)];
-        if (char === undefined) throw new Error(`token out of alphabet at "${key}[${i}]"`);
-        return char;
-      })
-      .join('');
-  /** A list of token lists decoded into an array of line strings */
-  const itfLines = (value: ItfValue, key: string): string[] =>
-    itfList(value, key).map((line, i) => itfText(line, `${key}[${i}]`));
-
-  // The spec's state variables, decoded; keys starting with '#' (like '#meta')
-  // are never read and are thereby ignored.
-  type SpecState = {
-    cmd: string;
-    chunkTaken: string;
-    stepLines: string[];
-    doc: string;
-    cursor: number;
-    carry: string;
-    lines: string[];
-  };
-
-  const decodeState = (raw: ItfState): SpecState => ({
-    cmd: itfStr(raw.cmd, 'cmd'),
-    chunkTaken: itfText(raw.chunkTaken, 'chunkTaken'),
-    stepLines: itfLines(raw.stepLines, 'stepLines'),
-    doc: itfText(raw.doc, 'doc'),
-    cursor: itfInt(raw.cursor, 'cursor'),
-    carry: itfText(raw.carry, 'carry'),
-    lines: itfLines(raw.lines, 'lines')
-  });
-
-  let traceFiles: string[] = [];
-  try {
-    traceFiles = readdirSync(tracesDir)
-      .filter((file) => file.endsWith('.itf.json'))
-      .sort();
-  } catch {
-    // Missing directory: the guard test below fails with a clear message.
-  }
-
-  test('the traces directory exists and holds at least one ITF trace', () => {
-    // Fails (rather than silently skipping the replay) when the Quint traces
-    // have not been generated into verification/quint/traces.
-    expect(traceFiles.length, `expected *.itf.json traces in ${tracesDir}`).toBeGreaterThan(0);
-  });
-
-  for (const traceFile of traceFiles) {
-    test(`replays ${traceFile} through splitChunk`, () => {
-      const parsed = JSON.parse(readFileSync(join(tracesDir, traceFile), 'utf8')) as { states: ItfState[] };
-      expect(Array.isArray(parsed.states), `${traceFile}: ITF file has no states array`).toBe(true);
-      expect(parsed.states.length, `${traceFile}: trace has no states`).toBeGreaterThan(0);
-      const states = parsed.states.map(decodeState);
-
-      expect(states[0].cmd, `${traceFile} step 0: the first state must be the init state`).toBe('init');
-      expect(states[0].carry, `${traceFile} step 0: the carry must start empty`).toBe('');
-      expect(states[0].lines, `${traceFile} step 0: no lines may be emitted yet`).toEqual([]);
-
-      // The real splitter's running state, built only from its own outputs.
-      let tail = '';
-      const emitted: string[] = [];
-      let consumed = '';
-
-      for (let step = 1; step < states.length; step++) {
-        const spec = states[step];
-        // A stutter records that the document was exhausted: nothing is fed.
-        if (spec.cmd === 'stutter') continue;
-        expect(spec.cmd, `${traceFile} step ${step}: unknown spec command "${spec.cmd}"`).toBe('chunk');
-
-        const at = (field: string, expected: unknown, actual: unknown): string =>
-          `${traceFile} step ${step} (chunk ${JSON.stringify(spec.chunkTaken)}) field ${field}: ` +
-          `expected ${JSON.stringify(expected)}, actual ${JSON.stringify(actual)}`;
-
-        const { complete, tail: nextTail } = splitChunk(tail, spec.chunkTaken);
-
-        // splitChunk's contract: tail + chunk == complete + sep + nextTail,
-        // where sep is the one consumed newline, or nothing when no line
-        // completed. The spec records one line per consumed separator, so an
-        // empty `complete` that still consumed a newline is one empty line.
-        const sepLength = tail.length + spec.chunkTaken.length - complete.length - nextTail.length;
-        expect(sepLength === 0 || sepLength === 1, at('separator', '0 or 1', sepLength)).toBe(true);
-        if (sepLength === 0) expect(complete, at('complete', '', complete)).toBe('');
-
-        const stepLines = sepLength === 1 ? complete.split('\n') : [];
-        expect(stepLines, at('stepLines', spec.stepLines, stepLines)).toEqual(spec.stepLines);
-        expect(nextTail, at('carry', spec.carry, nextTail)).toBe(spec.carry);
-
-        emitted.push(...stepLines);
-        expect(emitted, at('lines', spec.lines, emitted)).toEqual(spec.lines);
-
-        consumed += spec.chunkTaken;
-        const docPrefix = spec.doc.slice(0, spec.cursor);
-        expect(consumed, at('consumed doc prefix', docPrefix, consumed)).toBe(docPrefix);
-
-        tail = nextTail;
-      }
-    });
-  }
-});
-
-describe('streaming v2 spec trace replay', () => {
-  // Replays ITF traces produced from verification/quint-v2/streaming.qnt
+describe('streaming spec trace replay', () => {
+  // Replays ITF traces produced from verification/quint/streaming.qnt
   // against the real splitChunk. Each trace state holds exactly two records:
   // `s` (the machine state: doc, cursor, carry, cumulative lines) and `ev`
   // (the step's event: kind, the chunk fed, the lines it completed). Tokens
   // map 1:1 to characters, so a trace doubles as a chunking schedule whose
   // exact chunk strings drive the real splitter. All numbers here are token
   // counts, compared integer-exactly with ===; nothing is scaled.
-  const tracesDir = join(process.cwd(), 'verification', 'quint-v2', 'traces', 'streaming');
+  const tracesDir = join(process.cwd(), 'verification', 'quint', 'traces', 'streaming');
 
   // The spec's token alphabet, mapped 1:1 to characters (token = array index);
   // keep in sync with streaming.qnt's header and streaming.md.
@@ -342,7 +206,7 @@ describe('streaming v2 spec trace replay', () => {
 
   test('the v2 traces directory exists and holds at least one ITF trace', () => {
     // Fails (rather than silently skipping the replay) when the Quint traces
-    // have not been generated into verification/quint-v2/traces/streaming.
+    // have not been generated into verification/quint/traces/streaming.
     expect(traceFiles.length, `expected *.itf.json traces in ${tracesDir}`).toBeGreaterThan(0);
   });
 

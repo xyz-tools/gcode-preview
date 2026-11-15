@@ -1,274 +1,613 @@
 // -*- mode: Bluespec; -*-
 /**
- * Formal specification of the GCodePreview public-API lifecycle automaton.
+ * lifecycle — the v2 public-API lifecycle automaton of the preview facade:
+ * process, clear, render, resize and dispose as pinned observable behavior.
+ * The central pinned fact survives from v1: dispose() tears down only the
+ * rendering side, the job is retained, and the next call that touches
+ * rendering lazily resurrects a fresh scene-manager generation — so the
+ * disposed phase is NOT absorbing. v2 decouples the model from v1's single
+ * snippet ("process" draws from a three-snippet menu with declared
+ * path-growth deltas, carried in the trace so the replay knows what was
+ * fed) and widens the oracle from ok/throws + path length to per-step
+ * renderer observables: cumulative render and setSize call counts, a
+ * renderer-dispose ledger, and the kind of the job's last path. All counts
+ * assume the replay harness's inert requestAnimationFrame: the continuous
+ * presentation loop contributes exactly its first, synchronous frame per
+ * scene-manager generation, and no asynchronous frame ever fires.
  *
- * Models the library's observable public-API lifecycle — processGCode,
- * clear, render, resize and dispose, as pinned observable behavior — not
- * three.js internals. The central pinned fact: dispose() tears down only the
- * rendering side (the scene manager and its renderer), and the next
- * lifecycle call that needs rendering lazily resurrects a fresh scene
- * manager (and with it a fresh renderer). So "disposed" is NOT absorbing: every
- * lifecycle action except dispose itself (and stutter) leaves it. The job is
- * retained across dispose() and only replaced by clear(). No lifecycle call
- * throws.
+ * The no-throw contract ("no lifecycle call ever throws") is deliberately
+ * not an in-model invariant — inside the model it could never fail. The
+ * replay asserts it on every step instead, including asynchronous
+ * rejections of the animated-render promise.
  *
- * The cmd variable records WHICH action was taken on each step, so an ITF
- * trace doubles as a call script: a replay harness applies each call to a
- * real (WebGL-stubbed) GCodePreview and compares the predicted outcome and
- * the observable counters step by step. "process" stands for one fixed
- * one-move G-code snippet ("G1 X10 Y10 E1"). The printer state lives on the
- * retained job and E is absolute by default, so per job epoch (since
- * construction or the last clear) the first process lays an extrusion path,
- * the second adds a travel path (E is already at its absolute target, so the
- * same move extrudes nothing), and every further process extends that travel
- * path: the job's path count is min(processes-in-epoch, 2). All numeric
- * state is plain integer counters (no unit scaling needed).
+ * Unit: RL-1 (lifecycle automaton + resource-ownership ledger: dispose
+ *   idempotence, disposed-to-live resurrection, renderer disposed exactly
+ *   once per retired generation) in
+ *   .context/formal-verification/mapping-data.json.
+ * Authority policy: verification/quint/STYLE.md ("Authority
+ *   annotations"); every transition below carries its own block. The
+ *   lifecycle itself is host-library machinery, so almost everything here
+ *   is library-invented; only the snippet classifications lean on firmware
+ *   semantics.
+ * Companion: lifecycle.md.
  */
 module lifecycle {
-  // --- trace-contract variables: the action taken on this step ---
-  /// "init", "process", "clear", "render", "resize", "dispose" or "stutter"
-  var cmd: str
-  /// predicted result of the call: "ok" or "throws". Pinned behavior: no
-  /// lifecycle call ever throws, so this is always "ok".
-  var outcome: str
+  // --- sum types --------------------------------------------------------
 
-  // --- trace-contract variables: observable lifecycle state ---
-  /// abstract phase: "fresh" (empty job), "hasContent", or "disposed"
-  var phase: str
-  /// total processGCode calls since construction (spec bookkeeping)
-  var processedCount: int
-  /// paths in the current job: the fixed snippet yields one extrusion path on
-  /// the first process of a job epoch, one travel path on the second, and
-  /// extends that travel path afterwards, so this is capped at 2 until
-  /// clear() swaps in an empty job
-  var pathCount: int
-  /// how many scene-manager/renderer generations have been created so far:
-  /// 1 from construction, +1 each time an action touches the rendering side
-  /// while disposed (lazy resurrection)
-  var managerGen: int
+  /// The observable phase: an empty live preview, a live preview whose job
+  /// holds paths, or a preview whose scene manager has been torn down.
+  type Phase = Fresh | HasContent | Disposed
 
-  pure val Phases: Set[str] = Set("fresh", "hasContent", "disposed")
-  pure val Cmds: Set[str] = Set("init", "process", "clear", "render", "resize", "dispose", "stutter")
+  /// The kind of the job's most recent path (its `travelType` on the
+  /// implementation side), or PNone for an empty job.
+  type PathKind = PNone | PExtrusion | PTravel
 
-  /// Record which action this step takes; a lifecycle call never throws
-  action recordCmd(c: str): bool = all {
-    cmd' = c,
-    outcome' = "ok"
+  /// The process-snippet menu. Each snippet has a declared, state-dependent
+  /// path-growth delta the replay can bank on:
+  ///   Extruding  — "G92 E0" + "G1 X10 Y10 E1": the E reset makes the move
+  ///                extrude on every feed, so it opens an extrusion path
+  ///                when the last path is not one, and extends it otherwise.
+  ///   TravelOnly — "G0 X5 Y5": a travel move; opens a travel path when the
+  ///                last path is not one, and extends it otherwise.
+  ///   EmptyInput — a bare comment line: parses to no command, grows nothing.
+  type Snippet = Extruding | TravelOnly | EmptyInput
+
+  /// One public lifecycle call (plus init for construction).
+  type ActKind = AInit | AProcess(Snippet) | AClear | ARender | AResize | ADispose
+
+  // --- strings for the trace contract, derived in one place each ---------
+
+  pure def kindStr(k: ActKind): str = match k {
+    | AInit => "init"
+    | AProcess(_) => "process"
+    | AClear => "clear"
+    | ARender => "render"
+    | AResize => "resize"
+    | ADispose => "dispose"
   }
 
-  /// Touching the rendering side while disposed builds a fresh scene manager
-  /// (lazy resurrection)
-  val nextGen: int = if (phase == "disposed") managerGen + 1 else managerGen
-
-  // --- one action per public lifecycle call ---
-
-  /// processGCode(snippet) — parse + execute into the retained job, then an
-  /// animated re-render; resurrects the manager when disposed.
-  /// The job gains an extrusion path on the epoch's first call, a travel
-  /// path on the second (absolute E leaves nothing to extrude on the same
-  /// move), and extends that travel path from the third on: capped at 2.
-  action doProcess = all {
-    recordCmd("process"),
-    processedCount' = processedCount + 1,
-    pathCount' = if (pathCount < 2) pathCount + 1 else pathCount,
-    managerGen' = nextGen,
-    phase' = "hasContent"
+  pure def snippetStr(k: ActKind): str = match k {
+    | AProcess(sn) => match sn {
+        | Extruding => "extruding"
+        | TravelOnly => "travelOnly"
+        | EmptyInput => "empty"
+      }
+    | _ => ""
   }
 
-  /// clear() — fresh parse state and an empty job; touches the rendering
-  /// side (clear + re-render), so it resurrects when disposed. Idempotent.
-  action doClear = all {
-    recordCmd("clear"),
-    processedCount' = processedCount,
-    pathCount' = 0,
-    managerGen' = nextGen,
-    phase' = "fresh"
+  pure def phaseStr(p: Phase): str = match p {
+    | Fresh => "fresh"
+    | HasContent => "hasContent"
+    | Disposed => "disposed"
   }
 
-  /// Phase after an action that touches the rendering side without changing
-  /// the job: leaving "disposed" lands on whatever the retained job implies
-  val touchedPhase: str =
-    if (phase == "disposed") (if (pathCount > 0) "hasContent" else "fresh") else phase
-
-  /// render() — full scene rebuild; no job change
-  action doRender = all {
-    recordCmd("render"),
-    processedCount' = processedCount,
-    pathCount' = pathCount,
-    managerGen' = nextGen,
-    phase' = touchedPhase
+  pure def pathKindStr(pk: PathKind): str = match pk {
+    | PNone => "none"
+    | PExtrusion => "Extrusion"
+    | PTravel => "Travel"
   }
 
-  /// resize() — camera/renderer resize; no job change
-  action doResize = all {
-    recordCmd("resize"),
-    processedCount' = processedCount,
-    pathCount' = pathCount,
-    managerGen' = nextGen,
-    phase' = touchedPhase
+  // --- state ------------------------------------------------------------
+
+  /// The previous step's values, frozen by every transition. Ghost state for
+  /// the monotonicity / frame invariants only; the replay never decodes it.
+  type PrevGhost = {
+    gen: int,
+    paths: int,
+    renders: int,
+    setSizes: int,
+    wasDisposed: bool
   }
 
-  /// dispose() — tears down the scene manager; the job survives.
-  /// A second dispose is a no-op (disposing while already disposed touches
-  /// nothing), so it never resurrects anything.
-  action doDispose = all {
-    recordCmd("dispose"),
-    processedCount' = processedCount,
-    pathCount' = pathCount,
-    managerGen' = managerGen,
-    phase' = "disposed"
+  /// The semantic state. The first block is what the replay compares; the
+  /// ghost* block exists for property expression only (see the companion):
+  /// independent per-action counters make the render/setSize conservation
+  /// equations checkable, and the ghostJust* flags turn the "disposed only
+  /// right after dispose" and "only clear shrinks the job" temporal claims
+  /// into invariants.
+  type SpecState = {
+    phase: Phase,
+    processed: int, // total process calls since construction
+    pathCount: int, // finished paths in the retained job
+    lastPath: PathKind, // kind of the job's last path
+    managerGen: int, // scene-manager generations created so far
+    renders: int, // cumulative renderer.render calls, all generations
+    setSizes: int, // cumulative renderer.setSize calls, all generations
+    rendererDisposes: int, // cumulative renderer.dispose calls
+    ghostClears: int, // clear actions taken
+    ghostRenderActs: int, // render actions taken
+    ghostResizes: int, // resize actions taken
+    ghostBusyProcesses: int, // process actions that ended with pathCount > 1
+    ghostJustDisposed: bool, // this step was a dispose
+    ghostJustCleared: bool, // this step was a clear
+    ghostPrev: PrevGhost
   }
 
-  /// Explicit stutter so `step` is always enabled; the replay harness skips
-  /// these steps without feeding any input to the preview
-  action doStutter = all {
-    recordCmd("stutter"),
-    processedCount' = processedCount,
-    pathCount' = pathCount,
-    managerGen' = managerGen,
-    phase' = phase
+  /// The trace contract: plain strings and bools describing the step, so a
+  /// trace doubles as a call script. The integers the replay compares live
+  /// directly in `s`; `phase` and `lastPath` are mirrored here as strings
+  /// because their sum-type forms are model-internal.
+  type Event = {
+    kind: str, // kindStr of the action
+    snippet: str, // snippetStr: which G-code the replay must feed ("" unless process)
+    phase: str, // phaseStr of the resulting phase
+    lastPath: str, // pathKindStr of the resulting last path
+    resurrected: bool // this step rebuilt the scene manager from disposed
   }
 
-  // --- init and step ---
+  var s: SpecState
+  var ev: Event
 
-  /// new GCodePreview(opts) — parser, job and scene manager all exist
-  /// eagerly from the start
+  // --- pure transitions ---------------------------------------------------
+
+  /// Any call that touches the rendering side while disposed rebuilds the
+  /// scene manager: one fresh generation, whose construction performs one
+  /// synchronous presentation frame (render) and one initial resize (setSize).
+  pure def resurrects(st: SpecState): bool = st.phase == Disposed
+
+  pure def freezePrev(st: SpecState): PrevGhost = {
+    gen: st.managerGen,
+    paths: st.pathCount,
+    renders: st.renders,
+    setSizes: st.setSizes,
+    wasDisposed: st.phase == Disposed
+  }
+
+  /**
+   * processGCode(snippet) — parse and execute into the retained job, then
+   * start an animated render; resurrects the manager when disposed. The
+   * animated render performs one synchronous frame only when the job holds
+   * more than one path (a 0-or-1-path job is drawn without an extra
+   * renderer.render call); with the harness's inert requestAnimationFrame
+   * its later frames never fire and its promise stays pending, which the
+   * replay treats as pinned.
+   *
+   * Authority: Marlin documentation for the snippet semantics the deltas
+   * lean on — G92 E sets the extruder position directly and absolute-E
+   * extrusion is classified from the applied delta, which is what makes
+   * Extruding re-extrude on every feed and TravelOnly always lay travel.
+   * Library stance: conforms for that classification; library-invented for
+   * everything else (lazy resurrection, render cadence, path continuation
+   * across calls).
+   * Exclusions: streaming entry points (processGCodeStream/readStream),
+   * onJobUpdated/onStreamEnd callbacks, snippets beyond the three-item
+   * menu, dimension/tool-driven path breaks (the menu never changes
+   * widths, heights or tools).
+   */
+  pure def applyProcess(st: SpecState, sn: Snippet): SpecState = {
+    val r = if (resurrects(st)) 1 else 0
+    val delta = match sn {
+      | Extruding => if (st.lastPath == PExtrusion) 0 else 1
+      | TravelOnly => if (st.lastPath == PTravel) 0 else 1
+      | EmptyInput => 0
+    }
+    val newPaths = st.pathCount + delta
+    val busy = if (newPaths > 1) 1 else 0
+    {
+      ...st,
+      phase: if (newPaths > 0) HasContent else Fresh,
+      processed: st.processed + 1,
+      pathCount: newPaths,
+      lastPath: match sn {
+        | Extruding => PExtrusion
+        | TravelOnly => PTravel
+        | EmptyInput => st.lastPath
+      },
+      managerGen: st.managerGen + r,
+      renders: st.renders + r + busy,
+      setSizes: st.setSizes + r,
+      ghostBusyProcesses: st.ghostBusyProcesses + busy,
+      ghostJustDisposed: false,
+      ghostJustCleared: false,
+      ghostPrev: freezePrev(st)
+    }
+  }
+
+  /**
+   * clear() — fresh parser and an empty job; touches the rendering side
+   * (scene clear + one explicit re-render), so it resurrects when disposed.
+   * The only call that replaces the job.
+   *
+   * Authority: none — host-library machinery.
+   * Library stance: library-invented — pins that clear keeps the renderer,
+   * camera and controls of the current generation (no generation bump when
+   * live) while swapping the job and objects wholesale.
+   * Exclusions: the ~11 hand-copied display settings clear() preserves
+   * (colors, tube mode, lights); the model carries no display settings.
+   */
+  pure def applyClear(st: SpecState): SpecState = {
+    val r = if (resurrects(st)) 1 else 0
+    {
+      ...st,
+      phase: Fresh,
+      pathCount: 0,
+      lastPath: PNone,
+      managerGen: st.managerGen + r,
+      renders: st.renders + r + 1,
+      setSizes: st.setSizes + r,
+      ghostClears: st.ghostClears + 1,
+      ghostJustDisposed: false,
+      ghostJustCleared: true,
+      ghostPrev: freezePrev(st)
+    }
+  }
+
+  /// Phase after a job-neutral rendering touch: leaving disposed lands on
+  /// whatever the retained job implies.
+  pure def touchedPhase(st: SpecState): Phase =
+    if (st.phase == Disposed) (if (st.pathCount > 0) HasContent else Fresh) else st.phase
+
+  /**
+   * sceneManager.render() — full scene rebuild plus one explicit
+   * renderer.render call; no job change.
+   *
+   * Authority: none — host-library machinery.
+   * Library stance: library-invented — pins that render() reaches the
+   * renderer exactly once per call on top of the construction frame.
+   * Exclusions: scene contents (what the rebuild draws) and camera state;
+   * the model sees only the call counts.
+   */
+  pure def applyRender(st: SpecState): SpecState = {
+    val r = if (resurrects(st)) 1 else 0
+    {
+      ...st,
+      phase: touchedPhase(st),
+      managerGen: st.managerGen + r,
+      renders: st.renders + r + 1,
+      setSizes: st.setSizes + r,
+      ghostRenderActs: st.ghostRenderActs + 1,
+      ghostJustDisposed: false,
+      ghostJustCleared: false,
+      ghostPrev: freezePrev(st)
+    }
+  }
+
+  /**
+   * sceneManager.resize() — camera frustum update plus one
+   * renderer.setSize call; no render call of its own, no job change.
+   *
+   * Authority: none — host-library machinery.
+   * Library stance: library-invented — pins that resize() does not render
+   * (the continuous loop, inert here, presents the resized frame).
+   * Exclusions: setPixelRatio (called alongside setSize but not counted),
+   * canvas dimensions and camera projection values.
+   */
+  pure def applyResize(st: SpecState): SpecState = {
+    val r = if (resurrects(st)) 1 else 0
+    {
+      ...st,
+      phase: touchedPhase(st),
+      managerGen: st.managerGen + r,
+      renders: st.renders + r,
+      setSizes: st.setSizes + r + 1,
+      ghostResizes: st.ghostResizes + 1,
+      ghostJustDisposed: false,
+      ghostJustCleared: false,
+      ghostPrev: freezePrev(st)
+    }
+  }
+
+  /**
+   * dispose() — tears down the current scene manager, disposing its
+   * renderer exactly once; the job survives. Disposing while already
+   * disposed touches nothing (idempotent), so it never resurrects and
+   * never double-disposes a renderer.
+   *
+   * Authority: none — host-library machinery.
+   * Library stance: library-invented — pins the resurrection design:
+   * dispose nulls the manager reference and the lazy getter rebuilds one,
+   * so disposed is exit-able by every other lifecycle call.
+   * Exclusions: the wider Disposable ledger (controls, objects manager,
+   * geometries); the model tracks the renderer's dispose calls only.
+   */
+  pure def applyDispose(st: SpecState): SpecState = {
+    ...st,
+    phase: Disposed,
+    rendererDisposes: st.rendererDisposes + (if (st.phase == Disposed) 0 else 1),
+    ghostJustDisposed: true,
+    ghostJustCleared: false,
+    ghostPrev: freezePrev(st)
+  }
+
+  /// The one transition dispatcher: every action is pure state-to-state.
+  pure def nextState(st: SpecState, k: ActKind): SpecState = match k {
+    | AInit => st // unreachable from step; init builds its state directly
+    | AProcess(sn) => applyProcess(st, sn)
+    | AClear => applyClear(st)
+    | ARender => applyRender(st)
+    | AResize => applyResize(st)
+    | ADispose => applyDispose(st)
+  }
+
+  pure def mkEvent(k: ActKind, after: SpecState): Event = {
+    kind: kindStr(k),
+    snippet: snippetStr(k),
+    phase: phaseStr(after.phase),
+    lastPath: pathKindStr(after.lastPath),
+    resurrected: after.managerGen > after.ghostPrev.gen
+  }
+
+  // --- init and step ------------------------------------------------------
+
+  pure val INIT_STATE: SpecState = {
+    phase: Fresh,
+    processed: 0,
+    pathCount: 0,
+    lastPath: PNone,
+    managerGen: 1,
+    renders: 1, // the construction frame of the first generation
+    setSizes: 1, // the construction resize of the first generation
+    rendererDisposes: 0,
+    ghostClears: 0,
+    ghostRenderActs: 0,
+    ghostResizes: 0,
+    ghostBusyProcesses: 0,
+    ghostJustDisposed: false,
+    ghostJustCleared: false,
+    ghostPrev: { gen: 1, paths: 0, renders: 1, setSizes: 1, wasDisposed: false }
+  }
+
+  /**
+   * new GCodePreview(opts) — parser, job and the first scene-manager
+   * generation all exist eagerly; construction performs one synchronous
+   * presentation frame and one resize.
+   *
+   * Authority: none — model scaffolding.
+   * Library stance: library-invented — mirrors the eager constructor.
+   * Exclusions: constructor options (droppable, colors, build volume);
+   * the replay constructs with one fixed options record.
+   */
   action init = all {
-    cmd' = "init",
-    outcome' = "ok",
-    phase' = "fresh",
-    processedCount' = 0,
-    pathCount' = 0,
-    managerGen' = 1
+    s' = INIT_STATE,
+    ev' = {
+      kind: "init",
+      snippet: "",
+      phase: phaseStr(Fresh),
+      lastPath: pathKindStr(PNone),
+      resurrected: false
+    }
   }
 
-  /// Weighted pick: processing and disposal dominate so traces exercise
-  /// content growth and the resurrect-after-dispose paths heavily.
+  action dispatch(k: ActKind): bool = all {
+    s' = nextState(s, k),
+    ev' = mkEvent(k, nextState(s, k))
+  }
+
+  /// Weights live in data: process dominates (extruding doubled, so both
+  /// continue-same-kind and open-new-kind deltas recur), dispose is heavy so
+  /// disposed-phase steps — and with them every dispose-then-X resurrection
+  /// pair — are common rather than rare. See the companion's coverage table.
+  pure val STEP_MENU: List[ActKind] = [
+    AProcess(Extruding),
+    AProcess(Extruding),
+    AProcess(TravelOnly),
+    AProcess(EmptyInput),
+    ADispose,
+    ADispose,
+    ADispose,
+    AClear,
+    ARender,
+    AResize
+  ]
+
+  /// Always enabled (every lifecycle call is total), so there is no stutter.
   action step = {
-    nondet choice = 1.to(10).oneOf()
-    if (choice <= 3) doProcess
-    else if (choice <= 5) doDispose
-    else if (choice <= 7) doClear
-    else if (choice == 8) doRender
-    else if (choice == 9) doResize
-    else doStutter
+    nondet k = STEP_MENU.indices().oneOf()
+    dispatch(STEP_MENU[k])
   }
 
-  // --- invariants ---
-
-  val cmdWellFormed = Cmds.contains(cmd)
-
-  val phaseWellFormed = Phases.contains(phase)
-
-  /// pinned behavior: no lifecycle call ever throws
-  val neverThrows = outcome == "ok"
+  // --- invariants (over semantic state only; none mention `ev`) -----------
 
   /// fresh means an empty job; hasContent means a non-empty one
   val phaseMatchesContent = and {
-    phase == "fresh" implies pathCount == 0,
-    phase == "hasContent" implies pathCount > 0
+    s.phase == Fresh implies s.pathCount == 0,
+    s.phase == HasContent implies s.pathCount > 0
   }
 
-  /// disposed is NOT absorbing: only dispose itself (or a stutter) can leave
-  /// the automaton disposed — every other action resurrects the manager
-  val disposedOnlyAfterDispose = phase == "disposed" implies (cmd == "dispose" or cmd == "stutter")
+  /// the job is empty exactly when it has no last path
+  val emptyIffNoLastPath = (s.pathCount == 0) == (s.lastPath == PNone)
+
+  /// disposed is NOT absorbing, as a checked equivalence: the machine sits
+  /// in Disposed exactly when the step just taken was a dispose
+  val disposedExactlyAfterDispose = (s.phase == Disposed) == s.ghostJustDisposed
+
+  /// render-call conservation: every renderer.render is one construction
+  /// frame (per generation), one explicit render(), one clear() re-render,
+  /// or one animated-render first frame of a process that left > 1 path
+  val renderConservation =
+    s.renders == s.managerGen + s.ghostClears + s.ghostRenderActs + s.ghostBusyProcesses
+
+  /// setSize conservation: one per generation construction plus one per
+  /// resize action
+  val setSizeConservation = s.setSizes == s.managerGen + s.ghostResizes
+
+  /// every retired generation's renderer was disposed exactly once, and the
+  /// live generation's renderer not yet
+  val rendererDisposeLedger =
+    s.rendererDisposes == (if (s.phase == Disposed) s.managerGen else s.managerGen - 1)
+
+  /// generations only ever grow, at most one per step
+  val genMonotone = and {
+    s.ghostPrev.gen <= s.managerGen,
+    s.managerGen <= s.ghostPrev.gen + 1
+  }
+
+  /// a generation is created exactly by leaving the disposed phase
+  val resurrectionExactlyFromDisposed = and {
+    s.managerGen == s.ghostPrev.gen + 1 implies s.ghostPrev.wasDisposed,
+    (s.ghostPrev.wasDisposed and s.phase != Disposed) implies s.managerGen == s.ghostPrev.gen + 1
+  }
+
+  /// the job survives dispose() untouched
+  val disposeRetainsJob = s.ghostJustDisposed implies s.pathCount == s.ghostPrev.paths
+
+  /// only clear() ever shrinks the job
+  val onlyClearShrinksJob = s.pathCount < s.ghostPrev.paths implies s.ghostJustCleared
+
+  /// the renderer observables never decrease, and never jump by more than a
+  /// resurrection plus one call
+  val observablesMonotone = and {
+    s.renders >= s.ghostPrev.renders,
+    s.renders <= s.ghostPrev.renders + 2,
+    s.setSizes >= s.ghostPrev.setSizes,
+    s.setSizes <= s.ghostPrev.setSizes + 2
+  }
 
   val countersSane = and {
-    managerGen >= 1,
-    processedCount >= 0,
-    pathCount >= 0,
-    // the fixed snippet never grows a job epoch past extrusion + travel
-    pathCount <= 2,
-    pathCount <= processedCount
+    s.managerGen >= 1,
+    s.processed >= 0,
+    s.pathCount >= 0,
+    // each process call grows the job by at most one path
+    s.pathCount <= s.processed
   }
 
   val allInvariants = and {
-    cmdWellFormed,
-    phaseWellFormed,
-    neverThrows,
     phaseMatchesContent,
-    disposedOnlyAfterDispose,
+    emptyIffNoLastPath,
+    disposedExactlyAfterDispose,
+    renderConservation,
+    setSizeConservation,
+    rendererDisposeLedger,
+    genMonotone,
+    resurrectionExactlyFromDisposed,
+    disposeRetainsJob,
+    onlyClearShrinksJob,
+    observablesMonotone,
     countersSane
   }
 
-  // --- semantic tests (run with: npx quint test verification/quint/lifecycle.qnt) ---
+  // --- semantic tests (run with:
+  // ---   npx quint test verification/quint/lifecycle.qnt) ---
 
-  /// dispose is idempotent and never resurrects: the second dispose is a
-  /// no-op, and the retained job keeps its paths across both
+  /// The snippet menu drives path growth by last-path kind, not by a call
+  /// cap: extruding twice extends one extrusion path, travel opens a second
+  /// path (and the animated render starts billing one frame per process),
+  /// extruding again opens a third, and an empty snippet grows nothing but
+  /// still re-renders the now-multi-path job
+  run snippetMenuTest =
+    init
+      .expect(s.renders == 1 and s.setSizes == 1 and s.managerGen == 1)
+      .then(dispatch(AProcess(Extruding)))
+      .expect(s.pathCount == 1 and s.lastPath == PExtrusion and s.renders == 1)
+      .then(dispatch(AProcess(Extruding)))
+      .expect(s.pathCount == 1 and s.renders == 1 and s.processed == 2)
+      .then(dispatch(AProcess(TravelOnly)))
+      .expect(s.pathCount == 2 and s.lastPath == PTravel and s.renders == 2)
+      .then(dispatch(AProcess(TravelOnly)))
+      .expect(s.pathCount == 2 and s.renders == 3)
+      .then(dispatch(AProcess(Extruding)))
+      .expect(s.pathCount == 3 and s.lastPath == PExtrusion and s.renders == 4)
+      .then(dispatch(AProcess(EmptyInput)))
+      .expect(and {
+        s.pathCount == 3,
+        s.lastPath == PExtrusion,
+        s.renders == 5,
+        s.processed == 6,
+        ev.snippet == "empty"
+      })
+
+  /// dispose is idempotent: the second dispose changes nothing, disposes no
+  /// renderer twice, and the retained job keeps its paths across both
   run disposeIdempotencyTest =
     init
-      .then(doProcess)
-      .expect(phase == "hasContent" and pathCount == 1 and managerGen == 1)
-      .then(doDispose)
-      .expect(phase == "disposed" and pathCount == 1 and managerGen == 1)
-      .then(doDispose)
-      .expect(phase == "disposed" and pathCount == 1 and managerGen == 1 and outcome == "ok")
+      .then(dispatch(AProcess(Extruding)))
+      .expect(s.phase == HasContent and s.pathCount == 1 and s.rendererDisposes == 0)
+      .then(dispatch(ADispose))
+      .expect(s.phase == Disposed and s.pathCount == 1 and s.managerGen == 1 and s.rendererDisposes == 1)
+      .then(dispatch(ADispose))
+      .expect(and {
+        s.phase == Disposed,
+        s.pathCount == 1,
+        s.managerGen == 1,
+        s.rendererDisposes == 1,
+        ev.resurrected == false
+      })
 
-  /// clear replaces the job wholesale; processing afterwards grows content
-  /// from scratch while the total processed count keeps counting. A third
-  /// process of the same snippet extends the travel path: the count caps at 2.
-  run clearThenProcessTest =
+  /// every dispose-then-X pair resurrects with its own observable bill:
+  /// process adds a construction frame plus the multi-path animated frame,
+  /// render adds a construction frame plus its explicit one, resize adds a
+  /// construction setSize plus its own, clear adds a construction frame
+  /// plus its re-render and empties the job
+  run resurrectionPairsTest =
     init
-      .then(doProcess)
-      .then(doProcess)
-      .expect(phase == "hasContent" and pathCount == 2 and processedCount == 2)
-      .then(doProcess)
-      .expect(phase == "hasContent" and pathCount == 2 and processedCount == 3)
-      .then(doClear)
-      .expect(phase == "fresh" and pathCount == 0 and processedCount == 3)
-      .then(doProcess)
-      .expect(phase == "hasContent" and pathCount == 1 and processedCount == 4)
+      .then(dispatch(AProcess(Extruding)))
+      .then(dispatch(AProcess(TravelOnly)))
+      .expect(s.pathCount == 2 and s.renders == 2 and s.setSizes == 1)
+      .then(dispatch(ADispose))
+      .then(dispatch(AProcess(Extruding)))
+      .expect(and {
+        ev.resurrected == true,
+        s.phase == HasContent,
+        s.pathCount == 3,
+        s.managerGen == 2,
+        s.renders == 4, // +1 construction frame, +1 animated frame
+        s.setSizes == 2,
+        s.rendererDisposes == 1
+      })
+      .then(dispatch(ADispose))
+      .then(dispatch(ARender))
+      .expect(and {
+        ev.resurrected == true,
+        s.phase == HasContent,
+        s.managerGen == 3,
+        s.renders == 6, // +1 construction frame, +1 explicit render
+        s.setSizes == 3,
+        s.rendererDisposes == 2
+      })
+      .then(dispatch(ADispose))
+      .then(dispatch(AResize))
+      .expect(and {
+        ev.resurrected == true,
+        s.managerGen == 4,
+        s.renders == 7, // construction frame only
+        s.setSizes == 5, // +1 construction resize, +1 explicit resize
+        s.rendererDisposes == 3
+      })
+      .then(dispatch(ADispose))
+      .then(dispatch(AClear))
+      .expect(and {
+        ev.resurrected == true,
+        s.phase == Fresh,
+        s.pathCount == 0,
+        s.lastPath == PNone,
+        s.managerGen == 5,
+        s.renders == 9, // +1 construction frame, +1 clear re-render
+        s.setSizes == 6,
+        s.rendererDisposes == 4
+      })
 
-  /// render works in every phase; after dispose it resurrects the manager,
-  /// and the retained content makes the preview hasContent again
-  run renderInEachPhaseTest =
+  /// an empty snippet on a fresh job keeps the preview fresh (phase follows
+  /// content, not the fact that process was called) and draws nothing extra;
+  /// the first real path of the epoch is billed without an animated frame
+  run emptyFirstKeepsFreshTest =
     init
-      .then(doRender)
-      .expect(phase == "fresh" and managerGen == 1 and outcome == "ok")
-      .then(doProcess)
-      .then(doRender)
-      .expect(phase == "hasContent" and managerGen == 1)
-      .then(doDispose)
-      .then(doRender)
-      .expect(phase == "hasContent" and pathCount == 1 and managerGen == 2 and outcome == "ok")
+      .then(dispatch(AProcess(EmptyInput)))
+      .expect(and {
+        s.phase == Fresh,
+        s.pathCount == 0,
+        s.lastPath == PNone,
+        s.processed == 1,
+        s.renders == 1
+      })
+      .then(dispatch(AProcess(TravelOnly)))
+      .expect(s.phase == HasContent and s.pathCount == 1 and s.lastPath == PTravel and s.renders == 1)
 
-  /// clear twice is a no-op the second time; clear on a disposed preview
-  /// resurrects the manager and lands back in fresh
-  run clearIdempotencyTest =
+  /// clear replaces the job wholesale while the total processed count keeps
+  /// counting; each clear costs one explicit re-render even when the job is
+  /// already empty, and a job-neutral render/resize after it stays fresh
+  run clearEpochTest =
     init
-      .then(doProcess)
-      .then(doClear)
-      .expect(phase == "fresh" and pathCount == 0 and managerGen == 1)
-      .then(doClear)
-      .expect(phase == "fresh" and pathCount == 0 and managerGen == 1 and outcome == "ok")
-      .then(doDispose)
-      .then(doClear)
-      .expect(phase == "fresh" and pathCount == 0 and managerGen == 2)
-
-  /// the job survives dispose(); processing while disposed resurrects the
-  /// manager and keeps appending to the retained job
-  run processAfterDisposeTest =
-    init
-      .then(doProcess)
-      .then(doDispose)
-      .expect(phase == "disposed" and pathCount == 1)
-      .then(doProcess)
-      .expect(phase == "hasContent" and pathCount == 2 and processedCount == 2 and managerGen == 2)
-
-  /// resize works in every phase; on a disposed empty preview it resurrects
-  /// into fresh, on a disposed non-empty one into hasContent; stutter changes
-  /// nothing
-  run resizeAfterDisposeTest =
-    init
-      .then(doResize)
-      .expect(phase == "fresh" and managerGen == 1)
-      .then(doDispose)
-      .then(doResize)
-      .expect(phase == "fresh" and managerGen == 2 and outcome == "ok")
-      .then(doProcess)
-      .then(doDispose)
-      .then(doResize)
-      .expect(phase == "hasContent" and pathCount == 1 and managerGen == 3)
-      .then(doStutter)
-      .expect(phase == "hasContent" and pathCount == 1 and managerGen == 3 and cmd == "stutter")
+      .then(dispatch(AProcess(Extruding)))
+      .then(dispatch(AProcess(TravelOnly)))
+      .expect(s.pathCount == 2 and s.processed == 2)
+      .then(dispatch(AClear))
+      .expect(s.phase == Fresh and s.pathCount == 0 and s.processed == 2 and s.renders == 3)
+      .then(dispatch(AClear))
+      .expect(s.phase == Fresh and s.pathCount == 0 and s.renders == 4 and s.managerGen == 1)
+      .then(dispatch(ARender))
+      .expect(s.phase == Fresh and s.renders == 5)
+      .then(dispatch(AResize))
+      .expect(s.phase == Fresh and s.setSizes == 2 and s.renders == 5)
+      .then(dispatch(AProcess(Extruding)))
+      .expect(s.phase == HasContent and s.pathCount == 1 and s.processed == 3)
 }

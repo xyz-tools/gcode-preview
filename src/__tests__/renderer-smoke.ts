@@ -108,8 +108,8 @@ describe('SceneManager runtime smoke test', () => {
   });
 });
 
-describe('lifecycle v2 spec trace replay', () => {
-  // Replays ITF traces produced from verification/quint-v2/lifecycle.qnt
+describe('lifecycle spec trace replay', () => {
+  // Replays ITF traces produced from verification/quint/lifecycle.qnt
   // against a real GCodePreview with only the WebGL boundary stubbed (the
   // module-level 'three' mock above — no un-mocking machinery). Each trace
   // state holds exactly two records: `s` (the machine state: path counters
@@ -123,7 +123,7 @@ describe('lifecycle v2 spec trace replay', () => {
   // render contributes exactly its first frame per multi-path process (its
   // promise stays pending, which the suite treats as pinned), and the
   // renderer call counts become deterministic.
-  const tracesDir = join(process.cwd(), 'verification', 'quint-v2', 'traces', 'lifecycle');
+  const tracesDir = join(process.cwd(), 'verification', 'quint', 'traces', 'lifecycle');
 
   // The spec's snippet menu mapped to real G-code; keep in sync with the
   // Snippet type in lifecycle.qnt and lifecycle.md. The G92 E reset is what
@@ -202,7 +202,7 @@ describe('lifecycle v2 spec trace replay', () => {
 
   it('the traces directory exists and holds at least one ITF trace', () => {
     // Fails (rather than silently skipping the replay) when the Quint traces
-    // have not been generated into verification/quint-v2/traces/lifecycle.
+    // have not been generated into verification/quint/traces/lifecycle.
     expect(traceFiles.length, `expected *.itf.json traces in ${tracesDir}`).toBeGreaterThan(0);
   });
 

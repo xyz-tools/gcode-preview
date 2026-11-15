@@ -19,7 +19,8 @@ const statesOf = (dir, file) => JSON.stringify(JSON.parse(readFileSync(join(dir,
 for (const spec of SPECS) {
   console.log(`\n=== ${spec.name} ===`);
 
-  quint(['test', spec.path, ...(spec.testMain ? ['--main', spec.testMain] : [])]);
+  const testMain = spec.testMain ?? spec.main;
+  quint(['test', spec.path, ...(testMain ? ['--main', testMain] : [])]);
 
   if (spec.invariant) {
     const simulate = (seed) =>

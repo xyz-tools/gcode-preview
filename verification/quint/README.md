@@ -1,43 +1,27 @@
-# Quint specs of gcode-preview's state machines
+# Quint spec bank
 
-> **Version note:** this is the v1 bank. A critique-driven second generation is growing in [`../quint-v2/`](../quint-v2/README.md) — shared core semantics, ghost-state invariants, authority annotations, sized trace corpora. v1 specs stay green and bound until their v2 replacements land; see the migration status in the v2 README.
+This directory is THE formal-verification layer: behavior-pinning specs bound to the implementation by ITF trace replay. It is the second generation of the bank — a deliberate four-lens critique of the first generation (formal rigor, architecture, binding strength, semantic fidelity) found structural weaknesses worth rebuilding for, not patching. Each spec's companion `.md` records every design decision with its reasoning, the alternatives considered, and what v1 did instead.
 
-This directory holds [Quint](https://quint-lang.org) formal specifications of the library's discrete state machines. Each `.qnt` file is one spec; each models what the TypeScript source actually does, with integer-only state (lengths are centi-millimeters, mm × 100).
+A sibling bank, [`../quint-next/`](../quint-next/README.md), specifies the system as it *would* work designed from scratch — normative, firmware-conformant, intentionally divergent from the current implementation, and unbound by design.
 
-The specs are the intended semantics; the vitest replay keeps them honest against the real code. Every state in a trace records which input produced it, so a trace doubles as a program — a G-code snippet, a chunk sequence, or an API call sequence — that a replay suite feeds to the real implementation and compares step by step. Neither the spec nor the implementation can drift without CI failing.
+## Authority policy
 
-## The specs
+The implementation is the source of truth unless a clause says otherwise. Every command transition in `lib/printer-core.qnt` carries a three-field annotation: its **Authority** (Marlin documentation, the RepRap wiki, RepRapFirmware documentation, or none), the **Library stance** (conforms, pinned-divergence, or library-invented), and its **Exclusions**. A replay failure therefore has an arbitration rule: the spec is stale unless the failing clause cites an external authority, in which case the divergence is surfaced for a deliberate decision rather than silently re-pinned.
 
-The spec text reads as implementation-independent semantics on purpose: comments that cite source paths rot silently, while the replay suites bind each spec to the code mechanically. This table is the one place that maps a spec to the implementation it pins.
+## What v2 changes, and why
 
-| Spec                       | Models                                                                                                                                                                                       | Implementation it pins                                                                                            | Replay suite                             |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `interpreter.qnt`          | Printer-state effects of G0/G1, G2/G3 arcs, G20/G21 units, G28 homing, G31/G38.x probes (incl. the z-clamp rule), G92/G92.1 workspace shifts, M82/M83 extrusion modes, T0–T7 tool selection, and the zero-length-move stats classification | `src/interpreter/commands/*`, `src/state.ts`, `src/job-stats.ts`, `src/units.ts`                                   | `src/__tests__/interpreter.ts`           |
-| `encoding-equivalence.qnt` | Shift-frame equivalence: the same toolpath expressed in a G92-shifted workspace reaches the identical physical state                                                                          | `src/interpreter/commands/*`, `src/state.ts`, `src/job.ts`                                                         | `src/__tests__/job.ts`                   |
-| `streaming.qnt`            | Chunk-boundary carry buffer under nondeterministic splits, with conservation and prefix-correctness invariants                                                                                | `src/helpers/split-chunk.ts`                                                                                       | `src/__tests__/split-chunk.ts`           |
-| `slicer-detector.qnt`      | Write-once slicer-classification latch and its first-match priority order                                                                                                                     | `src/parser/slicer-detector.ts`, `src/parser/gcode-parser.ts`, `src/parser/metadata-parser-base.ts`, `src/parser/*-parser.ts` | `src/__tests__/parser/slicer-detector.ts` |
-| `thumbnail.qnt`            | Online thumbnail comment protocol (begin/data/end, restarts, validity checks)                                                                                                                 | `src/parser/gcode-parser.ts`, `src/thumbnail.ts`                                                                   | `src/__tests__/parse-thumbnail.ts`       |
-| `layer-indexer.qnt`        | Layer-indexing automaton across streamed chunks: strategy choice, layer-comment versus z-change assignment, non-planar collapse                                                               | `src/indexers.ts`, `src/job.ts`, `src/parser/gcode-parser.ts`                                                      | `src/__tests__/indexers.ts`              |
-| `lifecycle.qnt`            | Observable public-API lifecycle of `GCodePreview` (process/clear/render/resize/dispose ordering with predicted outcomes)                                                                      | `src/gcode-preview.ts`                                                                                             | `src/__tests__/gcode-preview.ts`         |
+**One semantics, written once.** v1 hand-transcribed the printer-state transitions into both `interpreter.qnt` and `encoding-equivalence.qnt`, which made the equivalence theorem compare two copies of the same hand — an identity no simulation could falsify. v2 extracts `lib/printer-core.qnt`: a `PrinterState` record, a `Command` sum type, and a single pure `applyCommand`. The interpreter machine folds it; the equivalence machine runs two states through the *same* function with a separately defined re-encoding, so its invariant now genuinely checks that re-encoding and interpretation commute.
 
-When a spec and its sources drift apart, the replay suite fails CI — not a comment.
+**Invariants that can fail.** v1's invariants were bookkeeping a wrong transition relation would still satisfy. Every v2 machine carries ghost state that makes its defining theorem checkable: the interpreter tracks ghost logical positions (invariant: `physical = logical + shift` on every known axis) and ghost move counters (invariant: the stats classification partitions zero-length moves exactly); streaming promotes its confluence claim — at document exhaustion the emitted lines equal the oneshot split — from one hand-built test to an invariant over every trace. These were mutation-tested during construction: breaking a transition clause is caught by simulation in milliseconds.
 
-Each spec also has a sibling Markdown file (`interpreter.md`, `streaming.md`, …) with Mermaid diagrams of its state machine, rendered inline by GitHub for an at-a-glance view of the model.
+**Corpora sized to the machine, and kept fresh.** v1 generated 15×24-step traces per spec from one frozen seed; for streaming that corpus was ~85% stutter steps. v2 budgets live in the runner manifest (`scripts/quint-specs.mjs`), each machine samples two seeds, and every companion tables its coverage minima against measured event counts (streaming's stutter share is now 8.6%). The check runner adds a fresh-seed simulation lane each run, and a trace-freshness gate regenerates every corpus and fails when a spec edit lands without regenerated traces — closing the one drift path v1's design left open.
 
-## Running everything
+**Exactness restored.** Replays compare through `src/__tests__/helpers/itf-replay.ts` (shared, not copy-pasted) and `centiMismatch`: the implementation value scaled by 100 must round to exactly the spec's integer, with sub-`1e-9` slack reserved for float noise. The epsilon that quietly gave away the integer model's precision is gone.
 
-Every spec follows the same conventions: an `init` and `step` action, an `allInvariants` value, and semantic runs named `*Test`. One script runs all semantic tests plus a seeded invariant simulation for every spec, and CI runs it on each pull request:
+## Layout and running
 
-```sh
-npm run quint:test
-```
+`lib/` holds pure modules validated by sibling `*_test` modules; runnable machines sit at the root with traces under `traces/<spec>/`. Conventions are codified in `STYLE.md`. The same two commands cover v1 and v2: `npm run quint:test` (semantic runs, both invariant lanes, freshness gate) and `npm run quint:traces` (regenerate all corpora).
 
-## Regenerating the traces
+## Migration status
 
-The ITF traces in `traces/<spec name>/` are committed and reproducible. They are produced with a fixed seed, so regenerating yields the same states (only the `#meta` timestamp in each file header changes):
-
-```sh
-npm run quint:traces
-```
-
-Each spec gets 15 traces of 25 states (init plus 24 steps). Integers in the ITF files are encoded as `{"#bigint": "..."}` objects, which the replay suites unwrap before comparing against the TypeScript state. The replay suites run as part of the normal vitest suite, so every CI leg checks the committed traces against the implementation.
+Complete. All seven machines live here on the shared core and conventions, each with its critique-driven improvements (multi-line chunk events and representative-line sets in `slicer-detector`; varied and padded payloads in `thumbnail`; the full per-layer partition in `layer-indexer`'s trace contract; a snippet menu and renderer-stub harness for `lifecycle`). The v1 bank and its replay suites were retired in the change that adopted this one.

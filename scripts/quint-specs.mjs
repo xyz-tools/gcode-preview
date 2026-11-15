@@ -2,34 +2,25 @@
 // Entry points: quint-check.mjs (tests + invariant simulation + trace
 // freshness) and quint-traces.mjs (regenerate the committed traces).
 //
-// v1 (verification/quint/) is the behavior-pinning bank: uniform budgets,
-// single seed. v2 (verification/quint-v2/) sizes each machine's corpus to its
-// diameter and samples two seeds; lib modules are pure and test-only.
+// verification/quint/ is THE spec bank (behavior-pinning, replay-bound):
+// lib modules are pure and test-only; machines carry two-seed trace corpora
+// sized to each machine (see the companions' coverage tables).
+// verification/quint-next/ is the NORMATIVE design bank: specified from
+// firmware docs as if the system were written from scratch; no replay and no
+// traces by design (it intentionally diverges from the implementation), so
+// its gate is internal consistency only.
 import { spawnSync } from 'node:child_process';
 
 export const BASE_SEED = '0x67c0de2026';
 export const SECOND_SEED = '0xfab1e2026';
 
-const v1 = (name) => ({
-  name: `v1/${name}`,
+const machine = (name, { main, nTraces, maxSteps }) => ({
+  name,
   path: `verification/quint/${name}.qnt`,
-  invariant: 'allInvariants',
-  traces: {
-    dir: `verification/quint/traces/${name}`,
-    nTraces: 15,
-    maxSteps: 24,
-    seeds: [BASE_SEED],
-    seedTag: false
-  }
-});
-
-const v2 = (name, { main, nTraces, maxSteps }) => ({
-  name: `v2/${name}`,
-  path: `verification/quint-v2/${name}.qnt`,
   main,
   invariant: 'allInvariants',
   traces: {
-    dir: `verification/quint-v2/traces/${name}`,
+    dir: `verification/quint/traces/${name}`,
     nTraces,
     maxSteps,
     seeds: [BASE_SEED, SECOND_SEED],
@@ -37,25 +28,38 @@ const v2 = (name, { main, nTraces, maxSteps }) => ({
   }
 });
 
+const design = (name, path, { testMain, main } = {}) => ({
+  name: `next/${name}`,
+  path,
+  testMain,
+  main,
+  // Invariant simulation needs a runnable machine; pure test-only modules
+  // are gated by their *Test runs alone.
+  ...(main ? { invariant: 'allInvariants' } : {})
+});
+
 export const SPECS = [
-  v1('encoding-equivalence'),
-  v1('interpreter'),
-  v1('layer-indexer'),
-  v1('lifecycle'),
-  v1('slicer-detector'),
-  v1('streaming'),
-  v1('thumbnail'),
-  // v2 lib: pure semantics modules, validated by their sibling test modules
-  { name: 'v2/lib/scale', path: 'verification/quint-v2/lib/scale.qnt', testMain: 'scale_test' },
-  { name: 'v2/lib/printer-core', path: 'verification/quint-v2/lib/printer-core.qnt', testMain: 'printer_core_test' },
-  // v2 machines: budgets sized per machine (see each companion's coverage table)
-  v2('streaming', { nTraces: 20, maxSteps: 40 }),
-  v2('interpreter', { nTraces: 25, maxSteps: 30 }),
-  v2('thumbnail', { nTraces: 25, maxSteps: 40 }),
-  v2('lifecycle', { nTraces: 15, maxSteps: 30 }),
-  v2('layer-indexer', { nTraces: 25, maxSteps: 30 }),
-  v2('slicer-detector', { nTraces: 40, maxSteps: 10 }),
-  v2('encoding-equivalence', { main: 'encoding_equivalence', nTraces: 12, maxSteps: 30 })
+  // lib: pure semantics modules, validated by their sibling test modules
+  { name: 'lib/scale', path: 'verification/quint/lib/scale.qnt', testMain: 'scale_test' },
+  { name: 'lib/printer-core', path: 'verification/quint/lib/printer-core.qnt', testMain: 'printer_core_test' },
+  // machines
+  machine('streaming', { nTraces: 20, maxSteps: 40 }),
+  machine('interpreter', { nTraces: 25, maxSteps: 30 }),
+  machine('thumbnail', { nTraces: 25, maxSteps: 40 }),
+  machine('lifecycle', { nTraces: 15, maxSteps: 30 }),
+  machine('layer-indexer', { nTraces: 25, maxSteps: 30 }),
+  machine('slicer-detector', { nTraces: 40, maxSteps: 10 }),
+  machine('encoding-equivalence', { main: 'encoding_equivalence', nTraces: 12, maxSteps: 30 }),
+  // normative design bank (no traces, internal consistency only)
+  design('lib/scale', 'verification/quint-next/lib/scale.qnt', { testMain: 'scale_next_test' }),
+  design('lib/printer-core', 'verification/quint-next/lib/printer-core.qnt', {
+    testMain: 'printer_core_next_test',
+    main: 'printer_core_next_props'
+  }),
+  design('streaming', 'verification/quint-next/streaming.qnt', { main: 'streaming_next' }),
+  design('lifecycle', 'verification/quint-next/lifecycle.qnt', { main: 'lifecycle_next' }),
+  design('interpreter', 'verification/quint-next/interpreter.qnt', { main: 'interpreter_next' }),
+  design('encoding-equivalence', 'verification/quint-next/interpreter.qnt', { main: 'encoding_equivalence_next' })
 ];
 
 export const quint = (args, { allowFail = false } = {}) => {

@@ -1,4 +1,3 @@
-import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test, expect, describe, vi, afterEach } from 'vitest';
 import { Job } from '../job';
@@ -854,248 +853,6 @@ describe('.resumeLastPath', () => {
   });
 });
 
-describe('Quint encoding-equivalence trace replay', () => {
-  // Replays ITF traces produced from verification/quint/encoding-equivalence.qnt.
-  // Each trace describes TWO G-code streams for the same physical toolpath:
-  // stream A as written, and stream B re-encoded in a G92-shifted workspace
-  // that the trace's "frame" step establishes (B alone executes a G92 on that
-  // step; A receives no line). Both streams run through their own real
-  // Parser + Interpreter + Job; each Job's State is compared per step to its
-  // spec copy (spec lengths are integers in centi-millimeters, compared at
-  // epsilon 1e-6 after scaling), and the two Jobs' physical x/y/z/e are
-  // compared to each other EXACTLY, since the model's integer arithmetic is
-  // exact in floating point too.
-  const tracesDir = join(process.cwd(), 'verification', 'quint', 'traces', 'encoding-equivalence');
-
-  // An ITF value: booleans and strings are plain JSON; integers arrive either
-  // as plain numbers or in Apalache's { "#bigint": "123" } wrapping.
-  type ItfValue = boolean | string | number | { '#bigint': string } | undefined;
-  type ItfState = Record<string, ItfValue>;
-
-  const itfInt = (value: ItfValue, key: string): number => {
-    if (typeof value === 'number') return value;
-    if (typeof value === 'object' && value !== null && typeof value['#bigint'] === 'string') {
-      return Number(value['#bigint']);
-    }
-    throw new Error(`expected an ITF integer for "${key}", got ${JSON.stringify(value)}`);
-  };
-  const itfBool = (value: ItfValue, key: string): boolean => {
-    if (typeof value !== 'boolean') throw new Error(`expected a boolean for "${key}", got ${JSON.stringify(value)}`);
-    return value;
-  };
-  const itfStr = (value: ItfValue, key: string): string => {
-    if (typeof value !== 'string') throw new Error(`expected a string for "${key}", got ${JSON.stringify(value)}`);
-    return value;
-  };
-
-  // One copy of the spec's printer state (copy A's workspace shift is always
-  // zero: it never executes a G92). Lengths in centi-millimeters.
-  type SpecCopy = {
-    xKnown: boolean;
-    yKnown: boolean;
-    zKnown: boolean;
-    posX: number;
-    posY: number;
-    posZ: number;
-    e100: number;
-    shiftX: number;
-    shiftY: number;
-    shiftZ: number;
-    rel: boolean;
-    homed: boolean;
-  };
-
-  type SpecState = {
-    cmd: string;
-    hasX: boolean;
-    hasY: boolean;
-    hasZ: boolean;
-    hasE: boolean;
-    wordX: number;
-    wordY: number;
-    wordZ: number;
-    wordE: number;
-    bWordX: number;
-    bWordY: number;
-    bWordZ: number;
-    bWordE: number;
-    a: SpecCopy;
-    b: SpecCopy;
-  };
-
-  // Decode a raw ITF state; keys starting with '#' (like '#meta') are never
-  // read and are thereby ignored.
-  const decodeState = (raw: ItfState): SpecState => ({
-    cmd: itfStr(raw.cmd, 'cmd'),
-    hasX: itfBool(raw.hasX, 'hasX'),
-    hasY: itfBool(raw.hasY, 'hasY'),
-    hasZ: itfBool(raw.hasZ, 'hasZ'),
-    hasE: itfBool(raw.hasE, 'hasE'),
-    wordX: itfInt(raw.wordX, 'wordX'),
-    wordY: itfInt(raw.wordY, 'wordY'),
-    wordZ: itfInt(raw.wordZ, 'wordZ'),
-    wordE: itfInt(raw.wordE, 'wordE'),
-    bWordX: itfInt(raw.bWordX, 'bWordX'),
-    bWordY: itfInt(raw.bWordY, 'bWordY'),
-    bWordZ: itfInt(raw.bWordZ, 'bWordZ'),
-    bWordE: itfInt(raw.bWordE, 'bWordE'),
-    a: {
-      xKnown: itfBool(raw.aXKnown, 'aXKnown'),
-      yKnown: itfBool(raw.aYKnown, 'aYKnown'),
-      zKnown: itfBool(raw.aZKnown, 'aZKnown'),
-      posX: itfInt(raw.aPosX, 'aPosX'),
-      posY: itfInt(raw.aPosY, 'aPosY'),
-      posZ: itfInt(raw.aPosZ, 'aPosZ'),
-      e100: itfInt(raw.aE100, 'aE100'),
-      shiftX: 0,
-      shiftY: 0,
-      shiftZ: 0,
-      rel: itfBool(raw.aRel, 'aRel'),
-      homed: itfBool(raw.aHomed, 'aHomed')
-    },
-    b: {
-      xKnown: itfBool(raw.bXKnown, 'bXKnown'),
-      yKnown: itfBool(raw.bYKnown, 'bYKnown'),
-      zKnown: itfBool(raw.bZKnown, 'bZKnown'),
-      posX: itfInt(raw.bPosX, 'bPosX'),
-      posY: itfInt(raw.bPosY, 'bPosY'),
-      posZ: itfInt(raw.bPosZ, 'bPosZ'),
-      e100: itfInt(raw.bE100, 'bE100'),
-      shiftX: itfInt(raw.bShiftX, 'bShiftX'),
-      shiftY: itfInt(raw.bShiftY, 'bShiftY'),
-      shiftZ: itfInt(raw.bShiftZ, 'bShiftZ'),
-      rel: itfBool(raw.bRel, 'bRel'),
-      homed: itfBool(raw.bHomed, 'bHomed')
-    }
-  });
-
-  // Builds one stream's G-code line: the command, then its present words.
-  // The "frame" step is stream B's workspace-establishing G92.
-  const buildLine = (spec: SpecState, words: { x: number; y: number; z: number; e: number }): string => {
-    let line = spec.cmd === 'frame' ? 'G92' : spec.cmd.toUpperCase();
-    if (spec.hasX) line += ` X${words.x}`;
-    if (spec.hasY) line += ` Y${words.y}`;
-    if (spec.hasZ) line += ` Z${words.z}`;
-    if (spec.hasE) line += ` E${words.e}`;
-    return line;
-  };
-
-  // Compares one real Job's State to its spec copy. Every assertion message
-  // names the trace file, step index, stream, G-code line, field, and the
-  // expected vs actual values. Scaled comparisons use epsilon 1e-6.
-  const compareCopy = (
-    traceFile: string,
-    stepIndex: number,
-    stream: string,
-    line: string,
-    state: State,
-    copy: SpecCopy
-  ): void => {
-    const at = (field: string, expected: unknown, actual: unknown) =>
-      `${traceFile} step ${stepIndex} stream ${stream} (${line}) field ${field}: expected ${String(expected)}, actual ${String(actual)}`;
-
-    const axes = [
-      { field: 'x', actual: state.x, known: copy.xKnown, posCenti: copy.posX },
-      { field: 'y', actual: state.y, known: copy.yKnown, posCenti: copy.posY },
-      { field: 'z', actual: state.z, known: copy.zKnown, posCenti: copy.posZ }
-    ];
-    for (const { field, actual, known, posCenti } of axes) {
-      if (!known) {
-        expect(actual, at(field, 'undefined (axis unknown)', actual)).toBeUndefined();
-      } else {
-        const expected = posCenti / 100;
-        expect(actual, at(field, expected, actual)).toBeDefined();
-        expect(Math.abs((actual as number) - expected) <= 1e-6, at(field, expected, actual)).toBe(true);
-      }
-    }
-
-    const close = (field: string, actual: number, expectedCenti: number): void => {
-      const expected = expectedCenti / 100;
-      expect(Math.abs(actual - expected) <= 1e-6, at(field, expected, actual)).toBe(true);
-    };
-    close('e', state.e, copy.e100);
-    close('positionShift.x', state.positionShift.x, copy.shiftX);
-    close('positionShift.y', state.positionShift.y, copy.shiftY);
-    close('positionShift.z', state.positionShift.z, copy.shiftZ);
-
-    expect(state.relativeExtrusion, at('relativeExtrusion', copy.rel, state.relativeExtrusion)).toBe(copy.rel);
-    expect(state.isHomed, at('isHomed', copy.homed, state.isHomed)).toBe(copy.homed);
-  };
-
-  // The headline check: the two Jobs' physical observables agree EXACTLY.
-  // Both streams perform the same floating-point additions on integer words,
-  // so no epsilon is needed.
-  const comparePhysical = (traceFile: string, stepIndex: number, stateA: State, stateB: State): void => {
-    const at = (field: string, a: unknown, b: unknown) =>
-      `${traceFile} step ${stepIndex} field ${field}: stream A ${String(a)} differs from stream B ${String(b)}`;
-
-    expect(stateB.x, at('x', stateA.x, stateB.x)).toBe(stateA.x);
-    expect(stateB.y, at('y', stateA.y, stateB.y)).toBe(stateA.y);
-    expect(stateB.z, at('z', stateA.z, stateB.z)).toBe(stateA.z);
-    expect(stateB.e, at('e', stateA.e, stateB.e)).toBe(stateA.e);
-  };
-
-  let traceFiles: string[] = [];
-  try {
-    traceFiles = readdirSync(tracesDir)
-      .filter((file) => file.endsWith('.itf.json'))
-      .sort();
-  } catch {
-    // Missing directory: the guard test below fails with a clear message.
-  }
-
-  test('the traces directory exists and holds at least one ITF trace', () => {
-    // Fails (rather than silently skipping the replay) when the Quint traces
-    // have not been generated into verification/quint/traces.
-    expect(traceFiles.length, `expected *.itf.json traces in ${tracesDir}`).toBeGreaterThan(0);
-  });
-
-  for (const traceFile of traceFiles) {
-    test(`replays ${traceFile} as two equivalent G-code streams`, () => {
-      const parsed = JSON.parse(readFileSync(join(tracesDir, traceFile), 'utf8')) as { states: ItfState[] };
-      expect(Array.isArray(parsed.states), `${traceFile}: ITF file has no states array`).toBe(true);
-      expect(parsed.states.length, `${traceFile}: trace has no states`).toBeGreaterThan(0);
-      const states = parsed.states.map(decodeState);
-
-      // One pipeline per stream: state persists across the steps.
-      const jobA = new Job();
-      const jobB = new Job();
-      const interpreterA = new Interpreter();
-      const interpreterB = new Interpreter();
-      const parserA = new Parser();
-      const parserB = new Parser();
-
-      expect(states[0].cmd, `${traceFile} step 0: the first state must be the init state`).toBe('init');
-      compareCopy(traceFile, 0, 'A', '<init>', jobA.state, states[0].a);
-      compareCopy(traceFile, 0, 'B', '<init>', jobB.state, states[0].b);
-      comparePhysical(traceFile, 0, jobA.state, jobB.state);
-
-      for (let step = 1; step < states.length; step++) {
-        const spec = states[step];
-        let lineA = '<none>';
-        let lineB = '<none>';
-
-        if (spec.cmd === 'stutter') {
-          // The spec had nothing left to do: neither stream receives input.
-        } else if (spec.cmd === 'frame') {
-          // The frame step: only stream B executes its workspace G92.
-          lineB = buildLine(spec, { x: spec.bWordX, y: spec.bWordY, z: spec.bWordZ, e: spec.bWordE });
-          interpreterB.execute(parserB.parseGCode(lineB).commands, jobB);
-        } else {
-          lineA = buildLine(spec, { x: spec.wordX, y: spec.wordY, z: spec.wordZ, e: spec.wordE });
-          lineB = buildLine(spec, { x: spec.bWordX, y: spec.bWordY, z: spec.bWordZ, e: spec.bWordE });
-          interpreterA.execute(parserA.parseGCode(lineA).commands, jobA);
-          interpreterB.execute(parserB.parseGCode(lineB).commands, jobB);
-        }
-
-        compareCopy(traceFile, step, 'A', lineA, jobA.state, spec.a);
-        compareCopy(traceFile, step, 'B', lineB, jobB.state, spec.b);
-        comparePhysical(traceFile, step, jobA.state, jobB.state);
-      }
-    });
-  }
-});
-
 function append_path(job: Job, travelType, points: [number, number, number][], tool: number = 0): Path {
   const path = new Path(travelType, 0.6, 0.2, tool || job.state.tool);
   points.forEach((point: [number, number, number]) => path.addPoint(...point));
@@ -1103,8 +860,8 @@ function append_path(job: Job, travelType, points: [number, number, number][], t
   return path;
 }
 
-describe('encoding equivalence v2 spec trace replay', () => {
-  // Replays ITF traces produced from verification/quint-v2/encoding-equivalence.qnt.
+describe('encoding equivalence spec trace replay', () => {
+  // Replays ITF traces produced from verification/quint/encoding-equivalence.qnt.
   // Each trace state holds exactly two records: `s` — two copies of the shared
   // spec printer state (copy A in the logical frame as written, copy B in a
   // G92-shifted workspace) plus the live frame offset — and `ev`, the step's
@@ -1113,7 +870,7 @@ describe('encoding equivalence v2 spec trace replay', () => {
   // Parser + Interpreter + Job, each Job is compared to its spec copy, and the
   // two Jobs are compared to each other — all integer-exactly on the
   // centi-millimeter grid via centiMismatch (no epsilon).
-  const tracesDir = join(process.cwd(), 'verification', 'quint-v2', 'traces', 'encoding-equivalence');
+  const tracesDir = join(process.cwd(), 'verification', 'quint', 'traces', 'encoding-equivalence');
 
   type AxisCopy = { known: boolean; pos: number };
   type PrinterCopy = {
@@ -1335,7 +1092,7 @@ describe('encoding equivalence v2 spec trace replay', () => {
 
   test('the v2 traces directory exists and holds at least one ITF trace', () => {
     // Fails (rather than silently skipping the replay) when the Quint traces
-    // have not been generated into verification/quint-v2/traces.
+    // have not been generated into verification/quint/traces.
     expect(traceFiles.length, `expected *.itf.json traces in ${tracesDir}`).toBeGreaterThan(0);
   });
 
