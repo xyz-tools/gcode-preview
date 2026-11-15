@@ -8,6 +8,12 @@ import { splitChunk } from './helpers/split-chunk';
 /** While streaming, how often (at most) the paths parsed so far are drawn. */
 const LIVE_RENDER_INTERVAL_MS = 250;
 
+/** How much G-code text is parsed between checks of the time budget. */
+const PARSE_SLICE_CHARS = 16 * 1024;
+
+/** How long parsing may hold the main thread before yielding to the browser. */
+const PARSE_BUDGET_MS = 10;
+
 /**
  * Preview-level options, merged into {@link GCodePreviewOptions}.
  */
@@ -152,17 +158,18 @@ export class GCodePreview {
    * Processes G-code and renders the preview
    * @param gcode - G-code string or array of lines
    * @returns Promise that resolves when the animated render has completed
+   * @remarks
+   * A large file is parsed in slices, with the browser getting a turn between
+   * them, so the page stays responsive while it loads. That means `job` fills
+   * in asynchronously: read it once the returned promise resolves, or follow
+   * along with `onJobUpdated`, which fires once per slice.
    */
   processGCode(gcode: string | string[]): Promise<void> {
-    // Parse the gcode using our managed parser
-    const { commands, metadata } = this.parser.parseGCode(gcode);
-    this.job.metadata = metadata;
-
-    // Pass the parsed commands to the sceneManager
-    this.executeCommands(commands);
-
-    // Render the result
-    return this.sceneManager.renderAnimated();
+    const job = this.job;
+    return this.parseInSlices(gcode).then(() => {
+      // cleared while parsing: there is nothing of ours to draw
+      if (this.job === job) return this.sceneManager.renderAnimated();
+    });
   }
 
   /**
@@ -179,9 +186,7 @@ export class GCodePreview {
     if (gcode instanceof ReadableStream) {
       await this.readStream(gcode, { render: options.render });
     } else {
-      const { commands, metadata } = this.parser.parseGCode(gcode);
-      this.job.metadata = metadata;
-      this.executeCommands(commands);
+      await this.parseInSlices(gcode);
     }
 
     if (!this.job.isPlanar) {
@@ -263,6 +268,45 @@ export class GCodePreview {
   }
 
   /**
+   * Parses a whole document in slices, yielding to the browser whenever a
+   * slice pushes the time spent past {@link PARSE_BUDGET_MS}.
+   * @remarks
+   * Each slice goes through splitChunk and the per-chunk steps of readStream,
+   * so the result is the same as streaming the text, which the ingestion
+   * equivalence harness holds equal to a one-shot parse. A `clear()` during a
+   * yield abandons the rest, as it does for a stream.
+   */
+  private async parseInSlices(gcode: string | string[]): Promise<void> {
+    const text = Array.isArray(gcode) ? gcode.join('\n') : gcode;
+    const job = this.job;
+    let tail = '';
+    let sliceStart = performance.now();
+
+    for (let offset = 0; offset < text.length; offset += PARSE_SLICE_CHARS) {
+      const split = splitChunk(tail, text.slice(offset, offset + PARSE_SLICE_CHARS));
+      tail = split.tail;
+      // see readStream: parsing '' would still count a line
+      if (split.complete !== '') {
+        const { commands, metadata } = this.parser.parseGCode(split.complete);
+        this.job.metadata = metadata;
+        this.executeCommands(commands);
+      }
+
+      if (performance.now() - sliceStart >= PARSE_BUDGET_MS) {
+        await yieldToBrowser();
+        if (this.job !== job) return;
+        sliceStart = performance.now();
+      }
+    }
+
+    // a last line without a trailing newline, flushed like readStream does
+    if (tail !== '') {
+      const { commands } = this.parser.parseGCode(tail);
+      this.executeCommands(commands);
+    }
+  }
+
+  /**
    * Folds parsed commands into the job and announces the result.
    * @param commands - Parsed G-code commands
    */
@@ -289,3 +333,26 @@ export class GCodePreview {
  */
 export { SceneManager, GCodeCommand, Parser, Job };
 export type { SceneManagerOptions };
+
+/**
+ * Lets the browser draw a frame and handle input before parsing continues.
+ * @remarks
+ * A MessageChannel task, chosen by measurement (3DBenchy in Chrome):
+ * - `scheduler.yield()` resumes ahead of rendering, so no frame got drawn
+ *   during the whole parse: no better than not yielding at all.
+ * - `setTimeout(0)` is clamped to 4 ms once nested, which made parsing a
+ *   third slower on a fast machine.
+ * - A posted message runs as an ordinary task, without the clamp, so frames
+ *   interleave (~50 fps) and parsing takes as long as without yielding.
+ * A resolved promise would not do either: microtasks run before rendering.
+ */
+function yieldToBrowser(): Promise<void> {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      channel.port1.close();
+      resolve();
+    };
+    channel.port2.postMessage(undefined);
+  });
+}

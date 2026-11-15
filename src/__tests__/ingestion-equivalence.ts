@@ -21,10 +21,17 @@
  * .ts file under src/__tests__ as a test suite, so a separate helper module
  * would be picked up as an empty suite and fail the run.
  */
+import { readdirSync, readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import { GCodePreview } from '../gcode-preview';
+import { GCodePreview, GCodePreviewOptions } from '../gcode-preview';
 import { PathType } from '../path';
+import { Parser } from '../parser/gcode-parser';
+import { Interpreter } from '../interpreter';
+import { Job } from '../job';
 
 const { MockWebGLRenderer } = vi.hoisted(() => {
   class MockWebGLRenderer {
@@ -96,31 +103,32 @@ const thumbnailBlock = [
   '; thumbnail end'
 ].join('\n');
 
-const MODES: [name: string, ingest: Ingest][] = [
-  [
-    'oneshot',
-    async (preview, gcode) => {
-      await preview.processGCode(gcode);
-    }
-  ],
+/** Hands the whole document to processGCode at once. */
+const oneshotIngest: Ingest = async (preview, gcode) => {
+  await preview.processGCode(gcode);
+};
+
+const MODES: [name: string, ingest: Ingest, options?: Partial<GCodePreviewOptions>][] = [
+  // processGCode parses in 16 KB slices through splitChunk, yielding between them
+  ['oneshot', oneshotIngest],
   ['stream chunk=1', streamIngest(1)],
   ['stream chunk=7', streamIngest(7)],
   // 64k delivers the whole file in a single chunk (65536 > every fixture here)
   ['stream chunk=64k', streamIngest(64 * 1024)]
 ];
 
-function createPreview(): GCodePreview {
+function createPreview(options: Partial<GCodePreviewOptions> = {}): GCodePreview {
   const canvas = document.createElement('canvas');
   Object.defineProperty(canvas, 'offsetWidth', { value: 800, configurable: true });
   Object.defineProperty(canvas, 'offsetHeight', { value: 600, configurable: true });
-  return new GCodePreview({ canvas, buildVolume: { x: 200, y: 200, z: 200 } });
+  return new GCodePreview({ canvas, buildVolume: { x: 200, y: 200, z: 200 }, ...options });
 }
 
-describe.each(MODES)('ingestion via %s', (_name, ingest) => {
+describe.each(MODES)('ingestion via %s', (_name, ingest, options) => {
   let preview: GCodePreview;
 
   beforeEach(() => {
-    preview = createPreview();
+    preview = createPreview(options);
     // readStream logs a debug line per chunk; chunk=1 would emit one per byte
     vi.spyOn(console, 'debug').mockImplementation(() => {});
   });
@@ -378,5 +386,116 @@ describe.each(MODES)('ingestion via %s', (_name, ingest) => {
       min: expect.objectContaining({ x: 10, y: 10, z: 1 }),
       max: expect.objectContaining({ x: 30, y: 25, z: 1 })
     });
+  });
+});
+
+/**
+ * Everything a parse leaves on the job, in plain data so two runs compare
+ * with toEqual. Layer contents are recorded as indices into `paths`, so a
+ * path filed into the wrong layer shows up even when the counts agree.
+ */
+function jobSnapshot(job: Job) {
+  const pathIndex = new Map(job.paths.map((path, index) => [path, index]));
+  const metadata = job.metadata;
+
+  return {
+    paths: job.paths.map((path) => ({
+      vertices: path.vertices,
+      travelType: path.travelType,
+      tool: path.tool,
+      extrusionWidth: path.extrusionWidth,
+      lineHeight: path.lineHeight,
+      layerIndex: path.layerIndex
+    })),
+    layers: job.layers.map((layer) => ({
+      z: layer.z,
+      height: layer.height,
+      paths: layer.paths.map((path) => pathIndex.get(path))
+    })),
+    stats: { ...job.stats },
+    corners: job.boundingBox.corners,
+    metadata: metadata && {
+      slicerName: metadata.slicerName,
+      layerMetadata: metadata.layerMetadata,
+      extrusionDimensions: metadata.extrusionDimensions,
+      thumbnails: Object.entries(metadata.thumbnails).map(([size, thumbnail]) => [size, thumbnail.chars])
+    }
+  };
+}
+
+// node's resolve: under happy-dom the global URL is the DOM one
+const demoDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../demo/gcodes');
+const demoFiles = readdirSync(demoDir).filter((file) => file.endsWith('.gcode'));
+
+// Cross-mode comparison rather than concrete values, as an exception to the
+// header's rule: the point here is real slicer output -- thumbnails, layer
+// comments, WIDTH/HEIGHT runs -- cut at 16 KB slice boundaries that land
+// wherever they land, which no hand-written fixture reproduces. The concrete
+// tests above already run the sliced mode against known values.
+describe('processGCode on real slicer output', () => {
+  const previews: GCodePreview[] = [];
+
+  /**
+   * The reference: the parser and interpreter run directly over the whole
+   * file in one call, the way processGCode worked before it sliced.
+   */
+  const parseInOneGo = (gcode: string): Job => {
+    const job = new Job();
+    const { commands, metadata } = new Parser().parseGCode(gcode);
+    job.metadata = metadata;
+    new Interpreter().execute(commands, job);
+    return job;
+  };
+
+  /** A preview whose closing renderAnimated is skipped: only the parse is compared. */
+  const parsingPreview = (options: Partial<GCodePreviewOptions> = {}) => {
+    const preview = createPreview(options);
+    vi.spyOn(preview.sceneManager, 'renderAnimated').mockResolvedValue(undefined);
+    previews.push(preview);
+    return preview;
+  };
+
+  beforeEach(() => {
+    // the budget is 10 ms; advancing 10 ms per read yields after every slice,
+    // so every slice boundary also crosses an await
+    let now = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => (now += 10));
+  });
+
+  afterEach(() => {
+    previews.splice(0).forEach((preview) => preview.dispose());
+    vi.restoreAllMocks();
+  });
+
+  test('the demo folder holds fixtures to compare', () => {
+    expect(demoFiles.length).toBeGreaterThan(0);
+  });
+
+  test.each(demoFiles)(
+    '%s parses to the same job as a single unsliced parse',
+    async (file) => {
+      const gcode = readFileSync(resolve(demoDir, file), 'utf8');
+      const sliced = parsingPreview();
+
+      await sliced.processGCode(gcode);
+      const reference = parseInOneGo(gcode);
+
+      expect(sliced.job.paths.length).toEqual(reference.paths.length);
+      expect(sliced.countLayers).toEqual(reference.countLayers);
+      expect(jobSnapshot(sliced.job)).toEqual(jobSnapshot(reference));
+    },
+    30_000
+  );
+
+  test('string[] input parses to the same job as the joined string', async () => {
+    const gcode = readFileSync(resolve(demoDir, 'calicat.gcode'), 'utf8');
+    const fromString = parsingPreview();
+    const fromLines = parsingPreview();
+
+    await fromString.processGCode(gcode);
+    await fromLines.processGCode(gcode.split('\n'));
+
+    expect(fromLines.job.paths.length).toBeGreaterThan(0);
+    expect(jobSnapshot(fromLines.job)).toEqual(jobSnapshot(fromString.job));
   });
 });
