@@ -101,4 +101,42 @@ export abstract class SlicerMetadataParser {
   parseExtrusionDimensions(commands: GCodeCommand[]): ExtrusionDimensionMetadata[] {
     return [];
   }
+
+  /**
+   * Whether the moves of this gcode can be trusted to derive per-path
+   * extrusion dimensions from
+   * @param commentCommands - Array of gcode commands with comments
+   * @returns True unless the dialect's E values are not filament lengths
+   * @remarks
+   * Deriving is the default, for every dialect and for gcode no parser
+   * recognised: a file that announces its dimensions simply outranks the
+   * derived values path by path (the Job resolves that order), so
+   * there is nothing to gate on. A dialect only opts out when the arithmetic
+   * itself does not hold -- Cura's UltiGCode flavor, whose E is cubic
+   * millimetres of material rather than millimetres of filament, would
+   * otherwise derive confidently wrong widths. Evaluated on the chunk that
+   * identified the slicer (like `detectSlicerName`), so it can inspect header
+   * comments.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  derivesExtrusionDimensions(commentCommands: GCodeCommand[]): boolean {
+    return true;
+  }
+
+  /**
+   * Reads the filament diameter announced in header comments, when any
+   * @param commentCommands - Array of gcode commands with comments
+   * @returns The filament diameter in millimeters, or undefined when unknown
+   * @remarks
+   * Feeds the volumetric dimension derivation (see
+   * `derivesExtrusionDimensions`), which converts extruded filament lengths
+   * into deposited volume. Only header-borne values may be reported here: a
+   * diameter that appears after moves (like Cura's end-of-file `;SETTING_3`
+   * blob) would reach a one-shot parse before any move executes but a
+   * streamed parse only after every move already ran, making the two disagree.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  parseFilamentDiameter(commentCommands: GCodeCommand[]): number | undefined {
+    return undefined;
+  }
 }

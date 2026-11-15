@@ -315,3 +315,54 @@ test('parseGCode ignores a thumbnail with invalid data', () => {
   const parsed = parser.parseGCode(gcode);
   expect(parsed.metadata.thumbnails['8x8']).toBeUndefined();
 });
+
+describe('header metadata across chunk boundaries', () => {
+  // The ;FLAVOR: line the diameter and the derivation flag are read from can
+  // sit in an earlier chunk than the comment that identifies the slicer, so
+  // reading them from the identifying chunk alone made the answers depend on
+  // chunk size -- Griffin lost its 2.85mm diameter (widths off by 2.65x) and
+  // UltiGCode wrongly enabled the volumetric derivation.
+  const identifying = ';Generated with Cura_SteamEngine 5.7.0\n;LAYER:0\nG1 X1 E1\n';
+
+  test('the Griffin filament diameter survives a chunk split after the flavor', () => {
+    const oneshot = new Parser();
+    oneshot.parseGCode(';FLAVOR:Griffin\n' + identifying);
+
+    const streamed = new Parser();
+    streamed.parseGCode(';FLAVOR:Griffin\n');
+    streamed.parseGCode(identifying);
+
+    expect(oneshot.metadata.filamentDiameter).toEqual(2.85);
+    expect(streamed.metadata.filamentDiameter).toEqual(oneshot.metadata.filamentDiameter);
+  });
+
+  test('UltiGCode still opts out of derivation when split after the flavor', () => {
+    const oneshot = new Parser();
+    oneshot.parseGCode(';FLAVOR:UltiGCode\n' + identifying);
+
+    const streamed = new Parser();
+    streamed.parseGCode(';FLAVOR:UltiGCode\n');
+    streamed.parseGCode(identifying);
+
+    expect(oneshot.metadata.deriveExtrusionDimensions).toBe(false);
+    expect(streamed.metadata.deriveExtrusionDimensions).toEqual(oneshot.metadata.deriveExtrusionDimensions);
+  });
+
+  test('a flavor past the header sample is ignored the same way in both modes', () => {
+    // The sample is capped, so a ;FLAVOR: line buried behind 200+ comments is
+    // out of reach -- what matters is that it is out of reach identically
+    // whether the file arrives in one piece or in chunks.
+    const filler = Array.from({ length: 250 }, (_, i) => `;filler ${i}`).join('\n') + '\n';
+    const late = ';FLAVOR:Griffin\n' + identifying;
+
+    const oneshot = new Parser();
+    oneshot.parseGCode(filler + late);
+
+    const streamed = new Parser();
+    streamed.parseGCode(filler);
+    streamed.parseGCode(late);
+
+    expect(oneshot.metadata.filamentDiameter).toBeUndefined();
+    expect(streamed.metadata.filamentDiameter).toEqual(oneshot.metadata.filamentDiameter);
+  });
+});

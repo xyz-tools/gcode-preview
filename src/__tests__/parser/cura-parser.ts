@@ -149,3 +149,41 @@ test('Cura parser returns empty array when no LAYER comments found', () => {
 
   expect(layers).toHaveLength(0);
 });
+
+test('Cura parser keeps the default of deriving dimensions', () => {
+  const parser = new CuraMetadataParser();
+
+  const commands = [
+    createCommand(';FLAVOR:Marlin', 'FLAVOR:Marlin'),
+    createCommand(';Generated with Cura_SteamEngine 5.7.0', 'Generated with Cura_SteamEngine 5.7.0')
+  ];
+
+  expect(parser.derivesExtrusionDimensions(commands)).toBe(true);
+});
+
+test('Cura parser does not derive dimensions for the volumetric UltiGCode flavor', () => {
+  // UltiGCode E values are mm³ of material, not mm of filament; deriving
+  // widths from them with the filament-length model would be confidently wrong.
+  const parser = new CuraMetadataParser();
+
+  const commands = [createCommand(';FLAVOR:UltiGCode', 'FLAVOR:UltiGCode')];
+
+  expect(parser.derivesExtrusionDimensions(commands)).toBe(false);
+});
+
+test('Cura parser reads a 2.85 filament diameter from the Griffin flavor', () => {
+  // Griffin is only generated for Ultimaker's own 2.85mm machines.
+  const parser = new CuraMetadataParser();
+
+  const commands = [createCommand(';FLAVOR:Griffin', 'FLAVOR:Griffin')];
+
+  expect(parser.parseFilamentDiameter(commands)).toEqual(2.85);
+});
+
+test('Cura parser leaves the filament diameter unknown for other flavors', () => {
+  const parser = new CuraMetadataParser();
+
+  const commands = [createCommand(';FLAVOR:Marlin', 'FLAVOR:Marlin')];
+
+  expect(parser.parseFilamentDiameter(commands)).toBeUndefined();
+});

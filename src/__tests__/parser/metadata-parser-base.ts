@@ -48,4 +48,18 @@ describe('SlicerMetadataParser base class', () => {
 
     expect(parser.parseExtrusionDimensions([comment('WIDTH:0.45')])).toEqual([]);
   });
+
+  it('derivesExtrusionDimensions defaults to true', () => {
+    // Deriving is the default; announced dimensions outrank derived ones per
+    // path, so only a dialect whose E is not a filament length opts out.
+    const parser = new StubMetadataParser();
+
+    expect(parser.derivesExtrusionDimensions([comment('STUB_MARKER v1')])).toBe(true);
+  });
+
+  it('parseFilamentDiameter defaults to unknown', () => {
+    const parser = new StubMetadataParser();
+
+    expect(parser.parseFilamentDiameter([comment('STUB_MARKER v1')])).toBeUndefined();
+  });
 });

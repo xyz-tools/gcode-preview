@@ -290,6 +290,52 @@ describe.each(MODES)('ingestion via %s', (_name, ingest) => {
     expect(extrusion.extrusionWidth).toEqual(0.6);
   });
 
+  test('a file without dimension comments derives the same dimensions point by point', async () => {
+    // Nothing announces width or height here, so both are derived
+    // from the moves: E values below deposit 0.4mm (E steps of 0.33260 per
+    // 10mm at 0.2mm height, computed from the volumetric model for 1.75mm
+    // filament) then 0.6mm (step 0.49890) wide lines. The layer change and
+    // the width shift land mid-file, so the 1- and 7-byte chunkers cut right
+    // through the derivation state: the extruder position, the last extrusion
+    // Z and the derived dimensions must all carry across chunk boundaries for
+    // every mode to taper the same paths with the same dimensions.
+    const gcode = [
+      ';FLAVOR:Marlin',
+      ';Generated with Cura_SteamEngine 5.7.0',
+      'M82',
+      'G28',
+      ';LAYER:0',
+      'G0 X10 Y10 Z0.2',
+      'G1 X20 Y10 E0.33260',
+      'G1 X20 Y20 E0.66520',
+      ';TYPE:FILL',
+      'G1 X10 Y20 E1.16410',
+      ';LAYER:1',
+      'G0 Z0.4',
+      'G1 X10 Y10 E1.49670'
+    ].join('\n');
+
+    await ingest(preview, gcode);
+
+    const paths = preview.job.paths;
+    // the width shift no longer splits the extrusion, so only the travels break it
+    expect(paths.length).toEqual(4);
+    // the leading travel predates any extrusion, so it carries no dimensions
+    expect(paths.map((path) => [path.extrusionWidth, path.lineHeight])).toEqual([
+      [undefined, undefined],
+      [0.6, 0.2],
+      [0.6, 0.2],
+      [0.4, 0.2]
+    ]);
+    // the whole first layer is one tapering path: the derived width steps up
+    // at the FILL move, point by point, however the file was cut
+    expect(paths[1].vertices).toEqual([10, 10, 0.2, 20, 10, 0.2, 20, 20, 0.2, 10, 20, 0.2]);
+    expect([0, 1, 2, 3].map((point) => paths[1].extrusionWidthAt(point))).toEqual([0.4, 0.4, 0.4, 0.6]);
+    expect([0, 1, 2, 3].map((point) => paths[1].lineHeightAt(point))).toEqual([0.2, 0.2, 0.2, 0.2]);
+    // and the second layer continues from the travel's endpoint
+    expect(paths[3].vertices).toEqual([10, 20, 0.4, 10, 10, 0.4]);
+  });
+
   test('slicer layer comments index the same layers however the file is cut', async () => {
     // Every other fixture here is bare gcode, so detectSlicer finds nothing and
     // the layer metadata path never runs -- which is how #445 survived this

@@ -41,23 +41,23 @@ export class State {
   /** Currently active tool */
   tool = 0;
   /**
-   * Width of extruded material, in millimeters, for paths created from here
-   * on, or `undefined` until slicer metadata announces one.
+   * Width of extruded material, in millimeters, as announced by the slicer,
+   * or `undefined` while no comment has announced one.
    * @remarks
    * Fed by `;WIDTH:` comments (PrusaSlicer family) via the slicer metadata
-   * pipeline (see `Job.beginCommand`). Paths created while this is
-   * `undefined` carry no width of their own and fall back at render time to
-   * the global setting, then to the built-in 0.6.
+   * pipeline (see `Job.beginCommand`). An announced width outranks both the
+   * one the caller supplied and the one derived from the moves: the slicer
+   * states what it asked the printer for, while the derivation infers it.
+   * The Job resolves that order when it starts a path.
    */
   extrusionWidth: number | undefined = undefined;
   /**
-   * Height of the extruded line, in millimeters, for paths created from here
-   * on, or `undefined` until slicer metadata announces one.
+   * Height of the extruded line, in millimeters, as announced by the slicer,
+   * or `undefined` while no comment has announced one.
    * @remarks
    * Fed by `;HEIGHT:` comments (PrusaSlicer family), which vary throughout a
-   * print when adaptive layer height is enabled. Paths created while this is
-   * `undefined` carry no height of their own and fall back at render time to
-   * the global setting, then to the built-in 0.2.
+   * print when adaptive layer height is enabled. Outranks the supplied and
+   * derived heights for the same reason as `extrusionWidth`.
    */
   lineHeight: number | undefined = undefined;
   /** Current units (millimeters or inches) */

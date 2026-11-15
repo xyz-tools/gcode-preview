@@ -131,7 +131,12 @@ export class GCodePreview {
     this.opts = opts;
     this.interpreter = new Interpreter({ arcChordTolerance: opts.arcChordTolerance });
     this._parser = this.createParser();
-    this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
+    this.job = new Job({
+      minLayerThreshold: this.opts.minLayerThreshold,
+      // a dimension the caller asked for is not derived from the moves
+      extrusionWidth: this.opts.extrusionWidth,
+      lineHeight: this.opts.lineHeight
+    });
     this._sceneManager = this.createSceneManager();
 
     if (opts.droppable) makeDroppable(this);
@@ -142,7 +147,12 @@ export class GCodePreview {
    */
   clear(): void {
     this._parser = this.createParser();
-    this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
+    this.job = new Job({
+      minLayerThreshold: this.opts.minLayerThreshold,
+      // a dimension the caller asked for is not derived from the moves
+      extrusionWidth: this.opts.extrusionWidth,
+      lineHeight: this.opts.lineHeight
+    });
     this.sceneManager.clear();
     this.sceneManager.job = this.job;
     this.sceneManager.render();
