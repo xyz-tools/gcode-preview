@@ -5,10 +5,6 @@
 // verification/quint/ is THE spec bank (behavior-pinning, replay-bound):
 // lib modules are pure and test-only; machines carry two-seed trace corpora
 // sized to each machine (see the companions' coverage tables).
-// verification/quint-next/ is the NORMATIVE design bank: specified from
-// firmware docs as if the system were written from scratch; no replay and no
-// traces by design (it intentionally diverges from the implementation), so
-// its gate is internal consistency only.
 import { spawnSync } from 'node:child_process';
 
 export const BASE_SEED = '0x67c0de2026';
@@ -28,16 +24,6 @@ const machine = (name, { main, nTraces, maxSteps }) => ({
   }
 });
 
-const design = (name, path, { testMain, main } = {}) => ({
-  name: `next/${name}`,
-  path,
-  testMain,
-  main,
-  // Invariant simulation needs a runnable machine; pure test-only modules
-  // are gated by their *Test runs alone.
-  ...(main ? { invariant: 'allInvariants' } : {})
-});
-
 export const SPECS = [
   // lib: pure semantics modules, validated by their sibling test modules
   { name: 'lib/scale', path: 'verification/quint/lib/scale.qnt', testMain: 'scale_test' },
@@ -49,17 +35,7 @@ export const SPECS = [
   machine('lifecycle', { nTraces: 15, maxSteps: 30 }),
   machine('layer-indexer', { nTraces: 25, maxSteps: 30 }),
   machine('slicer-detector', { nTraces: 40, maxSteps: 10 }),
-  machine('encoding-equivalence', { main: 'encoding_equivalence', nTraces: 12, maxSteps: 30 }),
-  // normative design bank (no traces, internal consistency only)
-  design('lib/scale', 'verification/quint-next/lib/scale.qnt', { testMain: 'scale_next_test' }),
-  design('lib/printer-core', 'verification/quint-next/lib/printer-core.qnt', {
-    testMain: 'printer_core_next_test',
-    main: 'printer_core_next_props'
-  }),
-  design('streaming', 'verification/quint-next/streaming.qnt', { main: 'streaming_next' }),
-  design('lifecycle', 'verification/quint-next/lifecycle.qnt', { main: 'lifecycle_next' }),
-  design('interpreter', 'verification/quint-next/interpreter.qnt', { main: 'interpreter_next' }),
-  design('encoding-equivalence', 'verification/quint-next/interpreter.qnt', { main: 'encoding_equivalence_next' })
+  machine('encoding-equivalence', { main: 'encoding_equivalence', nTraces: 12, maxSteps: 30 })
 ];
 
 export const quint = (args, { allowFail = false } = {}) => {
