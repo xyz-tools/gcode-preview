@@ -2,8 +2,9 @@ import { test, expect } from 'vitest';
 import { detectSlicer, parseSlicerMetadata, getAvailableParsers } from '../../parser/slicer-detector';
 import { GCodeCommand } from '../../parser/gcode-parser';
 
+// Comment-only lines carry no command, as Parser.parseCommand produces them.
 function createCommand(src: string, comment?: string, params = {}): GCodeCommand {
-  return new GCodeCommand(src, 'g1', params, comment);
+  return new GCodeCommand(src, src.startsWith(';') ? '' : 'g1', params, comment);
 }
 
 test('detectSlicer detects PrusaSlicer', () => {
