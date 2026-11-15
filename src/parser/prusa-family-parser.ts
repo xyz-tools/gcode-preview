@@ -1,5 +1,10 @@
 import { GCodeCommand } from './gcode-parser';
-import { SlicerMetadataParser, LayerMetadata, ExtrusionDimensionMetadata } from './metadata-parser-base';
+import {
+  SlicerMetadataParser,
+  SlicerMetadataResult,
+  LayerMetadata,
+  ExtrusionDimensionMetadata
+} from './metadata-parser-base';
 
 /**
  * Parser for the PrusaSlicer comment dialect, shared by the whole family of
@@ -80,7 +85,38 @@ export class PrusaFamilyMetadataParser extends SlicerMetadataParser {
   }
 
   parseLayerMetadata(commands: GCodeCommand[]): LayerMetadata[] {
+    return this.parse(commands).layers;
+  }
+
+  /**
+   * Parses `;WIDTH:` / `;HEIGHT:` extrusion dimension comments
+   * @param commands - Array of gcode commands with comments
+   * @returns One event per dimension comment, in line order
+   * @remarks
+   * Every `HEIGHT:` line is reported, including the ones inside a
+   * `LAYER_CHANGE` block: there it doubles as the layer's height (see
+   * parseLayerMetadata) and as the line height of the paths that follow,
+   * which is exactly how adaptive layer height reaches individual paths.
+   * Non-numeric and non-positive values are ignored.
+   */
+  parseExtrusionDimensions(commands: GCodeCommand[]): ExtrusionDimensionMetadata[] {
+    return this.parse(commands).extrusionDimensions;
+  }
+
+  /**
+   * Parses layers and extrusion dimension changes in a single walk over the
+   * commands
+   * @param commands - Array of gcode commands with comments
+   * @returns The layer metadata and the dimension change events
+   * @remarks
+   * Layers and dimensions used to be two separate passes, each visiting every
+   * command of every chunk; on the bundled 3DBenchy (163k lines) the second
+   * walk cost about 1 ms of a ~70 ms parse. Both read the same comments, so
+   * one loop now feeds both.
+   */
+  parse(commands: GCodeCommand[]): Pick<SlicerMetadataResult, 'layers' | 'extrusionDimensions'> {
     const layers: LayerMetadata[] = [];
+    const extrusionDimensions: ExtrusionDimensionMetadata[] = [];
     let currentZ: number | undefined;
     let currentHeight: number | undefined;
     let currentLineIndex = -1;
@@ -102,6 +138,11 @@ export class PrusaFamilyMetadataParser extends SlicerMetadataParser {
     for (let i = 0; i < commands.length; i++) {
       const comment = commands[i].comment;
       if (!comment) continue;
+
+      // Dimension comments first, and without `continue`: a HEIGHT inside a
+      // LAYER_CHANGE block is both a dimension event and the layer's height,
+      // so the layer handling below must still see it.
+      this.readExtrusionDimension(comment, i, extrusionDimensions);
 
       if (
         comment.includes('LAYER_CHANGE') &&
@@ -138,50 +179,37 @@ export class PrusaFamilyMetadataParser extends SlicerMetadataParser {
     }
 
     pushCurrentLayer();
-    return layers;
+    return { layers, extrusionDimensions };
   }
 
   /**
-   * Parses `;WIDTH:` / `;HEIGHT:` extrusion dimension comments
-   * @param commands - Array of gcode commands with comments
-   * @returns One event per dimension comment, in line order
-   * @remarks
-   * Every `HEIGHT:` line is reported, including the ones inside a
-   * `LAYER_CHANGE` block: there it doubles as the layer's height (see
-   * parseLayerMetadata) and as the line height of the paths that follow,
-   * which is exactly how adaptive layer height reaches individual paths.
-   * Non-numeric and non-positive values are ignored.
+   * Records the comment as a dimension change event when it is a
+   * `WIDTH:` / `HEIGHT:` comment with a positive numeric value
+   * @param comment - The comment text, pre-trimmed and without the `;`
+   * @param lineIndex - Index of the comment's command in the chunk
+   * @param dimensions - Events collected so far; the new one is appended
    */
-  parseExtrusionDimensions(commands: GCodeCommand[]): ExtrusionDimensionMetadata[] {
-    const dimensions: ExtrusionDimensionMetadata[] = [];
-
-    for (let i = 0; i < commands.length; i++) {
-      const comment = commands[i].comment;
-      if (!comment) continue;
-
-      // Rejects the other comments on their first character, before the
-      // pattern runs: the whole file's comments pass through here.
-      const firstCharCode = comment.charCodeAt(0);
-      if (
-        firstCharCode !== PrusaFamilyMetadataParser.W_CHAR_CODE &&
-        firstCharCode !== PrusaFamilyMetadataParser.H_CHAR_CODE
-      ) {
-        continue;
-      }
-      if (!PrusaFamilyMetadataParser.DIMENSION_PATTERN.test(comment)) continue;
-
-      // The pattern has already vouched for the shape, so everything past the
-      // colon is the number, and parseFloat skips the whitespace around it.
-      const value = parseFloat(comment.slice(comment.indexOf(':') + 1));
-      if (!Number.isFinite(value) || value <= 0) continue;
-
-      if (firstCharCode === PrusaFamilyMetadataParser.W_CHAR_CODE) {
-        dimensions.push({ width: value, lineIndex: i });
-      } else {
-        dimensions.push({ height: value, lineIndex: i });
-      }
+  private readExtrusionDimension(comment: string, lineIndex: number, dimensions: ExtrusionDimensionMetadata[]): void {
+    // Rejects the other comments on their first character, before the
+    // pattern runs: the whole file's comments pass through here.
+    const firstCharCode = comment.charCodeAt(0);
+    if (
+      firstCharCode !== PrusaFamilyMetadataParser.W_CHAR_CODE &&
+      firstCharCode !== PrusaFamilyMetadataParser.H_CHAR_CODE
+    ) {
+      return;
     }
+    if (!PrusaFamilyMetadataParser.DIMENSION_PATTERN.test(comment)) return;
 
-    return dimensions;
+    // The pattern has already vouched for the shape, so everything past the
+    // colon is the number, and parseFloat skips the whitespace around it.
+    const value = parseFloat(comment.slice(comment.indexOf(':') + 1));
+    if (!Number.isFinite(value) || value <= 0) return;
+
+    if (firstCharCode === PrusaFamilyMetadataParser.W_CHAR_CODE) {
+      dimensions.push({ width: value, lineIndex });
+    } else {
+      dimensions.push({ height: value, lineIndex });
+    }
   }
 }

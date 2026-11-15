@@ -299,6 +299,43 @@ describe('PrusaFamilyMetadataParser', () => {
     });
   });
 
+  describe('parse', () => {
+    const commands: GCodeCommand[] = [
+      { comment: 'LAYER_CHANGE' },
+      { comment: 'Z:0.2' },
+      { comment: 'HEIGHT:0.2' },
+      { comment: 'WIDTH:0.45' },
+      { gcode: 'G1 X10 Y20' },
+      { comment: 'LAYER_CHANGE' },
+      { comment: 'Z:0.36' },
+      { comment: 'HEIGHT:0.16' },
+      { comment: 'WIDTH:0.42' },
+      { gcode: 'G1 X20 Y20' }
+    ];
+
+    it('should report layers and dimensions from one walk over the commands', () => {
+      expect(parser.parse(commands)).toEqual({
+        layers: [
+          { layerIndex: 0, z: 0.2, height: 0.2, lineIndex: 0 },
+          { layerIndex: 1, z: 0.36, height: 0.16, lineIndex: 5 }
+        ],
+        extrusionDimensions: [
+          { height: 0.2, lineIndex: 2 },
+          { width: 0.45, lineIndex: 3 },
+          { height: 0.16, lineIndex: 7 },
+          { width: 0.42, lineIndex: 8 }
+        ]
+      });
+    });
+
+    it('should agree with parseLayerMetadata and parseExtrusionDimensions', () => {
+      expect(parser.parse(commands)).toEqual({
+        layers: parser.parseLayerMetadata(commands),
+        extrusionDimensions: parser.parseExtrusionDimensions(commands)
+      });
+    });
+  });
+
   // Comments arrive pre-trimmed from parseCommand, so these hand-built
   // comments deliberately carry no leading '; '.
   describe('detectSlicerName', () => {

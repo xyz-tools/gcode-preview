@@ -48,4 +48,12 @@ describe('SlicerMetadataParser base class', () => {
 
     expect(parser.parseExtrusionDimensions([comment('WIDTH:0.45')])).toEqual([]);
   });
+
+  it('parse defaults to running both parsers over the commands', () => {
+    const parser = new StubMetadataParser();
+    const layers: LayerMetadata[] = [{ layerIndex: 0, lineIndex: 0 }];
+    parser.parseLayerMetadata = () => layers;
+
+    expect(parser.parse([comment('WIDTH:0.45')])).toEqual({ layers, extrusionDimensions: [] });
+  });
 });

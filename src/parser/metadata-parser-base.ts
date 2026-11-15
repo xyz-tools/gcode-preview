@@ -101,4 +101,22 @@ export abstract class SlicerMetadataParser {
   parseExtrusionDimensions(commands: GCodeCommand[]): ExtrusionDimensionMetadata[] {
     return [];
   }
+
+  /**
+   * Parses everything this dialect reports from the commands: layers and
+   * extrusion dimension changes
+   * @param commands - Array of gcode commands with comments
+   * @returns The layer metadata and the dimension change events
+   * @remarks
+   * The default runs parseLayerMetadata and parseExtrusionDimensions one
+   * after the other, so the commands are walked twice. A dialect that reports
+   * both overrides this with a single pass: every chunk of a file goes
+   * through here, and each walk visits every command in it.
+   */
+  parse(commands: GCodeCommand[]): Pick<SlicerMetadataResult, 'layers' | 'extrusionDimensions'> {
+    return {
+      layers: this.parseLayerMetadata(commands),
+      extrusionDimensions: this.parseExtrusionDimensions(commands)
+    };
+  }
 }

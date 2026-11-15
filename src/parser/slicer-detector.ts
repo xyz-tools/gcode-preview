@@ -44,8 +44,7 @@ export function parseSlicerMetadata(
     return { layers: [], extrusionDimensions: [] };
   }
 
-  const layers = parser.parseLayerMetadata(commands);
-  const extrusionDimensions = parser.parseExtrusionDimensions(commands);
+  const { layers, extrusionDimensions } = parser.parse(commands);
 
   return {
     layers,
