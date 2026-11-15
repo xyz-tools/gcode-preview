@@ -14,6 +14,28 @@ import { Metadata } from './parser/gcode-parser';
 import { ExtrusionDimensionMetadata } from './parser/metadata-parser-base';
 import { JobStats } from './job-stats';
 
+/** Filament diameter assumed when the metadata announces none, in millimeters */
+const DEFAULT_FILAMENT_DIAMETER = 1.75;
+/** Derived layer heights outside this range are considered implausible */
+const MIN_DERIVED_HEIGHT = 0.01;
+const MAX_DERIVED_HEIGHT = 1.0;
+/** Derived extrusion widths outside this range are considered implausible */
+const MIN_DERIVED_WIDTH = 0.1;
+const MAX_DERIVED_WIDTH = 2.0;
+/**
+ * Segments shorter than this derive no width, in millimeters: the slicer
+ * rounds E to a few decimals, and over a near-zero length that quantization
+ * noise dominates the derived value.
+ */
+const MIN_DERIVED_SEGMENT_LENGTH = 0.05;
+/**
+ * A derived width within this relative tolerance of the current one keeps the
+ * current value, so residual noise cannot shatter the model into micro-paths.
+ * 2% separates a real width step (0.4 to 0.42 between wall and infill is 5%)
+ * from the noise.
+ */
+const DERIVED_WIDTH_TOLERANCE = 0.02;
+
 /**
  * Represents a complete print job containing paths, layers, and state
  * @remarks
@@ -45,6 +67,26 @@ export class Job {
   private extrusionDimensions: ExtrusionDimensionMetadata[] = [];
   /** Position in extrusionDimensions up to which events have been applied */
   private dimensionCursor = 0;
+  /**
+   * Whether per-path dimensions are derived from the moves.
+   * @remarks
+   * On unless the slicer metadata opts out (see
+   * `SlicerMetadataParser.derivesExtrusionDimensions`); announced dimensions
+   * outrank derived ones per path rather than switching the derivation off.
+   */
+  private deriveDimensions = true;
+  /** Filament cross-section area feeding the width derivation, in mm² */
+  private filamentCrossSection = Math.PI * (DEFAULT_FILAMENT_DIAMETER / 2) ** 2;
+  /** Z of the last extrusion move, from which derived layer heights are measured */
+  private lastExtrusionZ: number | undefined;
+  /** Width the caller supplied through the public API; suppresses deriving one */
+  private readonly suppliedExtrusionWidth: number | undefined;
+  /** Line height the caller supplied through the public API; suppresses deriving one */
+  private readonly suppliedLineHeight: number | undefined;
+  /** Width derived from the moves, used where nothing announced or supplied one */
+  private derivedExtrusionWidth: number | undefined;
+  /** Line height derived from the Z steps, used on the same terms */
+  private derivedLineHeight: number | undefined;
   /** How many commands have been executed on this job — one per parsed line */
   private executedCommandCount = 0;
 
@@ -56,9 +98,17 @@ export class Job {
    * @param opts - Job options
    * @param opts.state - Initial state (default: State.initial)
    * @param opts.minLayerThreshold - Minimum layer height threshold (default: LayersIndexer.DEFAULT_TOLERANCE)
+   * @param opts.extrusionWidth - Width the caller supplied through the public API, if any
+   * @param opts.lineHeight - Line height the caller supplied through the public API, if any
+   * @remarks
+   * A dimension the caller supplied is not derived: asking for a width is a
+   * decision, while deriving one is an inference, and the decision wins. The
+   * slicer's own `;WIDTH:` / `;HEIGHT:` comments still outrank both.
    */
-  constructor(opts: { state?: State; minLayerThreshold?: number } = {}) {
+  constructor(opts: { state?: State; minLayerThreshold?: number; extrusionWidth?: number; lineHeight?: number } = {}) {
     this.state = opts.state || State.initial;
+    this.suppliedExtrusionWidth = opts.extrusionWidth;
+    this.suppliedLineHeight = opts.lineHeight;
     this.layersIndexer = new LayersMetadataIndexer(this._layers, [], opts.minLayerThreshold);
     this.indexers = [
       new TravelTypeIndexer({ travel: this.travelPaths, extrusion: this.extrusionPaths }),
@@ -87,6 +137,9 @@ export class Job {
     this._metadata = metadata;
     this.layersIndexer.setLayerMetadata(metadata?.layerMetadata ?? []);
     this.setExtrusionDimensions(metadata?.extrusionDimensions ?? []);
+    this.deriveDimensions = metadata?.deriveExtrusionDimensions !== false;
+    const filamentDiameter = metadata?.filamentDiameter ?? DEFAULT_FILAMENT_DIAMETER;
+    this.filamentCrossSection = Math.PI * (filamentDiameter / 2) ** 2;
   }
 
   /**
@@ -111,10 +164,11 @@ export class Job {
    * index — which is how line-indexed slicer metadata is mapped onto the
    * command stream: extrusion dimension changes (`;WIDTH:` / `;HEIGHT:`
    * comments) recorded at or before this line are folded into the state here.
-   * The in-progress path is deliberately left alone: the move handlers break
-   * it via `continuePath` when the state no longer matches, which keeps a
+   * The in-progress path is deliberately left alone: the move handlers fold
+   * the state's dimensions into it via `continuePath`, which keeps a
    * streamed parse identical to a one-shot parse — the interpreter resumes
-   * the last path at every chunk boundary, undoing any break performed here.
+   * the last path at every chunk boundary, so anything done here to the
+   * in-progress path would be undone.
    */
   beginCommand(): void {
     const lineIndex = this.executedCommandCount++;
@@ -126,6 +180,121 @@ export class Job {
       if (dimension.width !== undefined) this.state.extrusionWidth = dimension.width;
       if (dimension.height !== undefined) this.state.lineHeight = dimension.height;
     }
+  }
+
+  /**
+   * Derives the extrusion dimensions of the move about to be executed and
+   * folds them into the state, best-effort
+   * @param target - The move's physical endpoint; an axis the move leaves
+   * unchanged carries the current (possibly unknown) state value
+   * @param extruded - The filament length the move extrudes (see `State.applyExtrusion`)
+   * @remarks
+   * Runs for every dialect, unless the slicer metadata opted out; a path
+   * carries the derived values as its own wherever the slicer announced
+   * none, taking the same render-time precedence over the global fallback as
+   * comment-announced dimensions do. Move handlers call this for extruding
+   * moves before `continuePath`, so a change folds into the path from the
+   * next point on, exactly like a `;WIDTH:` / `;HEIGHT:` comment would.
+   *
+   * Layer height is the Z step between consecutive extrusion moves (the
+   * first one's Z stands in for the first layer). Only extrusion Zs are
+   * compared, so z-hop travels are invisible; a zero step (ironing, or
+   * printing on within the layer) and steps outside 0.01–1.0 mm (spiralize's
+   * continuous micro-climb, a probe artifact, moving down to a second
+   * sequential object) keep the current height.
+   *
+   * Width comes from conservation of volume with a rectangular deposit
+   * cross-section — width = (ΔE × filament cross-section) / (length ×
+   * height) — matching the box profile ExtrusionGeometry extrudes. The
+   * result is quantized to 0.01 mm and kept within 2% of the current width,
+   * so E-value rounding noise cannot taper every point differently, and
+   * discarded entirely when implausible (outside 0.1–2.0 mm, or over a
+   * segment too short to measure).
+   */
+  /**
+   * The width a path started now carries of its own: what the slicer
+   * announced, else what the moves imply, else `undefined`.
+   * @remarks
+   * A width the caller supplied is deliberately absent here. It suppresses
+   * the derivation, but baking it into the path would freeze it: the renderer
+   * applies it as a fallback, so leaving the path without one is what lets
+   * `SceneManager.extrusionWidth` still take effect after the file is loaded.
+   */
+  private get resolvedExtrusionWidth(): number | undefined {
+    return this.state.extrusionWidth ?? this.derivedExtrusionWidth;
+  }
+
+  /** The line height a path started now carries of its own, resolved likewise */
+  private get resolvedLineHeight(): number | undefined {
+    return this.state.lineHeight ?? this.derivedLineHeight;
+  }
+
+  /**
+   * Whether any move can still change a dimension
+   * @internal
+   * @remarks
+   * Lets the move handlers skip `deriveMoveDimensions` entirely. With both
+   * dimensions supplied the call is a no-op -- the height block is skipped,
+   * the width arithmetic returns early, and the `lastExtrusionZ` it would
+   * still advance is only ever read by the height block it cannot reach --
+   * but it is one call and one object per extruding move to find that out,
+   * which cost about 5 ms of a 3DBenchy interpret.
+   */
+  get derivesAnything(): boolean {
+    return (
+      this.deriveDimensions && !(this.suppliedExtrusionWidth !== undefined && this.suppliedLineHeight !== undefined)
+    );
+  }
+
+  deriveMoveDimensions(
+    target: { x: number | undefined; y: number | undefined; z: number | undefined },
+    extruded: number
+  ): void {
+    if (!this.deriveDimensions || extruded <= 0) return;
+
+    if (target.z !== undefined) {
+      if (this.suppliedLineHeight === undefined) {
+        const step = this.lastExtrusionZ === undefined ? target.z : target.z - this.lastExtrusionZ;
+        if (step >= MIN_DERIVED_HEIGHT && step <= MAX_DERIVED_HEIGHT) {
+          // rounded so consecutive layers with equal heights compare equal
+          // despite floating-point Z subtraction noise
+          this.derivedLineHeight = Math.round(step * 10000) / 10000;
+        }
+      }
+      // Advanced even when the height is not being derived, so the anchor is
+      // still right if a later move does derive one.
+      this.lastExtrusionZ = target.z;
+    }
+
+    // Nothing below is needed while a width already outranks the derived one,
+    // whether the slicer announced it or the caller supplied it. Worth
+    // skipping rather than discarding -- on a file that announces every width
+    // (3DBenchy) the segment length and volume arithmetic is a third of the
+    // interpret time.
+    if (this.suppliedExtrusionWidth !== undefined || this.state.extrusionWidth !== undefined) return;
+
+    // Whichever height the material was actually laid at, in the same order
+    // the paths resolve it: announced, then the caller's, then derived.
+    const height = this.state.lineHeight ?? this.suppliedLineHeight ?? this.derivedLineHeight;
+    if (height === undefined) return;
+
+    // Resolved exactly like the rendered geometry: an unknown axis is assumed
+    // at the origin (see resolvePosition).
+    const from = this.resolvePosition();
+    const length = Math.hypot((target.x ?? 0) - from.x, (target.y ?? 0) - from.y, (target.z ?? 0) - from.z);
+    // Number.isFinite: overflowing (yet individually finite) coordinates can
+    // make hypot Infinity — or NaN via Inf - Inf — and both pass a plain `<`
+    if (!Number.isFinite(length) || length < MIN_DERIVED_SEGMENT_LENGTH) return;
+
+    const width = (extruded * this.filamentCrossSection) / (length * height);
+    // inclusive form so NaN (e.g. from an Infinity/Infinity overflow) is
+    // rejected rather than latched into the state and every path after it
+    if (!(width >= MIN_DERIVED_WIDTH && width <= MAX_DERIVED_WIDTH)) return;
+
+    const quantized = Math.round(width * 100) / 100;
+    const current = this.derivedExtrusionWidth;
+    if (current !== undefined && Math.abs(quantized - current) <= current * DERIVED_WIDTH_TOLERANCE) return;
+    this.derivedExtrusionWidth = quantized;
   }
 
   /**
@@ -209,7 +378,7 @@ export class Job {
    */
   breakPath(newType: PathType): Path {
     this.finishPath();
-    const currentPath = new Path(newType, this.state.extrusionWidth, this.state.lineHeight, this.state.tool);
+    const currentPath = new Path(newType, this.resolvedExtrusionWidth, this.resolvedLineHeight, this.state.tool);
     const pos = this.resolvePosition();
     currentPath.addPoint(pos.x, pos.y, pos.z);
     // The seed point is the extrusion's starting position, which the move
@@ -227,24 +396,22 @@ export class Job {
    * @param pathType - Type of the move about to be added
    * @returns The in-progress path when it can continue, otherwise a fresh one
    * @remarks
-   * The in-progress path continues only while its type, its extrusion
-   * dimensions and its tool still match the state; dimension metadata (see
-   * `beginCommand`) or a tool change that altered the state since the path
-   * was started breaks it here, so every path carries a single width, height
-   * and tool. Deciding this lazily at move time (and not when the metadata or
-   * tool is applied) keeps streamed and one-shot parses identical: the
-   * interpreter resumes the last finished path at every chunk boundary, which
-   * would undo an eager break.
+   * The in-progress path continues only while its type and its tool still
+   * match the state; a tool change that altered the state since the path was
+   * started breaks it here. Extrusion dimension changes (see `beginCommand`)
+   * do NOT break the path — they are folded into it, so one path can span
+   * many `;WIDTH:` / `;HEIGHT:` changes and carry per-point dimensions.
+   * Breaking on every change instead used to multiply the path count on
+   * adaptive-layer-height files, which multiplied geometry build time (and
+   * crashed on very large files). Deciding all of this lazily at move time
+   * (and not when the metadata or tool is applied) keeps streamed and
+   * one-shot parses identical: the interpreter resumes the last finished
+   * path at every chunk boundary, which would undo an eager break.
    */
   continuePath(pathType: PathType): Path {
     const currentPath = this.inprogressPath;
-    if (
-      currentPath !== undefined &&
-      currentPath.travelType === pathType &&
-      currentPath.extrusionWidth === this.state.extrusionWidth &&
-      currentPath.lineHeight === this.state.lineHeight &&
-      currentPath.tool === this.state.tool
-    ) {
+    if (currentPath !== undefined && currentPath.travelType === pathType && currentPath.tool === this.state.tool) {
+      currentPath.updateDimensions(this.resolvedExtrusionWidth, this.resolvedLineHeight);
       return currentPath;
     }
     return this.breakPath(pathType);

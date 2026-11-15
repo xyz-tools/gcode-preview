@@ -112,6 +112,15 @@ export type Metadata = {
   /** Extrusion dimension changes from `;WIDTH:` / `;HEIGHT:` comments, in line order */
   extrusionDimensions?: ExtrusionDimensionMetadata[];
   slicerName?: string;
+  /**
+   * Set to `false` when the detected dialect's E values cannot be read as
+   * filament lengths, so per-path dimensions must not be derived from the
+   * moves. Absent means derive, which is the default for every dialect
+   * (see `Job.deriveMoveDimensions`)
+   */
+  deriveExtrusionDimensions?: boolean;
+  /** Filament diameter in millimeters announced by header comments, when known */
+  filamentDiameter?: number;
 };
 
 /**
@@ -188,6 +197,21 @@ export class Parser {
   private readonly keepLines: boolean;
 
   /**
+   * The first comments of the file, kept across chunks.
+   * @remarks
+   * Slicer identification can land on a later chunk than the header it needs
+   * to read: a streamed parse may see `;FLAVOR:Griffin` in one chunk and the
+   * `;Generated with Cura` that identifies the slicer in the next. Header
+   * questions (slicer name, filament diameter, whether to derive dimensions)
+   * are asked against this sample rather than the identifying chunk alone, so
+   * streamed and one-shot parses answer them identically.
+   */
+  private headerComments: GCodeCommand[] = [];
+
+  /** How many leading comments `headerComments` retains */
+  private static readonly HEADER_COMMENT_SAMPLE = 200;
+
+  /**
    * Creates a new Parser instance
    * @param opts - Parser options
    */
@@ -227,6 +251,9 @@ export class Parser {
     const commands = this.lines2commands(lines);
 
     const comments = commands.filter((cmd) => cmd.comment);
+    if (this.headerComments.length < Parser.HEADER_COMMENT_SAMPLE) {
+      this.headerComments = this.headerComments.concat(comments).slice(0, Parser.HEADER_COMMENT_SAMPLE);
+    }
 
     // Extract thumbnails
     const thumbs = this.parseMetadata(comments).thumbnails;
@@ -238,10 +265,22 @@ export class Parser {
     // (not just comments) so parsers that read Z from G-code moves work.
     if (!this.metadataParser) {
       this.metadataParser = detectSlicer(commands);
-      // The slicer name comes from the chunk that identified the slicer -- a
-      // later chunk may contain layer comments but not the header.
+      // Header questions are asked against the retained header sample, not the
+      // identifying chunk: a streamed parse can identify the slicer on a chunk
+      // that no longer holds the ;FLAVOR: line the diameter and the derivation
+      // flag are read from, which made those answers depend on chunk size.
       if (this.metadataParser) {
-        this.metadata.slicerName = this.metadataParser.detectSlicerName(comments);
+        this.metadata.slicerName = this.metadataParser.detectSlicerName(this.headerComments);
+        // Only the opt-out is recorded: deriving is the default, so a job with
+        // no metadata at all still derives, and the flag never flips on
+        // mid-stream when a later chunk finally identifies the slicer.
+        if (!this.metadataParser.derivesExtrusionDimensions(this.headerComments)) {
+          this.metadata.deriveExtrusionDimensions = false;
+        }
+        const filamentDiameter = this.metadataParser.parseFilamentDiameter(this.headerComments);
+        if (filamentDiameter !== undefined) {
+          this.metadata.filamentDiameter = filamentDiameter;
+        }
       }
     }
     const slicerMetadata = parseSlicerMetadata(commands, this.metadataParser);

@@ -157,6 +157,13 @@ Slicers put more than the toolpath in a gcode file. These comments are read:
 Which set is used depends on the slicer, which is detected from the file's own
 header comments.
 
+A dimension change does not split the path: each point keeps the dimensions
+it was added under, so a tube tapers from the old dimensions to the new ones
+over the one segment where the change happens. Dimensions resolve per point:
+the slicer-announced value wins, the `lineHeight` / `extrusionWidth` options
+fill in for points without one, and the built-in defaults (0.6 width / 0.2
+height) apply last.
+
 ### Multi-color support
 Also known as multi-tool or multi-material. 
 
