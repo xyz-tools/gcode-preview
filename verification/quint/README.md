@@ -2,6 +2,8 @@
 
 This directory is THE formal-verification layer: behavior-pinning specs bound to the implementation by ITF trace replay. Each spec's companion `.md` records every design decision with its reasoning and the alternatives considered.
 
+A sibling bank, [`../quint-next/`](../quint-next/README.md), specifies the system as it *would* work designed from scratch — normative, firmware-conformant, intentionally divergent from the current implementation, and unbound by design.
+
 ## Authority policy
 
 The implementation is the source of truth unless a clause says otherwise. Every command transition in `lib/printer-core.qnt` carries a three-field annotation: its **Authority** (Marlin documentation, the RepRap wiki, RepRapFirmware documentation, or none), the **Library stance** (conforms, pinned-divergence, or library-invented), and its **Exclusions**. A replay failure therefore has an arbitration rule: the spec is stale unless the failing clause cites an external authority, in which case the divergence is surfaced for a deliberate decision rather than silently re-pinned.

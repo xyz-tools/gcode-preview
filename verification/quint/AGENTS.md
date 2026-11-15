@@ -62,7 +62,18 @@ Do all of this in the same commit as the code change:
 - Each `.qnt` opens with a doc comment carrying `Unit:`, `Authority policy:` and `Companion:`.
 - No version labels anywhere (no "v1", "v2", "old", "new"); git history holds that record. Exception: the Mermaid keyword `stateDiagram-v2` is syntax, not a version label, so don't strip it.
 
-## 6. Failure triage
+## 6. `verification/quint-next/` is not your target
+
+quint-next is the normative from-scratch design bank. It deliberately diverges from the current code, has no traces and no replay, and its gate is internal consistency only.
+
+- Don't make code changes to "match quint-next" unless your task explicitly says so.
+- Don't add traces or replay suites to quint-next.
+- If your task is to implement a quint-next design, follow its Divergence ledger:
+  - Each ledger row is one migration step.
+  - The machine graduates into `verification/quint/` by gaining a trace corpus and a replay suite.
+  - Update the ledger and both READMEs in the same change.
+
+## 7. Failure triage
 
 | Symptom | What it means | Do |
 | --- | --- | --- |
@@ -74,14 +85,14 @@ Do all of this in the same commit as the code change:
 | Evaluator download or network error | Infrastructure, not a verdict | Retrying is fine. Never treat a verdict failure as infrastructure |
 | Replay breaks after renaming a private field | The slicer-detector and thumbnail replays read private state through a structural cast | Update the replay's accessor. The spec doesn't change |
 
-## 7. Blind spots: the bank does not cover these
+## 8. Blind spots: the bank does not cover these
 
 - Geometry and float math (tube building, rendering) are deliberately not specced. Rely on the vitest suite and property tests.
 - A spec can pass vacuously. There is no check that every mode was actually reached. If you add a mode, measure its coverage yourself (§4.5).
 - Spec mutants don't run in CI. Your manual check in §4.3 is the only proof the invariants can still fail.
 - Lifecycle replay lives in `src/__tests__/renderer-smoke.ts`, not in a lifecycle test file.
 
-## 8. Repo rules that still apply
+## 9. Repo rules that still apply
 
 - New tests join the existing test file for that area. No standalone regression files.
 - 100% coverage on every `src/` file, or CI fails.
