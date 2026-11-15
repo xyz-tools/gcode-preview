@@ -48,8 +48,8 @@ export type SceneManagerOptions = {
   /** Width of rendered lines */
   lineWidth?: number;
   /**
-   * Height of extruded lines, for paths whose height the slicer metadata did
-   * not announce (`;HEIGHT:` comments always win per path; built-in default 0.2)
+   * Height of extruded lines, for points whose height the slicer metadata did
+   * not announce (`;HEIGHT:` comments always win per point; built-in default 0.2)
    */
   lineHeight?: number;
   /** Minimum layer height threshold */
@@ -67,8 +67,8 @@ export type SceneManagerOptions = {
   /** Disable color gradient between layers */
   disableGradient?: boolean;
   /**
-   * Width of extruded material, for paths whose width the slicer metadata did
-   * not announce (`;WIDTH:` comments always win per path; built-in default 0.6)
+   * Width of extruded material, for points whose width the slicer metadata did
+   * not announce (`;WIDTH:` comments always win per point; built-in default 0.6)
    */
   extrusionWidth?: number;
   /** Render paths as 3D tubes instead of lines */
