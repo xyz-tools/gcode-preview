@@ -44,6 +44,8 @@ export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler
     const currentPath = job.continuePath(pathType);
 
     job.stats.recordExtrusion(extruded);
+    // An arc is a move like any G0/G1, so it counts toward the points stat.
+    job.stats.points++;
 
     // The tessellator runs on the resolved position and emits every point,
     // ending with the exact endpoint -- which equals resolvePosition() after
