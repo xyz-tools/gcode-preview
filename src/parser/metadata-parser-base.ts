@@ -94,7 +94,7 @@ export abstract class SlicerMetadataParser {
    * @param commands - Array of gcode commands with comments
    * @returns Dimension change events extracted from comments, in line order
    * @remarks
-   * Only dialects that announce per-path dimensions override this; the
+   * Only dialects that announce extrusion dimensions override this; the
    * default reports none.
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

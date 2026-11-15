@@ -700,7 +700,7 @@ describe('.continuePath', () => {
     expect(path.travelType).toEqual(PathType.Extrusion);
   });
 
-  test('continues the in-progress path while type and dimensions match', () => {
+  test('continues the in-progress path while type and tool match', () => {
     const job = new Job();
     const path = job.breakPath(PathType.Extrusion);
 
@@ -718,7 +718,9 @@ describe('.continuePath', () => {
     expect(next.travelType).toEqual(PathType.Travel);
   });
 
-  test('breaks when the state extrusion width changed', () => {
+  test('continues when the state extrusion width changed, folding it into the path', () => {
+    // Breaking on every dimension change used to multiply the path count on
+    // adaptive-layer-height files; the path absorbs the change instead.
     const job = new Job();
     const path = job.breakPath(PathType.Extrusion);
     path.addPoint(1, 1, 0);
@@ -726,12 +728,13 @@ describe('.continuePath', () => {
 
     const next = job.continuePath(PathType.Extrusion);
 
-    expect(next).not.toBe(path);
+    expect(next).toBe(path);
     expect(next.extrusionWidth).toEqual(0.45);
-    expect(job.paths).toEqual([path]);
+    expect(next.hasVaryingDimensions).toBe(true);
+    expect(job.paths).toEqual([]);
   });
 
-  test('breaks when the state line height changed', () => {
+  test('continues when the state line height changed, folding it into the path', () => {
     const job = new Job();
     const path = job.breakPath(PathType.Extrusion);
     path.addPoint(1, 1, 0);
@@ -739,8 +742,9 @@ describe('.continuePath', () => {
 
     const next = job.continuePath(PathType.Extrusion);
 
-    expect(next).not.toBe(path);
+    expect(next).toBe(path);
     expect(next.lineHeight).toEqual(0.3);
+    expect(next.hasVaryingDimensions).toBe(true);
   });
 
   test('breaks when the state tool changed', () => {
