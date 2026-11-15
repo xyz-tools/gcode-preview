@@ -64,6 +64,7 @@
     "test:packaging": "npm run build && node scripts/test-packaging.mjs"
   },
   "dependencies": {
+    "gcode-ast": "git+https://github.com/xyz-tools/gcode-ast.git#add-prepare-script",
     "three": ">=0.166.0 <0.186.0"
   },
   "type": "module",

@@ -53,11 +53,3 @@ export function parseSlicerMetadata(
     slicerName: parser.slicerName
   };
 }
-
-/**
- * Gets all available slicer parsers
- * @returns Array of available parsers
- */
-export function getAvailableParsers(): SlicerMetadataParser[] {
-  return [...AVAILABLE_PARSERS];
-}

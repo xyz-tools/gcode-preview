@@ -1,9 +1,10 @@
+import type { CommandOf } from 'gcode-ast';
 import { toMillimeters } from '../../units';
-import type { CommandHandler } from '../../interpreter';
+import type { Job } from '../../job';
 
 /**
  * Executes a G92 set position command
- * @param command - GCodeCommand containing the axis parameters
+ * @param command - The typed G92 node
  * @param job - Job instance to update
  * @remarks
  * G92 gives the current position new coordinates without moving the printhead,
@@ -14,18 +15,23 @@ import type { CommandHandler } from '../../interpreter';
  * Marlin, the extruder position is not part of the workspace shift. `isHomed`
  * is also left untouched: G92 trusts the given coordinates but does not home
  * the axes.
+ *
+ * "Bare" is read off `words`, not off the typed axis fields. The node names
+ * only X/Y/Z/E, so a `G92 F3000` would look bare through them and reset the
+ * workspace it should leave alone; `words` still holds every letter on the
+ * line, the command word included, so a length of one is the real test.
  */
-export const setPosition: CommandHandler = (command, job) => {
+export const setPosition = (command: CommandOf<'G92'>, job: Job): void => {
   const { state } = job;
   const { units } = state;
-  const x = toMillimeters(command.params.x, units);
-  const y = toMillimeters(command.params.y, units);
-  const z = toMillimeters(command.params.z, units);
-  const e = toMillimeters(command.params.e, units);
+  const x = toMillimeters(command.x, units);
+  const y = toMillimeters(command.y, units);
+  const z = toMillimeters(command.z, units);
+  const e = toMillimeters(command.e, units);
   const { positionShift } = state;
   const physical = job.resolvePosition();
 
-  if (Object.keys(command.params).length === 0) {
+  if (command.words.length <= 1) {
     positionShift.x = physical.x;
     positionShift.y = physical.y;
     positionShift.z = physical.z;

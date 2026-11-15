@@ -47,7 +47,9 @@ describe('public API surface', () => {
     });
 
     it('does not ship the debug GUI as a dependency', () => {
-      expect(packageJson.dependencies).toEqual({ three: packageJson.dependencies.three });
+      // gcode-ast is the parser's tokenizing front end; three is the renderer.
+      // Nothing else may become a runtime dependency of a library this size.
+      expect(Object.keys(packageJson.dependencies).sort()).toEqual(['gcode-ast', 'three']);
       expect(packageJson.devDependencies['lil-gui']).toBeUndefined();
     });
   });

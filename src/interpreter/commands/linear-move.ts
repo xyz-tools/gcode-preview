@@ -1,24 +1,25 @@
+import type { CommandOf } from 'gcode-ast';
 import { toMillimeters } from '../../units';
 import { PathType } from '../../path';
-import type { CommandHandler } from '../../interpreter';
+import type { Job } from '../../job';
 
 /**
  * Executes a linear move command (G0/G1)
- * @param command - GCodeCommand containing move parameters
+ * @param command - The typed move node
  * @param job - Job instance to update
  * @remarks
  * Handles both rapid moves (G0) and linear moves (G1). Updates the job state
  * and adds points to the current path based on the command parameters.
  * G0 is for rapid moves (non-extrusion), G1 is for linear moves (with optional extrusion).
  */
-export const linearMove: CommandHandler = (command, job) => {
+export const linearMove = (command: CommandOf<'G0' | 'G1'>, job: Job): void => {
   const { state } = job;
   const { units } = state;
-  const x = toMillimeters(command.params.x, units);
-  const y = toMillimeters(command.params.y, units);
-  const z = toMillimeters(command.params.z, units);
-  const e = toMillimeters(command.params.e, units);
-  const f = command.params.f;
+  const x = toMillimeters(command.x, units);
+  const y = toMillimeters(command.y, units);
+  const z = toMillimeters(command.z, units);
+  const e = toMillimeters(command.e, units);
+  const f = command.f;
 
   // discard zero length moves
   if (x === undefined && y === undefined && z === undefined) {

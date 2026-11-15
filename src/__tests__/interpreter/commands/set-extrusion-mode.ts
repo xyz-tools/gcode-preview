@@ -1,12 +1,12 @@
 import { test, expect } from 'vitest';
-import { GCodeCommand } from '../../../parser/gcode-parser';
 import { Parser } from '../../../parser/gcode-parser';
+import { cmd } from '../command-fixtures';
 import { Interpreter } from '../../../interpreter';
 import { setAbsoluteExtrusion, setRelativeExtrusion } from '../../../interpreter/commands';
 import { Job } from '../../../job';
 
 test('M83 switches E parameters to relative distances', () => {
-  const command = new GCodeCommand('M83', 'm83', {});
+  const command = cmd<'M83'>('M83');
   const job = new Job();
 
   setRelativeExtrusion(command, job);
@@ -15,7 +15,7 @@ test('M83 switches E parameters to relative distances', () => {
 });
 
 test('M82 switches E parameters back to absolute positions', () => {
-  const command = new GCodeCommand('M82', 'm82', {});
+  const command = cmd<'M82'>('M82');
   const job = new Job();
   job.state.relativeExtrusion = true;
 
