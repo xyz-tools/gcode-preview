@@ -93,7 +93,7 @@ describe('setPosition (G92)', () => {
   });
 
   test('the following moves continue in place instead of teleporting', () => {
-    const job = run(['G28', 'G1 X10 Y10 E1', 'G92 X0 Y0', 'G1 X5 Y5 E1'].join('\n'));
+    const job = run(['G28', 'M83', 'G1 X10 Y10 E1', 'G92 X0 Y0', 'G1 X5 Y5 E1'].join('\n'));
 
     // The printhead never moved on G92, so the path is continuous and the
     // logical (5,5) target lands at the physical (15,15)
@@ -114,7 +114,8 @@ describe('setPosition (G92)', () => {
 
     expect(job.paths.length).toEqual(1);
     expect(job.paths[0].vertices).toEqual([0, 0, 0, 10, 0, 0, 20, 0, 0]);
-    expect(job.state.e).toEqual(0);
+    // the reset took: the final move extrudes from 0 to its absolute E of 1
+    expect(job.state.e).toEqual(1);
   });
 
   test('a Z re-zero translates the following Z moves', () => {
@@ -127,7 +128,7 @@ describe('setPosition (G92)', () => {
   });
 
   test('arc endpoints are translated by the shift', () => {
-    const job = run(['G28', 'G1 X10 Y10 E1', 'G92 X0 Y0', 'G2 X0 Y10 I-10 J0 E1'].join('\n'));
+    const job = run(['G28', 'M83', 'G1 X10 Y10 E1', 'G92 X0 Y0', 'G2 X0 Y10 I-10 J0 E1'].join('\n'));
 
     // logical endpoint (0,10) + shift (10,10) = physical (10,20)
     expect(job.state.x).toEqual(10);
@@ -137,7 +138,7 @@ describe('setPosition (G92)', () => {
   });
 
   test('a chunk boundary right after G92 produces the same paths as a single run', () => {
-    const commands = new Parser().parseGCode(['G28', 'G1 X10 E1', 'G92 X0', 'G1 X5 E1'].join('\n')).commands;
+    const commands = new Parser().parseGCode(['G28', 'M83', 'G1 X10 E1', 'G92 X0', 'G1 X5 E1'].join('\n')).commands;
     const interpreter = new Interpreter();
     const job = new Job();
 

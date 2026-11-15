@@ -1,0 +1,14 @@
+diff --git a/src/interpreter/commands/arc-move.ts b/src/interpreter/commands/arc-move.ts
+--- a/src/interpreter/commands/arc-move.ts
++++ b/src/interpreter/commands/arc-move.ts
+@@ -57,10 +57,6 @@
+       state.units
+     );
+ 
+-    // `??` not `||`: an arc ending on X0, Y0 or Z0 used to silently keep the previous
+-    // coordinate. Safe now that the parser drops non-finite params -- `||` was also
+-    // rejecting NaN here by accident, which `??` does not do. An axis the command
+-    // omits keeps its previous (possibly unknown) value, preserving isHomed semantics.
+     state.x = x ?? state.x;
+     state.y = y ?? state.y;
+     state.z = z ?? state.z;
