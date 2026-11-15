@@ -1,6 +1,6 @@
 // -*- mode: Bluespec; -*-
 /**
- * printer_core — THE single printer-state semantics shared by every v2
+ * printer_core — THE single printer-state semantics shared by every
  * machine that interprets position/extrusion G-codes.
  *
  * Unit: interpreter-state map, foundations of IS-2 (G92 offset-model laws),
@@ -59,7 +59,7 @@ module printer_core {
   /// physical = logical + shift on every commanded axis.
   type Shift = { x: int, y: int, z: int }
 
-  /// The full printer state every v2 interpreter-flavored machine folds.
+  /// The full printer state every interpreter-flavored machine folds.
   type PrinterState = {
     x: AxisState,
     y: AxisState,
@@ -399,9 +399,9 @@ module printer_core {
 }
 
 /**
- * Corner-case tests for printer_core.applyCommand, transcribed from the
- * v1 interpreter spec's semantic runs so the shared core provably encodes
- * the same semantics.
+ * Corner-case tests for printer_core.applyCommand, pinning the
+ * interpreter's semantic corners so the shared core provably encodes
+ * them.
  *
  * Validate with:
  *   npx quint test verification/quint/lib/printer-core.qnt --main printer_core_test

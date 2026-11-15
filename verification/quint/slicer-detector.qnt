@@ -1,6 +1,6 @@
 // -*- mode: Bluespec; -*-
 /**
- * slicer_detector — the v2 model of the write-once slicer-classification
+ * slicer_detector — the model of the write-once slicer-classification
  * latch over a streamed G-code parse. Each step delivers one chunk to the
  * parser: a single line, an ordered pair of lines, or a window-sized flood
  * of neutral comments with one marker line at the window boundary. While
@@ -10,8 +10,8 @@
  * resolved from the latching chunk alone. Once latched, later chunks are
  * never examined again.
  *
- * Unlike v1 (one line per chunk, outcome hard-coded per event), detection
- * is modeled as data here: every line kind carries the SET of parser
+ * Detection is modeled as data rather than as outcomes hard-coded per
+ * event: every line kind carries the SET of parser
  * families its representative texts match, the priority fold computes the
  * winner, and multi-line chunks make within-chunk priority — a lower
  * priority marker on an earlier line losing to a higher-priority marker
@@ -615,7 +615,7 @@ module slicer_detector {
   // --- semantic tests (run with:
   // ---   npx quint test verification/quint/slicer-detector.qnt) ------------
 
-  /// Within-chunk priority, the case v1's one-line chunks could not reach:
+  /// Within-chunk priority, the case only multi-line chunks can reach:
   /// a chunk carrying a Cura marker on its FIRST line and a Prusa family
   /// marker on its second latches PrusaFamily — priority ranks families,
   /// not line positions. A later Cura header cannot re-latch.

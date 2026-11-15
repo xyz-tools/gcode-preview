@@ -59,7 +59,7 @@ The flush is a real lifecycle state, not driver cleanup: `AtEof` is entered exac
 
 **Alternatives considered.** Treating a lone `\r` as a terminator too, as Marlin's serial reader does (Marlin 2.1.x `src/core/macros.h`: `#define ISEOL(C) ((C) == '\n' || (C) == '\r')`). Rejected with reason, per charter P1: under that rule every CRLF is two terminators unless pairing lookahead spans chunk boundaries, and the files a viewer ingests are slicer output in the two RepRap-named endings, not a serial byte stream. Also rejected: normalizing in the parser (the current approach — see the ledger), which leaves every other consumer of lines to handle `\r` itself.
 
-**What v2-current does.** The splitter passes `\r` through inside the line; `parseCommand`'s `trim()` removes it at parse time; lines kept via `keepLines` retain it.
+**What the main bank pins.** The splitter passes `\r` through inside the line; `parseCommand`'s `trim()` removes it at parse time; lines kept via `keepLines` retain it.
 
 ### No content-dependent holdback; metadata joins on sequence numbers
 
@@ -69,7 +69,7 @@ The flush is a real lifecycle state, not driver cleanup: `AtEof` is entered exac
 
 **Alternatives considered.** Keeping the holdback alongside seq numbers: pure cost, no remaining benefit. Buffering whole layers downstream instead: that is a consumer concern, and the consumer can do it by seq ranges without the splitter's help.
 
-**What v2-current does.** `splitChunk` holds back the maximal trailing run of comment-only lines (terminating newline kept) until a non-comment line closes it; the `Parser` then rebuilds whole-file line indices from `lineCount` offset arithmetic per chunk.
+**What the main bank pins.** `splitChunk` holds back the maximal trailing run of comment-only lines (terminating newline kept) until a non-comment line closes it; the `Parser` then rebuilds whole-file line indices from `lineCount` offset arithmetic per chunk.
 
 ### The flush is an explicit step that delivers the final partial line
 
@@ -79,7 +79,7 @@ The flush is a real lifecycle state, not driver cleanup: `AtEof` is entered exac
 
 **Alternatives considered.** Leaving the flush to the stream driver outside the splitter contract (the current shape): then the tail bypasses whatever the per-line path does, and the bypass must be re-audited every time that path grows a responsibility — which is exactly how the current tail-flush came to skip metadata forwarding.
 
-**What v2-current does.** `readStream` flushes a nonempty tail in a separate parse call after its loop; that call destructures only `commands`, so metadata parsed from the tail is not forwarded to `job.metadata`, and `onStreamEnd` fires afterwards.
+**What the main bank pins.** `readStream` flushes a nonempty tail in a separate parse call after its loop; that call destructures only `commands`, so metadata parsed from the tail is not forwarded to `job.metadata`, and `onStreamEnd` fires afterwards.
 
 ### Refinement is a per-state invariant, not a terminal check
 
@@ -87,9 +87,9 @@ The flush is a real lifecycle state, not driver cleanup: `AtEof` is entered exac
 
 **Reasoning.** Per-state refinement is strictly stronger than terminal confluence: it implies that any two chunkings agree at every shared cursor position, so chunk boundaries are unobservable downstream at all times, not just at the end. It is also the exact statement of the design idea — the splitter's state is a function of the consumed prefix — so a transcription error anywhere in `applyChunk` breaks it immediately rather than only at exhaustion.
 
-**Alternatives considered.** Terminal-only confluence (the v2-current spec's `terminalConfluence`): weaker, and vacuous for any sampled run that does not exhaust its document. A two-machine product invariant comparing two live chunkings: subsumed by prefix-refinement, since both sides equal the same oneshot prefix; kept as a deterministic run instead (`twoChunkingsAgreeTest`).
+**Alternatives considered.** Terminal-only confluence (the main bank's `terminalConfluence`): weaker, and vacuous for any sampled run that does not exhaust its document. A two-machine product invariant comparing two live chunkings: subsumed by prefix-refinement, since both sides equal the same oneshot prefix; kept as a deterministic run instead (`twoChunkingsAgreeTest`).
 
-**What v2-current does.** The v2 bank's `streaming.qnt` checks `prefixOfOneshot` per state and full agreement only at exhaustion, because the current splitter's comment holdback makes mid-stream output depend on where chunks fell — per-state refinement is false for it. That falsity is the measure of what this design buys.
+**What the main bank pins.** Its `streaming.qnt` checks `prefixOfOneshot` per state and full agreement only at exhaustion, because the current splitter's comment holdback makes mid-stream output depend on where chunks fell — per-state refinement is false for it. That falsity is the measure of what this design buys.
 
 ### Interior empty lines are delivered, with their sequence numbers
 
@@ -99,17 +99,17 @@ The flush is a real lifecycle state, not driver cleanup: `AtEof` is entered exac
 
 **Alternatives considered.** Discarding empty lines as Marlin's queue does (`queue.cpp`, `process_line_done`): right for a motion queue, wrong for a viewer that must map metadata back to file positions. Stated divergence from firmware, with this reason, per charter P1.
 
-**What v2-current does.** The splitter never produces them separately (lines travel joined), and `readStream` skips empty `complete` strings precisely because parsing `''` would miscount lines — the phantom-line hazard this design removes by never re-joining lines into a string.
+**What the main bank pins.** The splitter never produces them separately (lines travel joined), and `readStream` skips empty `complete` strings precisely because parsing `''` would miscount lines — the phantom-line hazard this design removes by never re-joining lines into a string.
 
 ### Unbound by design: no replay, no traces
 
 **Decision.** This spec has no vitest replay and no ITF trace corpus. Its gate is internal consistency: `npx quint parse`, `npx quint test --main streaming_next`, and `npx quint run --main streaming_next --invariant allInvariants --max-samples 200 --max-steps 30 --seed=0x67c0de2026` (all against `verification/quint-next/streaming.qnt`) must pass, and all three do.
 
-**Reasoning.** A replay against the current code would fail on purpose — immediate emission vs last-newline batching, no holdback, CRLF stripping, flush-in-contract are all designed divergences. Binding the spec to the implementation would turn every intended difference into a red test. The v2 bank already pins current behavior with replays; this bank answers a different question (charter P6).
+**Reasoning.** A replay against the current code would fail on purpose — immediate emission vs last-newline batching, no holdback, CRLF stripping, flush-in-contract are all designed divergences. Binding the spec to the implementation would turn every intended difference into a red test. The main bank already pins current behavior with replays; this bank answers a different question (charter P6).
 
 **Alternatives considered.** Replaying only the invariant-compatible observables (cursor, conservation): a partial binding would blur which bank is normative for what.
 
-**What v2-current does.** The v2 `streaming.qnt` ships 40 ITF traces replayed against the real `splitChunk` in `src/__tests__/split-chunk.ts` — the correct arrangement for a pinning bank, and the wrong one for this one.
+**What the main bank pins.** Its `streaming.qnt` ships 40 ITF traces replayed against the real `splitChunk` in `src/__tests__/split-chunk.ts` — the correct arrangement for a pinning bank, and the wrong one for this one.
 
 ### Corpus sized so the terminal invariants are exercised
 
@@ -119,7 +119,7 @@ The flush is a real lifecycle state, not driver cleanup: `AtEof` is entered exac
 
 **Alternatives considered.** Longer documents stress the splitter more per run but starve the terminal invariants under a 30-step budget.
 
-**What v2-current does.** 100–120 tokens under a 40-step trace budget, tuned for trace-corpus coverage metrics this bank does not have.
+**What the main bank pins.** 100–120 tokens under a 40-step trace budget, tuned for trace-corpus coverage metrics this bank does not have.
 
 ## Divergence ledger
 

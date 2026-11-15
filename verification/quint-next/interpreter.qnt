@@ -14,7 +14,7 @@
  * Designed-in properties checked here (charter P2):
  * - The defining equation physical == logical + shift holds UNGUARDED on
  *   every axis in every reachable state — known or unknown, absolute or
- *   relative mode. The v2 bank could only state it on known axes; the
+ *   relative mode. The main bank can only state it on known axes; the
  *   from-scratch relative semantics (deltas are shift-free, un-commanded
  *   axes read a conventional 0 that deltas accumulate onto) closes the
  *   gap by construction.
@@ -218,7 +218,7 @@ module interpreter_next {
    *
    * Authority: none — model scaffolding for property expression.
    * Design stance: library-invented ghost; "logical" is the coordinate
-   *   the G-code file talks in. Unlike v2, no clamp case and no
+   *   the G-code file talks in. Unlike the main bank, no clamp case and no
    *   known-axis guard are needed: the equation holds on unknown axes
    *   too, because relative deltas accumulate onto the conventional 0.
    * Exclusions: E has no logical/physical split (excluded from the
@@ -545,8 +545,8 @@ module interpreter_next {
 
   /// THE defining equation, UNGUARDED: physical == logical + shift on
   /// every axis in every reachable state. No known-axis guard is needed
-  /// (contrast v2): relative deltas accumulate onto the conventional 0
-  /// of un-commanded axes on both sides of the equation.
+  /// (contrast the main bank): relative deltas accumulate onto the
+  /// conventional 0 of un-commanded axes on both sides of the equation.
   val shiftDefiningEquation = and {
     s.p.x.pos == s.ghostLogical.x + s.p.shift.x,
     s.p.y.pos == s.ghostLogical.y + s.p.shift.y,
@@ -801,8 +801,8 @@ module interpreter_next {
  *
  * Unit: design-bank counterpart of IS-3 (encoding equivalences) in
  *   .context/formal-verification/mapping-data.json, extended with the
- *   G90/G91 half that only exists in the from-scratch design; the v2
- *   UnitsReadTimeOnly OPEN item is discharged here by the D column.
+ *   G90/G91 half that only exists in the from-scratch design; the main
+ *   bank's UnitsReadTimeOnly OPEN item is discharged here by the D column.
  * Authority policy: verification/quint/STYLE.md ("Authority
  *   annotations"), adapted for a design bank; command semantics live in
  *   lib/printer-core.qnt, and the constructs annotated here are the

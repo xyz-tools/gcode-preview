@@ -1,4 +1,4 @@
-# Public-API lifecycle, v2: the resurrection machine
+# Public-API lifecycle: the resurrection machine
 
 A companion to `lifecycle.qnt`. This spec pins the preview facade's observable lifecycle — process, clear, render, resize and dispose — including the design decision at its heart: dispose tears down only the rendering side, and the next call that touches rendering lazily resurrects a fresh scene-manager generation.
 
@@ -66,47 +66,39 @@ Dispose, render and resize do not appear: none of them changes the job. The `emp
 
 **Reasoning.** The `G92 E0` reset makes the extruding snippet lay material on every feed, so each snippet's effect depends only on the last path's kind — a fact of the implementation's path-continuation rule, not of one snippet's arithmetic. The model becomes a real lifecycle model: path counts grow without bound, both open-new-path and extend-existing-path deltas recur, and the replay knows exactly which G-code to feed because the trace says so.
 
-**Alternatives considered.** An `M83` (relative extrusion) prologue would also re-extrude every time, but it flips a modal state the menu would then have to carry; the `G92 E0` form leaves every mode at its default. A menu with varying widths/heights was rejected: dimension-driven path breaks belong to the metadata pipeline, not this machine.
-
-**What v1 did.** One fixed snippet, `G1 X10 Y10 E1`, whose absolute-E arithmetic capped the job at two paths per epoch — interpreter behavior smuggled into the lifecycle spec, and a model that rewrote itself if the snippet changed.
+**Alternatives considered.** An `M83` (relative extrusion) prologue would also re-extrude every time, but it flips a modal state the menu would then have to carry; the `G92 E0` form leaves every mode at its default. A menu with varying widths/heights was rejected: dimension-driven path breaks belong to the metadata pipeline, not this machine. One fixed snippet such as `G1 X10 Y10 E1`; rejected — its absolute-E arithmetic caps the job at two paths per epoch, smuggling interpreter behavior into the lifecycle spec, and the model would have to be rewritten whenever the snippet changed.
 
 ### Renderer call counts are in-model observables
 
 **Decision.** `s` carries cumulative `renders`, `setSizes` and `rendererDisposes`, billed by each transition: a construction frame and a construction resize per generation, one render per explicit `render()` and per `clear()` re-render, one animated-render first frame per process that leaves more than one path, one setSize per `resize()`, one renderer dispose per generation retirement.
 
-**Reasoning.** This is the oracle strengthening the port was for. The replay sums the stub renderers' mock call counts over the trace's window and compares integer-exactly every step, so a resurrection that skipped its construction frame, a clear that stopped re-rendering, or a double renderer dispose is caught at the exact step it happens. In-model, two conservation equations (`renderConservation`, `setSizeConservation`) tie the cumulative counts to independent per-action ghost counters, so mis-billing any single transition breaks an equation.
+**Reasoning.** The replay sums the stub renderers' mock call counts over the trace's window and compares integer-exactly every step, so a resurrection that skipped its construction frame, a clear that stopped re-rendering, or a double renderer dispose is caught at the exact step it happens. In-model, two conservation equations (`renderConservation`, `setSizeConservation`) tie the cumulative counts to independent per-action ghost counters, so mis-billing any single transition breaks an equation.
 
 **Alternatives considered.** Keeping the counts replay-side only (deltas recomputed by the harness) would leave the spec unable to state the conservation equations. Counting `setPixelRatio` too was rejected: it tracks `setSize` one-for-one and would add a column without adding information.
 
-**What v1 did.** The stub's `render`/`setSize` were `vi.fn()`s no assertion ever read; the only renderer observable was how many had been constructed.
+### A three-phase machine; ghosts make its claims checkable
 
-### The phase machine survives; ghosts make its claims checkable
+**Decision.** Keep a three-phase automaton with disposed non-absorbing, exactly as the implementation behaves, and back every temporal claim about it with an invariant over ghost state: `ghostJustDisposed`, `ghostJustCleared` and the frozen `ghostPrev` record.
 
-**Decision.** Keep v1's three-phase automaton with disposed non-absorbing, exactly as the implementation behaves, and back every temporal claim about it with an invariant over ghost state: `ghostJustDisposed`, `ghostJustCleared` and the frozen `ghostPrev` record.
+**Reasoning.** The resurrection semantics is the pinned heart of this machine, so its claims must be falsifiable. With the ghost block, "disposed only right after dispose", "a generation is created exactly by leaving disposed", "dispose retains the job" and "only clear shrinks the job" are all checked on every simulated state — and each was observed to fail under deliberate transition mutations during construction.
 
-**Reasoning.** The resurrection semantics is the pinned heart of this machine; what v1 lacked was falsifiability. With the ghost block, "disposed only right after dispose", "a generation is created exactly by leaving disposed", "dispose retains the job" and "only clear shrinks the job" are all checked on every simulated state — and each was observed to fail under deliberate transition mutations during construction.
-
-**Alternatives considered.** Deriving phase from `pathCount` plus a liveness bit instead of storing it; storing the sum type plus `phaseMatchesContent` was chosen so a transition error has one more way to fail.
-
-**What v1 did.** The dispose claim lived in one invariant written over the trace-contract `cmd` string — an action property coupled to the replay plumbing.
+**Alternatives considered.** Deriving phase from `pathCount` plus a liveness bit instead of storing it; storing the sum type plus `phaseMatchesContent` was chosen so a transition error has one more way to fail. Stating the dispose claim as one invariant over the trace-contract `cmd` string; rejected — that is an action property coupled to the replay plumbing, where ghost state checks it on every simulated state.
 
 ### The no-throw contract moved to the replay
 
 **Decision.** There is no `outcome` field and no `neverThrows` invariant. The replay asserts `ok` on every call, and additionally collects asynchronous rejections of the animated-render promises and requires none by the end of each trace.
 
-**Reasoning.** Inside the model a constant can never fail, so as a spec invariant the claim was decorative. As a replay assertion it is live on all 930 replayed states — and now covers the asynchronous failure path the v1 harness never awaited.
+**Reasoning.** Inside the model a constant can never fail, so as a spec invariant the claim was decorative. As a replay assertion it is live on all 930 replayed states — and covers the asynchronous failure path as well.
 
-**Alternatives considered.** Keeping `outcome: "ok"` in `ev` for self-documentation; rejected as exactly the vacuous-constant pattern v2 removes.
-
-**What v1 did.** An `outcome` variable assigned `"ok"` by every action, plus an unfalsifiable `neverThrows` invariant over it.
+**Alternatives considered.** Keeping `outcome: "ok"` in `ev` for self-documentation; rejected as exactly the vacuous-constant pattern: inside the model it can never fail.
 
 ### Always-enabled step, no stutter
 
 **Decision.** Every lifecycle call is total in every phase, so `step` is always enabled and the machine has no stutter action.
 
-**Reasoning.** v1's stutter existed to keep `step` enabled, but this machine never exhausts anything; dropping it means every committed step is a real call the replay exercises.
+**Reasoning.** A stutter exists to keep `step` enabled, but this machine never exhausts anything; without it, every committed step is a real call the replay exercises.
 
-**What v1 did.** A 10% `doStutter` branch the replay skipped.
+**Alternatives considered.** A 10% `doStutter` branch the replay skips; rejected — this machine never needs a stutter to keep `step` enabled, and every stutter step is one the replay does not exercise.
 
 ### Inert frames as the clock model
 
@@ -114,13 +106,11 @@ Dispose, render and resize do not appear: none of them changes the job. The `emp
 
 **Reasoning.** The continuous presentation loop renders once per real frame, which no step-indexed model can count. Pinning the synchronous prefix makes the arithmetic exact and the suite deterministic, while generation identity, job growth and the dispose ledger — the lifecycle substance — are unaffected by how many frames would have fired.
 
-**Alternatives considered.** A controllable frame queue flushed a fixed number of times per step would re-admit the loop at the cost of arbitrary flush constants in both spec and harness.
-
-**What v1 did.** Real frames ran during the replay; render counts were unasserted, and awaiting the animated render made step timing depend on the frame scheduler.
+**Alternatives considered.** A controllable frame queue flushed a fixed number of times per step would re-admit the loop at the cost of arbitrary flush constants in both spec and harness. Letting real frames run during the replay; rejected — the loop renders once per real frame, which no step-indexed model can count, and awaiting the animated render makes step timing depend on the frame scheduler.
 
 ## Compared vs ignored
 
-The replay in `src/__tests__/renderer-smoke.ts` (`lifecycle v2 spec trace replay`) applies each trace's calls to a real `GCodePreview` built exactly as the smoke tests build theirs: every three.js class real except `WebGLRenderer`, no module-level mocks of library code, no un-mocking machinery.
+The replay in `src/__tests__/renderer-smoke.ts` (`lifecycle spec trace replay`) applies each trace's calls to a real `GCodePreview` built exactly as the smoke tests build theirs: every three.js class real except `WebGLRenderer`, no module-level mocks of library code, no un-mocking machinery.
 
 | Real-system observable                                   | Replay treatment                                                            |
 | -------------------------------------------------------- | --------------------------------------------------------------------------- |
@@ -146,7 +136,7 @@ The streaming entry points (`processGCodeStream`, `readStream`) and their interl
 
 ## Trace budget
 
-Sized to this machine's diameter rather than v1's uniform 15×24: **15 traces × 30 steps × 2 seeds** (`0x67c0de2026` first, then `0xfab1e2026`), generated per seed with `npx quint run verification/quint/lifecycle.qnt --invariant allInvariants --max-samples 15 --n-traces 15 --max-steps 30 --seed=<seed> --out-itf 'verification/quint/traces/lifecycle/trace_<seed-tag>_{seq}.itf.json' --verbosity 1`.
+Sized to this machine's diameter: **15 traces × 30 steps × 2 seeds** (`0x67c0de2026` first, then `0xfab1e2026`), generated per seed with `npx quint run verification/quint/lifecycle.qnt --invariant allInvariants --max-samples 15 --n-traces 15 --max-steps 30 --seed=<seed> --out-itf 'verification/quint/traces/lifecycle/trace_<seed-tag>_{seq}.itf.json' --verbosity 1`.
 
 The weighted `STEP_MENU` (process 4/10 with extruding doubled, dispose 3/10, clear/render/resize 1/10 each) makes the disposed phase a frequent launch point, so every dispose-then-X resurrection pair is common rather than seed luck. Stated minima and measured counts over the committed corpus of 30 traces (900 post-init steps):
 
@@ -170,6 +160,6 @@ The weighted `STEP_MENU` (process 4/10 with extruding doubled, dispose 3/10, cle
 
 `quint verify` has not been run — there is no JVM on this machine. This automaton is small and bounded apart from its monotone counters, so it is a natural first candidate for a bounded Apalache lane once one exists.
 
-The runner manifest (`scripts/quint-specs.mjs`) carries the `v2/lifecycle` entry, and the freshness gate reproduces the committed corpus exactly. Retiring the v1 spec, its traces and its replay in `src/__tests__/gcode-preview.ts` is the integrator's step, taken in the same change that lands this replay.
+The runner manifest (`scripts/quint-specs.mjs`) carries the `lifecycle` entry, and the freshness gate reproduces the committed corpus exactly.
 
 `renderConservation`'s animated-frame term and the transition that bills it share the `pathCount > 1` predicate, so that one term is cross-checked primarily by the replay rather than by the equation. The per-generation attribution of calls (which generation's renderer received which call) is derivable from the trace but compared only as window-wide sums.

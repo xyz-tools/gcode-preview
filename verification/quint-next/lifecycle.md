@@ -61,7 +61,7 @@ flowchart LR
 
 **Alternatives considered.** Documented no-op for all calls: silent, but hides real bugs (a view that stops updating with no signal). Throw on double dispose too: punishes safe teardown patterns for no leak-safety gain. Lazy resurrection: see the ledger — it makes leak analysis non-local.
 
-**What v2-current does.** No lifecycle call ever throws. `dispose()` nulls the internal scene manager and any later call reaches the lazy `sceneManager` getter, which silently constructs a fresh `SceneManager` (and with it a fresh `WebGLRenderer`).
+**What the main bank pins.** No lifecycle call ever throws. `dispose()` nulls the internal scene manager and any later call reaches the lazy `sceneManager` getter, which silently constructs a fresh `SceneManager` (and with it a fresh `WebGLRenderer`).
 
 ### The ledger lives in the state
 
@@ -71,7 +71,7 @@ flowchart LR
 
 **Alternatives considered.** A boolean `disposed` flag alone: cannot express exactly-once release or the no-resurrection law. Tracking individual resource identities: more faithful, but counters already distinguish every bug class the identities would, at a fraction of the state space.
 
-**What v2-current does.** `SceneManager` keeps a private `disposables` array; dispose walks it. Nothing counts allocations, and exactly-once release is not observable from outside.
+**What the main bank pins.** `SceneManager` keeps a private `disposables` array; dispose walks it. Nothing counts allocations, and exactly-once release is not observable from outside.
 
 ### render never allocates; process builds eagerly
 
@@ -81,7 +81,7 @@ flowchart LR
 
 **Alternatives considered.** Build-on-render with caching: same steady-state behavior but the first frame after every change pays the build, and the law degrades to a conditional. Letting clear re-render (current behavior): couples a release-only operation to the draw path.
 
-**What v2-current does.** `render()` performs a full scene rebuild, and `clear()` calls `sceneManager.clear()` followed by `sceneManager.render()`, so both can allocate and both resurrect a disposed preview.
+**What the main bank pins.** `render()` performs a full scene rebuild, and `clear()` calls `sceneManager.clear()` followed by `sceneManager.render()`, so both can allocate and both resurrect a disposed preview.
 
 ### dispose releases the job too
 
@@ -89,7 +89,7 @@ flowchart LR
 
 **Reasoning.** In an absorbing design the retained job is unreachable — every call that could show it throws — so keeping it is a pure leak. Releasing it makes `disposedReleasesAll` one uniform statement over every class.
 
-**What v2-current does.** The job and parser survive `dispose()`; a later call re-renders the retained content through the resurrected manager.
+**What the main bank pins.** The job and parser survive `dispose()`; a later call re-renders the retained content through the resurrected manager.
 
 ## Divergence ledger
 
@@ -103,7 +103,7 @@ flowchart LR
 | Resource accounting | Private `disposables` array, no observable counts | Explicit `alloc`/`released` ledgers with conservation, monotonicity and releaser restrictions | Exactly-once release and at-most-one-live-renderer become invariants an implementation can expose and a test can read. |
 | clear on a disposed preview | Resurrects the manager and lands in `fresh` | Throws, like every non-dispose call | One rule for the whole disposed surface; no special case to document. |
 
-Current behavior read from `src/gcode-preview.ts` (constructor, `clear`, `processGCode`, `dispose`, the lazy `sceneManager` getter) and `src/scene-manager.ts` (`dispose`, `resize`, render paths), plus the pinned description in `verification/quint/lifecycle.qnt` / `lifecycle.md`. Stated neutrally; the v1 spec pins it as the implementation's actual contract today.
+Current behavior read from `src/gcode-preview.ts` (constructor, `clear`, `processGCode`, `dispose`, the lazy `sceneManager` getter) and `src/scene-manager.ts` (`dispose`, `resize`, render paths), plus the pinned description in `verification/quint/lifecycle.qnt` / `lifecycle.md`. Stated neutrally; the main bank pins it as the implementation's actual contract today.
 
 ## No replay binding, by design
 

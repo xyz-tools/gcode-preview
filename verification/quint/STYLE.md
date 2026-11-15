@@ -1,4 +1,4 @@
-# Quint v2 spec style guide
+# Quint spec style guide
 
 One page, binding for every spec under `verification/quint/`. Library modules live in `lib/` (pure, no state, never run as machines); runnable machines live at this directory's root. A file's module name is its basename with dashes as underscores.
 
@@ -41,7 +41,7 @@ Every `.qnt` opens with a doc comment carrying, in order: a one-paragraph descri
 
 ## Authority annotations
 
-The implementation is the source of truth; v2 specs pin behavior. Every command or transition carries a three-field block in its doc comment:
+The implementation is the source of truth; specs pin behavior. Every command or transition carries a three-field block in its doc comment:
 
 - **Authority:** Marlin docs / RepRap wiki / RepRapFirmware docs / none.
 - **Library stance:** conforms / pinned-divergence / library-invented.
@@ -53,7 +53,7 @@ Divergences are pinned decisions, stated neutrally — never editorialized. Arbi
 
 Traces live in `verification/quint/traces/<spec>/`, generated with `npx quint run --out-itf ... --main <module>` per seed. Seed `0x67c0de2026` comes first and at least one more seed follows. Budgets (`--n-traces`, `--max-steps`) are sized to the machine's own diameter, then event coverage is measured over the generated corpus; the companion records budgets, the machine's stated minima (no machine mode under ~20 replayed exercises; low stutter share) and the measured counts.
 
-Replays join the existing vitest file for the area, in a new describe block `'<spec> v2 spec trace replay'`, importing all ITF plumbing from `src/__tests__/helpers/itf-replay.ts` (`listTraceFiles`, `readTrace`, `itfInt`/`itfBool`/`itfStr`/`itfList`/`itfRecord`, `centiMismatch`). Comparisons are integer-exact via `centiMismatch` — no epsilon. The guard test fails, never skips, on an empty trace directory.
+Replays join the existing vitest file for the area, in a new describe block `'<spec> spec trace replay'`, importing all ITF plumbing from `src/__tests__/helpers/itf-replay.ts` (`listTraceFiles`, `readTrace`, `itfInt`/`itfBool`/`itfStr`/`itfList`/`itfRecord`, `centiMismatch`). Comparisons are integer-exact via `centiMismatch` — no epsilon. The guard test fails, never skips, on an empty trace directory.
 
 ## Temporal claims
 

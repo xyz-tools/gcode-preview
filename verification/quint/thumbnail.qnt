@@ -1,6 +1,6 @@
 // -*- mode: Bluespec; -*-
 /**
- * thumbnail — the v2 embedded-thumbnail comment machine. Slicers write a
+ * thumbnail — the embedded-thumbnail comment machine. Slicers write a
  * thumbnail into G-code comments as a 'thumbnail begin <size> <count>'
  * marker, a run of base64 payload comments, and a 'thumbnail end' marker;
  * the library collects the payload between the markers and keeps the
@@ -12,7 +12,7 @@
  *
  * Payload is abstract: a data line is an alphabet-character run followed by
  * a trailing '=' pad run, carried as counts. Validity therefore does not
- * collapse to one filler convention (v1's single repeated character):
+ * collapse to one filler convention:
  * the model tracks a pad-structure mode (none / '=' / '==' / broken) and a
  * dirty flag for non-base64 characters, and the stored predicate — length
  * equals the declared count, length a multiple of 4, no dirty characters,

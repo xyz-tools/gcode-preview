@@ -1,15 +1,15 @@
 // -*- mode: Bluespec; -*-
 /**
- * lifecycle — the v2 public-API lifecycle automaton of the preview facade:
+ * lifecycle — the public-API lifecycle automaton of the preview facade:
  * process, clear, render, resize and dispose as pinned observable behavior.
- * The central pinned fact survives from v1: dispose() tears down only the
+ * The central pinned fact: dispose() tears down only the
  * rendering side, the job is retained, and the next call that touches
  * rendering lazily resurrects a fresh scene-manager generation — so the
- * disposed phase is NOT absorbing. v2 decouples the model from v1's single
- * snippet ("process" draws from a three-snippet menu with declared
- * path-growth deltas, carried in the trace so the replay knows what was
- * fed) and widens the oracle from ok/throws + path length to per-step
- * renderer observables: cumulative render and setSize call counts, a
+ * disposed phase is NOT absorbing. "process" draws from a three-snippet
+ * menu with declared path-growth deltas, carried in the trace so the
+ * replay knows what was fed, and the oracle goes beyond ok/throws + path
+ * length to per-step renderer observables: cumulative render and setSize
+ * call counts, a
  * renderer-dispose ledger, and the kind of the job's last path. All counts
  * assume the replay harness's inert requestAnimationFrame: the continuous
  * presentation loop contributes exactly its first, synchronous frame per
@@ -335,8 +335,8 @@ module lifecycle {
     pathCount: 0,
     lastPath: PNone,
     managerGen: 1,
-    renders: 1, // the construction frame of the first generation
-    setSizes: 1, // the construction resize of the first generation
+    renders: 1, // the construction frame of the initial generation
+    setSizes: 1, // the construction resize of the initial generation
     rendererDisposes: 0,
     ghostClears: 0,
     ghostRenderActs: 0,

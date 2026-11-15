@@ -1,4 +1,4 @@
-# Slicer detection latch, v2: windowed, priority-resolving, write-once
+# Slicer detection latch: windowed, priority-resolving, write-once
 
 A companion to `slicer-detector.qnt`. The machine pins unit PA-3: a streamed parse classifies its slicer at most once, through a fixed priority order, from a bounded sample of each chunk's comments — and never revisits that decision.
 
@@ -57,9 +57,7 @@ Priority ranks families, never line positions: a chunk pairing a Cura line befor
 
 **Reasoning.** The genuinely risky logic is pattern precedence over an open set of lines. With the resolution modeled, a mis-transcribed fold, a reordered menu, or a wrong matched set fails in simulation; the ghost `ghostLatchFams` makes the theorem checkable on every state.
 
-**Alternatives considered.** Deriving the replay's line table from the spec file itself (single source); rejected — ITF carries no strings-to-regex bridge, and the replay's contract test closes the same gap.
-
-**What v1 did.** Each event hard-coded its resolved `(family, name)` outcome, so the order existed only in comments and no invariant could falsify it.
+**Alternatives considered.** Hard-coding each event's resolved `(family, name)` outcome; rejected — the order would exist only in comments, so a mis-transcribed fold or a reordered menu could not fail in simulation. Deriving the replay's line table from the spec file itself (single source); rejected — ITF carries no strings-to-regex bridge, and the replay's contract test closes the same gap.
 
 ### Multi-line chunks make within-chunk priority reachable
 
@@ -67,9 +65,7 @@ Priority ranks families, never line positions: a chunk pairing a Cura line befor
 
 **Reasoning.** With one line per chunk, "priority applies within one detection attempt" is unreachable by construction; random pairs land the conflict shape too rarely (once in an early 600-step corpus). The curated menu lifts that mode above the stated minimum while generic random pairs keep exploring the rest of the square.
 
-**Alternatives considered.** Chunks of arbitrary length; rejected — two lines already distinguish position from priority, and longer chunks only dilute the corpus.
-
-**What v1 did.** Fixed one line per chunk, so within-chunk priority was never exercised by any trace.
+**Alternatives considered.** One line per chunk; rejected — within-chunk priority is unreachable by construction. Chunks of arbitrary length; rejected — two lines already distinguish position from priority, and longer chunks only dilute the corpus.
 
 ### The sampling window is modeled on both sides of its edge
 
@@ -77,9 +73,7 @@ Priority ranks families, never line positions: a chunk pairing a Cura line befor
 
 **Reasoning.** The window restarts per chunk, because detection re-runs on every chunk while un-latched; that makes the bound invisible to one-line-per-chunk models and to any corpus without window-sized chunks. Pinning both sides of the edge is what makes an off-by-one in the sample slice observable.
 
-**Alternatives considered.** A smaller model window with a scaled replay; rejected — the replay feeds 200 real filler lines in milliseconds, and an unscaled bound keeps the contract literal.
-
-**What v1 did.** The 200-comment window was unmodeled; detection was only ever exercised within the first lines of a stream.
+**Alternatives considered.** Leaving the window unmodeled; rejected — the bound stays invisible to any corpus without window-sized chunks, so an off-by-one in the sample slice goes unobserved. A smaller model window with a scaled replay; rejected — the replay feeds 200 real filler lines in milliseconds, and an unscaled bound keeps the contract literal.
 
 ### Representative sets, not single lines, are the event contract
 
@@ -87,9 +81,7 @@ Priority ranks families, never line positions: a chunk pairing a Cura line befor
 
 **Reasoning.** A single hard-coded line per event lets pattern facts rot silently: an edit to a regex that changes a variant's matched set now fails a named assertion even if no random trace leads with that variant. Within a kind, all representatives match the same family set and carry the same generator literal, so passes are interchangeable by construction — and the contract test is what proves that construction.
 
-**Alternatives considered.** Random per-step representative choice; rejected — pass-indexed iteration is deterministic and covers every string without a seed.
-
-**What v1 did.** One line per event forever, with cross-matching asserted in comments only.
+**Alternatives considered.** A single hard-coded line per event; rejected — it lets pattern facts rot silently, since a regex edit that changes another variant's matched set fails nothing. Random per-step representative choice; rejected — pass-indexed iteration is deterministic and covers every string without a seed.
 
 ### Name resolution reads the whole latching chunk
 
@@ -97,33 +89,27 @@ Priority ranks families, never line positions: a chunk pairing a Cura line befor
 
 **Reasoning.** The name scan and the pattern match are different mechanisms over the same sample; only a multi-line chunk can tell them apart. The detection window and the name-scan window coincide at 200, so one `prusaLiteralInWin` bit carries the whole story.
 
-**Alternatives considered.** Modeling the other generator literals (SuperSlicer, OrcaSlicer, BambuStudio); deferred — one literal exercises the mechanism, the rest would quadruple the alphabet for the same code path.
-
-**What v1 did.** Name resolution was an input to each event, not a modeled function; the upgrade-vs-generic split existed but only across single-line chunks.
+**Alternatives considered.** Supplying the resolved name as an input to each event instead of modeling it; rejected — the name scan and the pattern match are different mechanisms, and only a modeled resolution over a multi-line chunk can tell them apart. Modeling the other generator literals (SuperSlicer, OrcaSlicer, BambuStudio); deferred — one literal exercises the mechanism, the rest would quadruple the alphabet for the same code path.
 
 ### Two state variables, sum types inside, strings only in `ev`
 
 **Decision.** `var s` holds the latch as `Unlatched | Latched({fam, name, lineStart})` plus ghosts; `var ev` carries plain strings and integers derived in one place (`lineTag`, `famStr`, `nameStr`, `latchFamStr`, `latchNameStr`, `latchStartOf`). All event kinds funnel through the single `deliver` action, which computes the next state once, so `ev` and `s` cannot disagree.
 
-**Reasoning.** Illegal families and names are unrepresentable, so v1's `domainsOk` has no job left. The replay decodes `ev` alone and never touches the sum-typed internals.
+**Reasoning.** Illegal families and names are unrepresentable, so no domain-membership invariant is needed. The replay decodes `ev` alone and never touches the sum-typed internals.
 
-**Alternatives considered.** Decoding `s.latch`'s ITF variant encoding in the replay; rejected for harness simplicity — the projection is derived next to the sum types it projects.
-
-**What v1 did.** Seven scattered string/int vars policed by a membership invariant.
+**Alternatives considered.** Scattered string and integer vars policed by a membership invariant; rejected — sum types make illegal families and names unrepresentable instead. Decoding `s.latch`'s ITF variant encoding in the replay; rejected for harness simplicity — the projection is derived next to the sum types it projects.
 
 ### Phase-aware generation weights
 
 **Decision.** Two step menus: while un-latched, conflict pairs and window floods are heavy; once latched, marker rain dominates. Line bags differ too (~52% neutral before the latch, marker-heavy after).
 
-**Reasoning.** Window and conflict events are only semantically interesting before the latch closes, and the latch closes fast (mean latch step 1.95). Flat v1-style weights starved exactly those modes; phase-aware bags spend the un-latched budget where the semantics is.
+**Reasoning.** Window and conflict events are only semantically interesting before the latch closes, and the latch closes fast (mean latch step 1.95). Flat weights starve exactly those modes; phase-aware bags spend the un-latched budget where the semantics is.
 
-**Alternatives considered.** One flat menu with a much longer neutral prefix; rejected — it buys un-latched steps by making most of every trace neutral noise.
-
-**What v1 did.** One flat 40/60 neutral/marker coin per step, every trace, both phases.
+**Alternatives considered.** One flat neutral/marker coin per step in both phases; rejected — flat weights starve exactly the window and conflict modes. One flat menu with a much longer neutral prefix; rejected — it buys un-latched steps by making most of every trace neutral noise.
 
 ## Compared vs ignored
 
-The replay in `src/__tests__/parser/slicer-detector.ts` (`slicer-detector v2 spec trace replay`) rebuilds each chunk from the representative table and feeds it to one real `Parser` per trace and pass.
+The replay in `src/__tests__/parser/slicer-detector.ts` (`slicer-detector spec trace replay`) rebuilds each chunk from the representative table and feeds it to one real `Parser` per trace and pass.
 
 | Real-system observable                           | Replay treatment                                                                     |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------ |
@@ -162,7 +148,7 @@ Stated minima and measured counts over the committed corpus of 80 traces (800 po
 
 ## Open items
 
-The latched family is still read through a structural cast of the private `metadataParser` field: the public surface exposes the reported name but not the latch itself, so the cast is kept (as v1 kept it) until the implementation grows an internal test accessor. The name determines the family for every current parser, so the cast's only added power is distinguishing a set-name-without-latch inconsistency — worth keeping, and worth replacing with a typed accessor.
+The latched family is still read through a structural cast of the private `metadataParser` field: the public surface exposes the reported name but not the latch itself, so the cast is kept until the implementation grows an internal test accessor. The name determines the family for every current parser, so the cast's only added power is distinguishing a set-name-without-latch inconsistency — worth keeping, and worth replacing with a typed accessor.
 
 `ev.latchStart` is derived harness-side (the parser's public `lineCount` captured at the step where the latch flips) rather than read from an implementation field; it is implementation-observed but not implementation-stored.
 

@@ -107,8 +107,8 @@ while G91 is active, which contradicts Marlin's own documentation pages; the
 documented last-writer-wins reading was chosen (charter P1 prefers documented
 semantics). Per-axis relative flags were rejected as out of scope.
 
-**What v2-current does.** G90/G91 are unregistered no-ops; there is exactly one
-positioning mode (pinned in `quint/lib/printer-core.qnt`).
+**What the main bank pins.** G90/G91 are unregistered no-ops; there is exactly
+one positioning mode (pinned in `quint/lib/printer-core.qnt`).
 
 ### G28 honors axis words
 
@@ -126,8 +126,8 @@ invariant instead of a global flag that over-claims.
 knowledge (redundant, and wrong under partial homing). Modeling G28 O
 (trusted-position skip) — excluded as endstop hardware territory.
 
-**What v2-current does.** Axis words are ignored; G28 always homes all three
-axes and sets one global `homed` flag (pinned divergence in v2).
+**What the main bank pins.** Axis words are ignored; G28 always homes all three
+axes and sets one global `homed` flag (a pinned divergence).
 
 ### Physically-named extrusion classification
 
@@ -149,9 +149,9 @@ trigger — rejected: a move to the position the carriage already occupies is
 physically zero-length, and with G91 in the alphabet "has an axis word" no
 longer approximates "moves".
 
-**What v2-current does.** On moves without axis words, the raw E-word sign
-decides, with positive raw E counted as retraction and negative as
-deretraction (`src/job-stats.ts`; pinned in v2 as `classifyLinear`); any
+**What the main bank pins.** On moves without axis words, the raw E-word sign
+decides, with positive raw E counted as retraction and negative as deretraction
+(`src/job-stats.ts`; pinned in the main bank as `classifyLinear`); any
 axis-word presence counts a path point.
 
 ### Probes: z-clamp dropped
@@ -172,14 +172,15 @@ the same move laws as G0/G1, so mode independence covers them for free.
 
 **Alternatives considered.** Keeping the clamp as a "bed plane" approximation —
 rejected as library-invented physics with no firmware authority (its stance in
-v2). Modeling a nondeterministic trigger point between start and target —
-attractive but it makes every downstream machine nondeterministic; left as an
-open item. G31: Marlin's G31 is Dock Sled and RepRapFirmware's is probe
-configuration — too dialect-ambiguous to carry in a normative design.
+the main bank). Modeling a nondeterministic trigger point between start and
+target — attractive but it makes every downstream machine nondeterministic;
+left as an open item. G31: Marlin's G31 is Dock Sled and RepRapFirmware's is
+probe configuration — too dialect-ambiguous to carry in a normative design.
 
-**What v2-current does.** G31 and G38.2–G38.5 all probe; a shifted Z target
+**What the main bank pins.** G31 and G38.2–G38.5 all probe; a shifted Z target
 below the origin plane, from a known Z at or above it, clamps to physical Z0
-(library-invented, pinned in v2). A P word makes the command a no-op.
+(library-invented, pinned in the main bank). A P word makes the command a
+no-op.
 
 ### G92 / G92.1: kept
 
@@ -195,8 +196,8 @@ and the bare-form reset follows the RepRap-wiki dialect. Conformant designs
 are kept (charter P1); the `g92Law` invariant checks the readback equation
 `physical − shift = word` on every worded axis.
 
-**What v2-current does.** The same — this is the ledger's non-row, cited as a
-kept design.
+**What the main bank pins.** The same — this is the ledger's non-row, cited as
+a kept design.
 
 ### Other kept and retained choices
 
@@ -223,7 +224,7 @@ zero-move classification.
 | Probe family | G31 and G38.2–G38.5; P word makes the command a no-op | G38.2–G38.5 only; no P word; no-axis-word probes are no-ops | G31 is dialect-ambiguous (Marlin: Dock Sled; RRF: probe config); the design carries only firmware-documented probe targets |
 
 Stated neutrally: the "current implementation" column describes pinned
-decisions of the shipping library as recorded in the v2 bank's authority
+decisions of the shipping library as recorded in the main bank's authority
 annotations; it files no defects.
 
 ## Unbound by design
@@ -235,16 +236,16 @@ a normative design bank. The gate is internal consistency instead:
 `npx quint run --invariant allInvariants --max-samples 200 --max-steps 30
 --seed=0x67c0de2026` on `printer_core_next_props` all pass.
 
-One deviation from the v2 style sheet is deliberate: `printer_core_next_props`
-is a runnable machine living in a `lib/` file. It validates the library itself
-(like the sibling test module) and exists so the designed-in properties are
-checked invariants rather than prose; spec machines proper live at the bank
-root.
+One deviation from the main bank's style sheet is deliberate:
+`printer_core_next_props` is a runnable machine living in a `lib/` file. It
+validates the library itself (like the sibling test module) and exists so the
+designed-in properties are checked invariants rather than prose; spec machines
+proper live at the bank root.
 
 ## Open items
 
-Whether arcs should feed the stats classification (they are currently
-excluded, matching v2's pinned no-count decision) is OPEN; if they do, the
+Whether arcs should feed the stats classification (they are currently excluded,
+matching the main bank's pinned no-count decision) is OPEN; if they do, the
 physical-displacement rule extends to them unchanged.
 
 A nondeterministic probe trigger point (stop anywhere between start and

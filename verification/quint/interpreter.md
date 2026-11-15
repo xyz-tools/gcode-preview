@@ -1,6 +1,6 @@
-# Interpreter state machine, v2: folding the shared printer core
+# Interpreter state machine: folding the shared printer core
 
-A companion to `interpreter.qnt`. This is the v2 flagship machine: it folds `printer_core::applyCommand` over a nondeterministic G-code stream and adds only what the core does not own — the job-statistics fold, the trace contract, generation weights, ghosts and invariants.
+A companion to `interpreter.qnt`. This is the flagship machine: it folds `printer_core::applyCommand` over a nondeterministic G-code stream and adds only what the core does not own — the job-statistics fold, the trace contract, generation weights, ghosts and invariants.
 
 ## What it models
 
@@ -60,11 +60,9 @@ The raw E sign decides before anything else — a pinned decision: in absolute m
 
 **Decision.** The machine imports `printer_core` and folds `applyCommand`; the only domain logic it adds is the statistics fold, expressed through the core's `classifyLinear` and `probeActs`.
 
-**Reasoning.** The core is the single transcription of command semantics, already pinned by its own corner-case tests. A machine that re-stated axis updates or G92 arithmetic would reopen the exact divergence channel v2 exists to close.
+**Reasoning.** The core is the single transcription of command semantics, already pinned by its own corner-case tests. A machine that re-stated axis updates or G92 arithmetic would reopen the exact divergence channel the shared core exists to close.
 
-**Alternatives considered.** Keeping the stats fold in the core too; rejected — the counters are machine/trace state, not printer state, and other core importers (equivalence machines) do not want them.
-
-**What v1 did.** All semantics inline: twelve command actions, eight hand-maintained `keep*` frame actions, and the axis-update rule written twice within the same file.
+**Alternatives considered.** Keeping the stats fold in the core too; rejected — the counters are machine/trace state, not printer state, and other core importers (equivalence machines) do not want them. Writing the semantics inline as one action per command with hand-maintained `keep*` frame actions; rejected — it is a second transcription of the core, the divergence channel above.
 
 ### The defining equation is a ghost invariant
 
@@ -72,9 +70,7 @@ The raw E sign decides before anything else — a pinned decision: in absolute m
 
 **Reasoning.** This is IS-2's ShiftDefiningEquation — the one equation the whole G92 offset model derives from. With two independent derivations (applyCommand's shifted targets vs the ghost's unshifted words), a mis-transcribed move, home, G92, G92.1 or probe clause makes the invariant fail; a mutation test on the Home clause confirmed it does. The clamped probe is the one landing with no commanded logical coordinate, so its ghost case reuses the core's `probeTargetZ` minus the shift.
 
-**Alternatives considered.** Stating the equation over history (after-the-fact replay of the command list through `applyAll`); rejected as a heavier encoding of the same check.
-
-**What v1 did.** The equation lived inside each action's update formula and in comments; the invariant set (tool range, non-negativity, unknown-is-zero, homed-implies-known) could not fail under any mis-transcription of G92 or units semantics.
+**Alternatives considered.** Stating the equation over history (after-the-fact replay of the command list through `applyAll`); rejected as a heavier encoding of the same check. Leaving the equation inside each transition's update formula and checking only structural invariants (tool range, non-negativity, unknown-is-zero, homed-implies-known); rejected — none of those can fail under a mis-transcription of G92 or units semantics.
 
 ### Conservation counters for the stats partition
 
@@ -84,37 +80,29 @@ The raw E sign decides before anything else — a pinned decision: in absolute m
 
 **Alternatives considered.** Per-counter prev-value monotonicity ghosts; the conservation form subsumes the interesting failure (a lost or double increment) in two invariants instead of ten.
 
-**What v1 did.** The partition was encoded per-branch in the action body and asserted nowhere.
-
 ### A flat event record
 
 **Decision.** `ev` is one flat record of the canonical tag plus `has*`/`word*` pairs, derived in a single place (`evOf`, on top of `printer_core::cmdTag`), with absent words reading `false`/`0`.
 
 **Reasoning.** The replay rebuilds a G-code line from `ev` alone; flat plain values keep the ITF decode trivial. Deriving every tag from the sum types in one def means no free string literal can drift.
 
-**Alternatives considered.** Mirroring the core's `Word` options inside `ev`; rejected — ITF renders sum types as nested variant records, which the replay would have to unpick for no expressive gain.
-
-**What v1 did.** Twenty scattered `cmd`/`has*`/`word*` state variables primed by four layers of `record*` helper actions.
+**Alternatives considered.** Mirroring the core's `Word` options inside `ev`; rejected — ITF renders sum types as nested variant records, which the replay would have to unpick for no expressive gain. Scattered `cmd`/`has*`/`word*` state variables primed by layers of `record*` helper actions; rejected — tags and words assigned in many places can drift, which a single derivation rules out.
 
 ### Generation weights live in menus, shaped to the modes
 
 **Decision.** Weighted literal lists drive every choice: the step menu; a 3:2 axis-vs-zero-length split for linear moves; a balanced four-way zero-move kind menu; a 4:1 word-vs-bare G92 menu; an inches-doubled units menu; a probe Z domain biased negative around the clamp plane.
 
-**Reasoning.** v1's independent per-word coins made the modes that matter rare: a bare G92 was a 1-in-16 event, a zero-length move 1-in-8, and inch-mode steps and probe clamps were seed luck. Weights in data make each modeled mode a first-class sampling target, and changing one is a visible diff.
+**Reasoning.** Weights in data make each modeled mode a first-class sampling target, and changing one is a visible diff.
 
-**Alternatives considered.** Deterministic directed traces per corner case; the semantic runs already pin those corners in-spec, and the replay needs volume more than scripts.
+**Alternatives considered.** Deterministic directed traces per corner case; the semantic runs already pin those corners in-spec, and the replay needs volume more than scripts. Uniform `1.to(N).oneOf()` if-chains with independent per-word coins; rejected — they make the modes that matter rare: a bare G92 becomes a 1-in-16 event, a zero-length move 1-in-8, and inch-mode steps and probe clamps are seed luck.
 
-**What v1 did.** Uniform `1.to(12).oneOf()` if-chains with percentages computed in comments, uniform independent word coins.
-
-### The words v1 could not emit
+### G28 axis letters and probe P values
 
 **Decision.** G28 carries axis-presence flags rendered as bare letters (`G28 X`), and a probe's P word carries a rendered value so traces exercise both `P0` and `P1`.
 
-**Reasoning.** Both were unexercisable in v1's alphabet. The pinned decisions — G28 homes all axes regardless of its words; any P word, zero-valued included, makes the probe a no-op — are now observed by the replay rather than asserted in a comment. The P0 form specifically probes the presence-vs-truthiness seam.
+**Reasoning.** The pinned decisions — G28 homes all axes regardless of its words; any P word, zero-valued included, makes the probe a no-op — are now observed by the replay rather than asserted in a comment. The P0 form specifically probes the presence-vs-truthiness seam.
 
-**Alternatives considered.** Rendering G28 flags as `X0`; bare letters match what firmware documentation shows and exercise the parser's empty-value word path too.
-
-**What v1 did.** `G28` only ever replayed bare; `P` always replayed as `P1`, with the abstraction noted in a test comment instead of the spec.
+**Alternatives considered.** Rendering G28 flags as `X0`; bare letters match what firmware documentation shows and exercise the parser's empty-value word path too. Replaying `G28` always bare and `P` always as `P1`; rejected — the word-ignoring G28 decision and the zero-valued P case would go unobserved.
 
 ### Monotonicity ghosts for the safety cluster
 
@@ -124,11 +112,9 @@ The raw E sign decides before anything else — a pinned decision: in absolute m
 
 **Alternatives considered.** Leaving it to the core's comment; rejected by the rule above.
 
-**What v1 did.** Claimed in comments, checked nowhere.
-
 ## Compared vs ignored
 
-The replay in `src/__tests__/interpreter.ts` (`interpreter v2 spec trace replay`) rebuilds each step's G-code line from `ev`, feeds it through the real `Parser` and `Interpreter` into one persistent `Job`, and compares after every step.
+The replay in `src/__tests__/interpreter.ts` (`interpreter spec trace replay`) rebuilds each step's G-code line from `ev`, feeds it through the real `Parser` and `Interpreter` into one persistent `Job`, and compares after every step.
 
 | Real-system observable                               | Replay treatment                                                            |
 | ---------------------------------------------------- | --------------------------------------------------------------------------- |
@@ -153,7 +139,7 @@ Also out: G90/G91 (unregistered no-ops in the library — there is exactly one X
 
 ## Trace budget
 
-Sized to this machine's own mode coverage rather than v1's uniform 15×24: **25 traces × 30 steps × 2 seeds** (`0x67c0de2026` first, then `0xfab1e2026`), generated with `npx quint run verification/quint/interpreter.qnt --main interpreter --invariant allInvariants --max-steps 30 --n-traces 25 --max-samples 25 --out-itf 'verification/quint/traces/interpreter/trace_<seed-tag>_{seq}.itf.json'` per seed.
+Sized to this machine's own mode coverage: **25 traces × 30 steps × 2 seeds** (`0x67c0de2026` first, then `0xfab1e2026`), generated with `npx quint run verification/quint/interpreter.qnt --main interpreter --invariant allInvariants --max-steps 30 --n-traces 25 --max-samples 25 --out-itf 'verification/quint/traces/interpreter/trace_<seed-tag>_{seq}.itf.json'` per seed.
 
 Stated minima and measured counts over the committed corpus of 50 traces (1500 post-init steps; stutter share is 0 by construction — the machine has no stutter):
 
@@ -184,4 +170,4 @@ OPEN: per-counter monotonicity (each statistics counter never decreases) is impl
 
 OPEN: `centiMismatch`'s float-noise bound (1e-9 on the ×100 scale) is comfortable for every committed trace, but a pathological trace that pumps relative-mode inch E words monotonically for dozens of steps could accumulate rounding noise near that bound; if a regenerated corpus ever trips it, the E-word domain or trace length is the knob.
 
-OPEN: path-level observables (per-step path count, last path type and endpoint) are not in this trace contract; binding geometry output to a spec remains future v2 work, as does the streamed-vs-oneshot full-pipeline equivalence noted in `streaming.md`.
+OPEN: path-level observables (per-step path count, last path type and endpoint) are not in this trace contract; binding geometry output to a spec remains future work, as does the streamed-vs-oneshot full-pipeline equivalence noted in `streaming.md`.

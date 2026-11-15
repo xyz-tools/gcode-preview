@@ -434,7 +434,7 @@ describe('interpreter spec trace replay', () => {
   // comparison is integer-exact via centiMismatch — no epsilon.
   const tracesDir = join(process.cwd(), 'verification', 'quint', 'traces', 'interpreter');
 
-  type V2Event = {
+  type TraceEvent = {
     cmd: string;
     hasX: boolean;
     wordX: number;
@@ -456,13 +456,13 @@ describe('interpreter spec trace replay', () => {
     wordP: number;
   };
 
-  type V2Axis = { known: boolean; pos: number };
+  type TraceAxis = { known: boolean; pos: number };
 
-  type V2Step = {
-    ev: V2Event;
-    x: V2Axis;
-    y: V2Axis;
-    z: V2Axis;
+  type TraceStep = {
+    ev: TraceEvent;
+    x: TraceAxis;
+    y: TraceAxis;
+    z: TraceAxis;
     e: number;
     shiftX: number;
     shiftY: number;
@@ -478,12 +478,12 @@ describe('interpreter spec trace replay', () => {
     others: number;
   };
 
-  const decodeAxis = (raw: ItfState, key: string): V2Axis => {
+  const decodeAxis = (raw: ItfState, key: string): TraceAxis => {
     const axis = itfRecord(raw[key], key);
     return { known: itfBool(axis.known, `${key}.known`), pos: itfInt(axis.pos, `${key}.pos`) };
   };
 
-  const decodeStep = (raw: ItfState): V2Step => {
+  const decodeStep = (raw: ItfState): TraceStep => {
     const s = itfRecord(raw.s, 's');
     const ev = itfRecord(raw.ev, 'ev');
     const p = itfRecord(s.p, 's.p');
@@ -536,7 +536,7 @@ describe('interpreter spec trace replay', () => {
   // the implementation ignores them (pinned: G28 homes all axes). A probe's
   // P word carries its rendered value (P0 or P1), both of which are the
   // set-trigger-values no-op by the pinned presence-only rule.
-  const buildLine = (ev: V2Event): string => {
+  const buildLine = (ev: TraceEvent): string => {
     let line = ev.cmd.toUpperCase().replace('_', '.');
     if (ev.cmd === 'g28') {
       if (ev.hasX) line += ' X';
@@ -560,7 +560,7 @@ describe('interpreter spec trace replay', () => {
   // (axes with knownness, E, the workspace shift, the four mode flags) and
   // the five job-statistics counters. Millimeter values are compared
   // integer-exactly against the spec's centi-mm integers.
-  const compareStep = (traceFile: string, stepIndex: number, line: string, job: Job, spec: V2Step): void => {
+  const compareStep = (traceFile: string, stepIndex: number, line: string, job: Job, spec: TraceStep): void => {
     const state: State = job.state;
     const at = (field: string, detail: string): string =>
       `${traceFile} step ${stepIndex} (${line}) field ${field}: ${detail}`;
@@ -617,7 +617,7 @@ describe('interpreter spec trace replay', () => {
 
   const traceFiles = listTraceFiles(tracesDir);
 
-  test('the v2 traces directory exists and holds at least one ITF trace', () => {
+  test('the traces directory exists and holds at least one ITF trace', () => {
     // Fails (rather than silently skipping the replay) when the Quint traces
     // have not been generated into verification/quint/traces/interpreter.
     expect(traceFiles.length, `expected *.itf.json traces in ${tracesDir}`).toBeGreaterThan(0);

@@ -4,19 +4,19 @@
  *
  * Unit: cross-cutting foundation for the interpreter-state map
  *   (IS-1..IS-6 in .context/formal-verification/mapping-data.json);
- *   every v2 machine that handles length words imports this module.
+ *   every machine that handles length words imports this module.
  * Authority policy: see verification/quint/STYLE.md ("Authority
  *   annotations"). This module carries no command semantics of its own;
  *   per-command annotations live in lib/printer-core.qnt.
  * Companion: scale.md.
  *
- * All v2 lengths are integers in centi-millimeters (mm x 100), so specs
+ * All lengths are integers in centi-millimeters (mm x 100), so specs
  * stay in Int and the replay compares integer-exactly. The two constants
  * below and the conversion defs are the only place the scale is written
- * down; no spec may hard-code 100 or 2540 for a length again.
+ * down; no spec may hard-code 100 or 2540 for a length.
  */
 module scale {
-  /// Centi-millimeters per millimeter: the integer grid every v2 length
+  /// Centi-millimeters per millimeter: the integer grid every length
   /// lives on. One model unit is 0.01 mm.
   pure val CENTI: int = 100
 

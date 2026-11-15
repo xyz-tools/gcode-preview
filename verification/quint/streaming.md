@@ -1,4 +1,4 @@
-# Streaming line splitter, v2: the carry-buffer machine
+# Streaming line splitter: the carry-buffer machine
 
 A companion to `streaming.qnt`. This spec is independent of the printer core: its whole universe is text, chunks, lines and a carry buffer.
 
@@ -63,9 +63,7 @@ A comment-only line is one whose first non-blank character is the `;` opener. On
 
 **Reasoning.** Confluence — chunking never changes the result — is this machine's headline theorem. As an invariant it is quantified over every document and every chunking the simulator explores, and the replay re-checks it against the real splitter at every trace exhaustion.
 
-**Alternatives considered.** A temporal property under `quint verify` would state it more directly, but there is no JVM on this machine and the invariant form is equivalent here because exhaustion is absorbing.
-
-**What v1 did.** v1 had the `oneshot` ghost but used it only for the prefix invariant; terminal agreement was checked in a single hand-built 9-token run.
+**Alternatives considered.** A temporal property under `quint verify` would state it more directly, but there is no JVM on this machine and the invariant form is equivalent here because exhaustion is absorbing. Checking terminal agreement in a single hand-built scripted run; rejected — a run covers one document and one chunking, while the invariant is quantified over every document and every chunking the simulator explores.
 
 ### Two state variables, pure transitions
 
@@ -73,9 +71,7 @@ A comment-only line is one whose first non-blank character is the `;` opener. On
 
 **Reasoning.** Pure transitions are unit-testable, reusable by ghosts (the `oneshot` ghost is literally `feed` applied once), and leave no frame conditions to get wrong. Invariants range over `s` only, so refactoring the trace contract cannot weaken a correctness claim.
 
-**Alternatives considered.** Splitting the semantic machine and the trace contract into two modules; rejected as overweight for a one-function machine.
-
-**What v1 did.** Seven scattered scalar vars (`cmd`, `chunkTaken`, `stepLines`, `doc`, `cursor`, `carry`, `lines`) primed individually in every action.
+**Alternatives considered.** Splitting the semantic machine and the trace contract into two modules; rejected as overweight for a one-function machine. Scattered scalar variables primed individually in every action; rejected — every action would carry frame conditions to get wrong, and invariants could no longer range over `s` alone.
 
 ### Sum types inside, plain strings in the event
 
@@ -83,9 +79,7 @@ A comment-only line is one whose first non-blank character is the `;` opener. On
 
 **Reasoning.** Illegal phases are unrepresentable, so no well-formedness invariant is needed. ITF files and the replay still see plain `"init" | "chunk" | "stutter"` strings, which keeps the harness trivial.
 
-**Alternatives considered.** Deriving the phase from the cursor on demand instead of storing it; storing it plus the `phaseMatchesCursor` invariant was chosen precisely so a transition transcription error has one more way to fail.
-
-**What v1 did.** Stringly-typed `cmd` with the domain documented in a comment.
+**Alternatives considered.** Deriving the phase from the cursor on demand instead of storing it; storing it plus the `phaseMatchesCursor` invariant was chosen precisely so a transition transcription error has one more way to fail. A string-typed step kind with its domain documented in a comment; rejected — illegal values would be representable and need a well-formedness invariant.
 
 ### Documents sized to the step budget
 
@@ -93,9 +87,7 @@ A comment-only line is one whose first non-blank character is the `;` opener. On
 
 **Reasoning.** Chunks average 3 tokens, so 40 steps consume about 120. Most documents exhaust in the trace's final quarter: nearly every step is chunk work, terminal confluence is exercised in most traces, and only a short stutter tail remains. The newline weight in the token bag (2/7) keeps lines short, so chunk boundaries cross line and comment-run boundaries constantly.
 
-**Alternatives considered.** Ending traces at exhaustion would eliminate stutters entirely, but `quint run` has no early-stop on a state predicate; resampling a fresh document on exhaustion would break the per-trace confluence story.
-
-**What v1 did.** 10-token documents under the uniform 15×24 budget — the document died in 2–4 steps and 83–86% of committed steps were stutters.
+**Alternatives considered.** Ending traces at exhaustion would eliminate stutters entirely, but `quint run` has no early-stop on a state predicate; resampling a fresh document on exhaustion would break the per-trace confluence story. Short documents of around 10 tokens; rejected — at 3 tokens per chunk the document exhausts within a few steps and the rest of the trace is stutters.
 
 ### Degenerate documents live in the semantic runs
 
@@ -105,8 +97,6 @@ A comment-only line is one whose first non-blank character is the `;` opener. On
 
 **Alternatives considered.** Keeping short lengths in the bag at low weight; rejected because each short draw costs a whole trace.
 
-**What v1 did.** Lengths 0 and 1 stayed in the random bag "so the degenerate machines are still explored".
-
 ### One emitted line per consumed separator
 
 **Decision.** Emitted-line accounting records one line per consumed newline, so an empty completion that consumed a separator is one empty line.
@@ -115,11 +105,9 @@ A comment-only line is one whose first non-blank character is the `;` opener. On
 
 **Alternatives considered.** Recording `complete.split('\n')` unconditionally would fabricate a phantom empty line on non-completing steps.
 
-**What v1 did.** The same accounting; it is kept verbatim because the replay proved it exact.
-
 ## Compared vs ignored
 
-The replay in `src/__tests__/split-chunk.ts` (`streaming v2 spec trace replay`) drives the real `splitChunk` with each trace's exact chunk strings.
+The replay in `src/__tests__/split-chunk.ts` (`streaming spec trace replay`) drives the real `splitChunk` with each trace's exact chunk strings.
 
 | Real-system observable                                    | Replay treatment                                                               |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -131,7 +119,7 @@ The replay in `src/__tests__/split-chunk.ts` (`streaming v2 spec trace replay`) 
 | Oneshot agreement at exhaustion                            | Compared: real chunked output vs real `splitChunk('', doc)`                     |
 | Separator accounting (0 or 1 newlines consumed per call)   | Asserted as a replay-side sanity check                                          |
 | `Parser` behavior on the emitted lines                     | Ignored — downstream of the splitter; owned by the parser suites                |
-| Real slicer comment texts (`;LAYER_CHANGE`, `;Z:` …)       | Ignored — the alphabet has one opener; real texts live in the v1 unit tests     |
+| Real slicer comment texts (`;LAYER_CHANGE`, `;Z:` …)       | Ignored — the alphabet has one opener; real texts live in the hand-written unit tests |
 | Timing, backpressure, chunk arrival order                  | Ignored — transport concerns; chunks are contiguous document slices by model    |
 
 No millimeter quantities appear in this machine, so the shared helper's `centiMismatch` is unused here; every number is a token count compared with `===`.
@@ -140,11 +128,11 @@ No millimeter quantities appear in this machine, so the shared helper's `centiMi
 
 The splitter operates on decoded strings, so everything numeric about G-code is out of scope by construction: floats, fractional words, NaN and non-finite words belong to the interpreter spec and to `src/__tests__/interpreter.ts` and `src/__tests__/parser.ts`.
 
-Closer to home, the model cannot express: `\r` (no CRLF handling is a pinned decision — a `\r` travels inside a line's characters; the v1 unit describes in `src/__tests__/split-chunk.ts` exercise real strings), tabs and non-space blanks (the implementation's `trimStart()` trims all leading whitespace; the model's only blank is `' '`), multi-byte/UTF-8 chunk boundaries (decoded upstream by `TextDecoderStream` before the splitter sees text), and the end-of-stream flush of the final tail into the parser (owned by the stream driver and tested in the `streaming across a chunk boundary` describe of `src/__tests__/split-chunk.ts`).
+Closer to home, the model cannot express: `\r` (no CRLF handling is a pinned decision — a `\r` travels inside a line's characters; the hand-written describes in `src/__tests__/split-chunk.ts` exercise real strings), tabs and non-space blanks (the implementation's `trimStart()` trims all leading whitespace; the model's only blank is `' '`), multi-byte/UTF-8 chunk boundaries (decoded upstream by `TextDecoderStream` before the splitter sees text), and the end-of-stream flush of the final tail into the parser (owned by the stream driver and tested in the `streaming across a chunk boundary` describe of `src/__tests__/split-chunk.ts`).
 
 ## Trace budget
 
-Sized to this machine's diameter rather than v1's uniform 15×24: **20 traces × 40 steps × 2 seeds** (`0x67c0de2026` first, then `0xfab1e2026`), generated with `npx quint run --invariant allInvariants --max-steps 40 --n-traces 20 --out-itf 'verification/quint/traces/streaming/trace_<seed-tag>_{seq}.itf.json'` per seed.
+Sized to this machine's diameter: **20 traces × 40 steps × 2 seeds** (`0x67c0de2026` first, then `0xfab1e2026`), generated with `npx quint run --invariant allInvariants --max-steps 40 --n-traces 20 --out-itf 'verification/quint/traces/streaming/trace_<seed-tag>_{seq}.itf.json'` per seed.
 
 Stated minima and measured counts over the committed corpus of 40 traces (1600 post-init steps):
 
@@ -162,6 +150,6 @@ Stated minima and measured counts over the committed corpus of 40 traces (1600 p
 
 `quint verify` has not been run — there is no JVM on this machine. Constructs suspected verify-hostile for a future Apalache lane: `oneOf` over `setOfMaps(0.to(119), …)` in `init` (an astronomically large function set that the simulator samples lazily but a checker must encode), the tuple-accumulator `foldr` in `trailingCommentRun`, and the growing unbounded lists (`doc`, `lines`) whose lengths only the `LenBag` constants bound.
 
-Confluence here is terminal-state agreement under the model's chunkings; pairwise agreement between two *different* chunkings of the same random document is implied by it (both equal the oneshot) but is not stated as a two-machine product invariant. OPEN: the streamed-vs-oneshot equivalence of the full pipeline (parser metadata, Job) is a different machine entirely and remains unspecified in v2.
+Confluence here is terminal-state agreement under the model's chunkings; pairwise agreement between two *different* chunkings of the same random document is implied by it (both equal the oneshot) but is not stated as a two-machine product invariant. OPEN: the streamed-vs-oneshot equivalence of the full pipeline (parser metadata, Job) is a different machine entirely and remains unspecified.
 
 Traces whose document outlives the 40-step budget (8 of 40) skip the confluence check by design; their steps still verify every per-step observable.

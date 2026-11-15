@@ -215,7 +215,7 @@ describe('slicer-detector spec trace replay', () => {
   };
 
   // The spec's trace contract, decoded from `ev` only.
-  type V2Step = {
+  type TraceStep = {
     kind: string;
     line1: string;
     line2: string;
@@ -226,7 +226,7 @@ describe('slicer-detector spec trace replay', () => {
     linesSeen: number;
   };
 
-  const decodeStep = (raw: ItfState): V2Step => {
+  const decodeStep = (raw: ItfState): TraceStep => {
     const ev = itfRecord(raw.ev, 'ev');
     return {
       kind: itfStr(ev.kind, 'ev.kind'),
@@ -255,7 +255,7 @@ describe('slicer-detector spec trace replay', () => {
 
   /** The chunk a step describes: ev.fill neutral fillers, then the tagged
    * line(s), joined with newlines into the single string fed to the parser. */
-  const chunkLines = (spec: V2Step, pass: number, context: string): string[] => {
+  const chunkLines = (spec: TraceStep, pass: number, context: string): string[] => {
     const lines: string[] = new Array<string>(spec.fill).fill(FILLER);
     if (spec.line1 !== '') lines.push(representative(spec.line1, pass, context));
     if (spec.line2 !== '') lines.push(representative(spec.line2, pass, context));
@@ -266,7 +266,7 @@ describe('slicer-detector spec trace replay', () => {
 
   const traceFiles = listTraceFiles(tracesDir);
 
-  test('the v2 traces directory exists and holds at least one ITF trace', () => {
+  test('the traces directory exists and holds at least one ITF trace', () => {
     // Fails (rather than silently skipping the replay) when the Quint traces
     // have not been generated into verification/quint/traces/slicer-detector.
     expect(traceFiles.length, `expected *.itf.json traces in ${tracesDir}`).toBeGreaterThan(0);

@@ -1090,7 +1090,7 @@ describe('encoding equivalence spec trace replay', () => {
 
   const traceFiles = listTraceFiles(tracesDir);
 
-  test('the v2 traces directory exists and holds at least one ITF trace', () => {
+  test('the traces directory exists and holds at least one ITF trace', () => {
     // Fails (rather than silently skipping the replay) when the Quint traces
     // have not been generated into verification/quint/traces.
     expect(traceFiles.length, `expected *.itf.json traces in ${tracesDir}`).toBeGreaterThan(0);

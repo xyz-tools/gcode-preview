@@ -1,6 +1,6 @@
 // -*- mode: Bluespec; -*-
 /**
- * v2 formal specification of the streaming chunk-boundary line splitter:
+ * Formal specification of the streaming chunk-boundary line splitter:
  * the carry-buffer machine that turns arbitrarily chunked input into whole
  * lines while holding back trailing comment-only runs. Independent of the
  * printer core: its whole universe is text, chunks, lines and a carry.
@@ -14,7 +14,7 @@
  *   3 -> ';'   comment opener
  *   4 -> '\n'  line separator
  *
- * State shape (the v2 trace contract): exactly two variables.
+ * State shape (the trace contract): exactly two variables.
  *   - `s`  is the semantic machine state as one record, advanced only by
  *     pure transition functions (`applyChunk`, `applyStutter`).
  *   - `ev` is the event record describing what the step did, in plain
@@ -29,7 +29,7 @@
  * emitted line re-terminated with '\n', then the carry, then the unread
  * input, reconstructs the document.
  *
- * The headline v2 theorem is checked as an invariant, not narrated: once the
+ * The headline theorem is checked as an invariant, not narrated: once the
  * cursor reaches the end of the document, the chunked run's emitted lines
  * and carry equal the oneshot split of the whole document fed as one chunk
  * (`terminalConfluence`, over the `oneshot` ghost).
@@ -313,7 +313,7 @@ module streaming {
     }
   }
 
-  /// The confluence theorem, promoted from a v1 run to a checked invariant:
+  /// The confluence theorem as a checked invariant:
   /// once the whole document has been fed — under ANY chunking the
   /// simulator chose — the emitted lines and the carry equal the oneshot
   /// split of the document fed as a single chunk

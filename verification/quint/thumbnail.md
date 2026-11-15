@@ -1,4 +1,4 @@
-# Embedded thumbnails, v2: the comment-protocol collector
+# Embedded thumbnails: the comment-protocol collector
 
 A companion to `thumbnail.qnt`. This machine is independent of the printer core: its whole universe is comment lines, character counts and a size-keyed record of finished thumbnails.
 
@@ -62,11 +62,9 @@ A block is storable at `end` exactly when the collected length equals the declar
 
 **Decision.** Data lines carry an alphabet count and a pad count; garbage lines carry a trimmed length. The replay renders alphabet runs by cycling through all 64 base64 characters and appends the declared `=` run.
 
-**Reasoning.** Validity now depends on payload structure the model actually tracks — pad placement and character class — so the implementation's regex is exercised in padded and unpadded forms, and the replay compares the stored `chars` content exactly instead of only its length.
+**Reasoning.** Validity depends on payload structure the model actually tracks — pad placement and character class — so the implementation's regex is exercised in padded and unpadded forms, and the replay compares the stored `chars` content exactly instead of only its length.
 
-**Alternatives considered.** Carrying concrete characters per line in the event (heavier traces for no added distinguishing power); testing the regex equation in a separate unit suite only (leaves the collector's interaction with padding unpinned).
-
-**What v1 did.** Every data line was N copies of one filler character with no `=`, so validity collapsed to `length % 4 == 0 && clean` and the regex's padded forms were never sampled.
+**Alternatives considered.** Every data line as N copies of one filler character with no `=` (validity collapses to `length % 4 == 0 && clean`, and the regex's padded forms are never exercised); carrying concrete characters per line in the event (heavier traces for no added distinguishing power); testing the regex equation in a separate unit suite only (leaves the collector's interaction with padding unpinned).
 
 ### Malformed begin headers are modeled forms
 
@@ -76,23 +74,21 @@ A block is storable at `end` exactly when the collected length equals the declar
 
 **Alternatives considered.** Modeling only the well-formed header and excluding the rest; rejected because the forms are reachable from real files and their behavior is part of the machine's surface.
 
-**What v1 did.** Only well-formed `WxH N` headers existed in the model.
-
 ### Two state variables, pure transitions, sum types inside
 
 **Decision.** Exactly `var s` and `var ev`; actions record `ev` and apply a pure `apply*` function. Phases, pad modes, declarations, size keys and header forms are sum types; the only strings live in `ev`, derived in one place.
 
 **Reasoning.** Illegal states (a pad mode outside the four values, a phase string typo) are unrepresentable, so no well-formedness invariants are needed; the pure transitions are reusable by the runs and leave no frame conditions to get wrong.
 
-**What v1 did.** Twelve scattered scalar vars with `keepProgress`/`keepStored` frame actions and stringly-typed `cmd`/`phase`.
+**Alternatives considered.** Scattered scalar vars with per-variable frame actions and string-typed command and phase fields (illegal phase strings stay representable, and every action carries frame conditions to get wrong).
 
 ### Ghosts make the transitions falsifiable
 
 **Decision.** An append log (`ghostAppends`) re-derives the collected count line by line; `ghostPadChars` pins the pad mode to an independent `=` count; the outcome counters (stores, padded stores, replacements, drops, discards, garbage hits) carry conservation invariants (`storedCountConservation`, `storesMonotone`); `ghostPrevStores` freezes the previous store count so monotonicity is a checked claim, not a comment.
 
-**Reasoning.** v1's invariants were bookkeeping a wrong transition would still satisfy. Here a mis-added append, a mis-pinned pad transition or a duplicated store entry each fail a dedicated invariant within milliseconds of simulation.
+**Reasoning.** With the ghosts, a mis-added append, a mis-pinned pad transition or a duplicated store entry each fail a dedicated invariant within milliseconds of simulation.
 
-**What v1 did.** `phaseWellFormed`, `countersNonNegative` and a stored-lengths check — none could fail without editing the spec itself.
+**Alternatives considered.** Bookkeeping invariants only — a well-formed phase, non-negative counters, a stored-lengths check; rejected — a wrong transition would still satisfy them, and none can fail without editing the spec itself.
 
 ### The stored record is a keyed list
 
@@ -100,21 +96,19 @@ A block is storable at `end` exactly when the collected length equals the declar
 
 **Reasoning.** ITF serializes maps as `#map`/`#tup` structures the shared replay helpers do not decode; a list of records keeps the replay on `itfList`/`itfRecord` only. The uniqueness invariant preserves the map law.
 
-**What v1 did.** A `(int, int) -> int` map, decoded by a bespoke `#map`/`#tup` decoder copy-pasted into the suite.
+**Alternatives considered.** A Quint map decoded by a bespoke `#map`/`#tup` decoder in the suite; rejected — the shared replay helpers do not decode those structures, and a list of records keeps the replay on them.
 
 ### Deficit-aimed fills keep rare modes measurable
 
 **Decision.** Two weighted step kinds aim a data line exactly at the declared count's remaining deficit (one of them ending with a pad run), and close the block when it already sits on its declared count; weights live in data (`STEP_MENU`).
 
-**Reasoning.** Independent random lines almost never hit the declared count exactly — v1's corpus replayed only 3 successful stores in 375 states. Aimed fills make stores, padded stores and same-key replacements corpus-measurable while free data, garbage and ends keep every mismatch mode flowing.
+**Reasoning.** Independent random lines almost never hit the declared count exactly — an early unaimed corpus replayed only 3 successful stores in 375 states. Aimed fills make stores, padded stores and same-key replacements corpus-measurable while free data, garbage and ends keep every mismatch mode flowing.
 
 **Alternatives considered.** Uniform step choice with a much larger corpus (thousands of traces to clear the same minima); post-filtering generated traces (breaks the manifest's exact reproduction).
 
-**What v1 did.** A `1.to(20).oneOf()` if-chain with percentages in comments, and no aimed fills.
-
 ## Compared vs ignored
 
-The replay in `src/__tests__/parse-thumbnail.ts` (`thumbnail v2 spec trace replay`) rebuilds each event as a concrete line and feeds it to one real `Parser` per trace.
+The replay in `src/__tests__/parse-thumbnail.ts` (`thumbnail spec trace replay`) rebuilds each event as a concrete line and feeds it to one real `Parser` per trace.
 
 | Real-system observable                                    | Replay treatment                                                            |
 | --------------------------------------------------------- | --------------------------------------------------------------------------- |
@@ -126,9 +120,9 @@ The replay in `src/__tests__/parse-thumbnail.ts` (`thumbnail v2 spec trace repla
 | Stored `width`/`height`/`charLength`/`chars.length`        | Compared exactly per entry                                                   |
 | Stored `chars` content                                     | Compared exactly against the payload recorded at the storing step            |
 | Stored `isValid`                                           | Asserted true for every stored entry                                         |
-| `src` data-URL prefix                                      | Ignored — a pure getter over `chars`, pinned by the v1 unit tests            |
-| Real slicer thumbnail blocks (PNG payloads, QOI variants)  | Ignored — representative payloads only; real blocks live in the v1 unit tests |
-| Chunk-straddled blocks (`parseGCode` call boundaries)      | Ignored here — one line per call pins persistence; multi-line chunk shapes stay with the v1 unit tests |
+| `src` data-URL prefix                                      | Ignored — a pure getter over `chars`, pinned by the unit tests            |
+| Real slicer thumbnail blocks (PNG payloads, QOI variants)  | Ignored — representative payloads only; real blocks live in the unit tests |
+| Chunk-straddled blocks (`parseGCode` call boundaries)      | Ignored here — one line per call pins persistence; multi-line chunk shapes stay with the unit tests |
 
 No millimeter quantities appear in this machine, so the shared helper's `centiMismatch` is unused; every number is a character count or pixel dimension compared with `toBe`.
 
@@ -160,11 +154,9 @@ Stated minima and measured counts over the committed corpus of 50 traces (2000 p
 | Data lines carrying a pad run                               | ≥ 100   | 415      |
 | Traces replaying at least one store                         | ≥ 25    | 37       |
 
-v1's uniform 15×24 single-seed corpus replayed 3 stores, no padded form and no replacement.
-
 ## Open items
 
-The in-progress block lives in a private parser field with no public accessor, so the replay keeps v1's structural peek (`(parser as unknown as { thumb?: Thumbnail }).thumb`). OPEN: if the implementation ever grows an internal test accessor for the in-flight thumbnail, the peek should move onto it; until then mid-flight phases stay publicly unobservable and the peek is the only binding for the collecting state.
+The in-progress block lives in a private parser field with no public accessor, so the replay uses a structural peek (`(parser as unknown as { thumb?: Thumbnail }).thumb`). OPEN: if the implementation ever grows an internal test accessor for the in-flight thumbnail, the peek should move onto it; until then mid-flight phases stay publicly unobservable and the peek is the only binding for the collecting state.
 
 `quint verify` has not been run — there is no JVM on this machine. The growing lists (`stored`, `ghostAppends`) are bounded only by the step budget, which an Apalache lane would need explicit bounds for.
 

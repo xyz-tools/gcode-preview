@@ -30,8 +30,9 @@ in every reachable state.
 The A/B pair is the new theorem: **G90/G91 encoding equivalence**. The current
 implementation has no G91, so this theorem cannot even be stated against it —
 which is exactly why this bank carries no replay. A/C is the shift-frame
-equivalence and A/D the units equivalence, both carried over from v2 onto the
-new core; the D column discharges the `UnitsReadTimeOnly` item v2 left OPEN.
+equivalence and A/D the units equivalence, both carried over from the main bank
+onto the new core; the D column discharges the `UnitsReadTimeOnly` item the
+main bank leaves OPEN.
 
 Both machines live in one file because they are two views of one deliverable:
 the fold, and the theorems about the fold. They share no state; each has its
@@ -88,7 +89,7 @@ state, with no known-axis guard: `physical == logical + shift`, where
 `applyCommand` (absolute words set it, relative words add to it, G28 lands
 effectively homed axes on `-shift`, G92 redefines it, G92.1 re-bases it).
 
-**Reasoning.** The v2 bank could only state the equation on known axes. The
+**Reasoning.** The main bank can only state the equation on known axes. The
 from-scratch relative semantics closes the gap by construction: un-commanded
 axes read a conventional 0, and relative deltas accumulate onto that 0 on both
 sides of the equation. A stronger invariant for free is the measurable payoff
@@ -98,8 +99,8 @@ of the design.
 a transcription bug on unknown axes. Tracking logical E — rejected, E has no
 logical/physical split in the kept G92 model.
 
-**What v2-current does.** The same equation guarded by `known`, with a special
-clamp case in the ghost for probes.
+**What the main bank pins.** The same equation guarded by `known`, with a
+special clamp case in the ghost for probes.
 
 ### Stats fold: linear moves only, physically classified
 
@@ -116,13 +117,15 @@ machine really reached. Probes no longer count points: with the clamp gone
 they are ordinary moves, and whether any non-G0/G1 motion should feed the
 counters is a product question, kept open rather than guessed.
 
-**Alternatives considered.** Counting acting probes as points (v2's rule) —
-dropped pending the open item, since the designed probe is semantically a
-move and the v2 rule was tied to the old no-op/clamp special cases.
+**Alternatives considered.** Counting acting probes as points (the main
+bank's rule) — dropped pending the open item, since the designed probe is
+semantically a move and that rule is tied to the current implementation's
+no-op/clamp special cases.
 
-**What v2-current does.** Raw E-word sign classifies zero-word moves (positive
-raw E named retraction); any axis-word presence counts a point; acting probes
-count points; the partition ghost counts word shapes, not physics.
+**What the main bank pins.** Raw E-word sign classifies zero-word moves
+(positive raw E named retraction); any axis-word presence counts a point;
+acting probes count points; the partition ghost counts word shapes, not
+physics.
 
 ### One logical path, four encodings, one fold
 
@@ -131,23 +134,25 @@ mode-free path description (quantum deltas) via pure encoders, and every copy
 folds the same imported `applyCommand`. Each copy's mode/frame is fixed at
 setup: B takes G91 once, C takes one ordinary G92, D takes G20.
 
-**Reasoning.** This is the falsifiable shape of the v2 encoding-equivalence
-pattern: nothing re-transcribes a command's effect, so a violation can only
-mean an encoder (the theorem's witness) is wrong. Fixing the modes per copy IS
-the statement "the same path expressed in either mode"; mid-path re-moding
-would change which path each stream expresses. The quantum grid
-(12700 centi-mm = 127 mm = 5 in, the lcm of the two word grids) keeps every
-stream on whole words of its own units.
+**Reasoning.** This is the falsifiable shape of the main bank's
+encoding-equivalence pattern: nothing re-transcribes a command's effect, so a
+violation can only mean an encoder (the theorem's witness) is wrong. Fixing the
+modes per copy IS the statement "the same path expressed in either mode";
+mid-path re-moding would change which path each stream expresses. The quantum
+grid (12700 centi-mm = 127 mm = 5 in, the lcm of the two word grids) keeps
+every stream on whole words of its own units.
 
 **Alternatives considered.** A two-copy machine per theorem (three machines) —
 rejected: one cursor and one invariant cover all three equivalences, and any
 pairwise disagreement still names its culprit column. Random mid-path G92s in
 all four streams — deferred: re-framing against an arbitrary reached position
-breaks word integrality off the quantum grid (same boundary v2 hit).
+breaks word integrality off the quantum grid (the same boundary the main bank
+hits).
 
-**What v2-current does.** The v2 machine proves the shift-frame half on two
-copies and leaves units equivalence OPEN; a G91 column is impossible there
-because the pinned current semantics has exactly one positioning mode.
+**What the main bank pins.** Its equivalence machine proves the shift-frame
+half on two copies and leaves units equivalence OPEN; a G91 column is
+impossible there because the pinned current semantics has exactly one
+positioning mode.
 
 ### G28 in the equivalence alphabet
 
@@ -160,10 +165,10 @@ bookkeeping — not luck — keeps the streams aligned. The core's design (G28
 touches neither shift nor modes) is what lets the path continue equivalently
 after it.
 
-**What v2-current does.** v2's equivalence machine also carries G28, but under
-the all-axes-always semantics; partial homing composition is exercised here in
-`interpreter_next` instead (`partialHomingCompositionTest`), where the honored
-axis words are the designed divergence.
+**What the main bank pins.** Its equivalence machine also carries G28, but
+under the all-axes-always semantics; partial homing composition is exercised
+here in `interpreter_next` instead (`partialHomingCompositionTest`), where the
+honored axis words are the designed divergence.
 
 ## Divergence ledger
 
@@ -177,11 +182,11 @@ below are what this file adds at machine level.
 | Stats partition basis | Zero-move counters sum to the count of moves *without axis words*; points count moves *with* axis words and acting probes | Five counters sum to the count of G0/G1 commands; points equal the count of *physically displacing* linear moves | Conservation is exact and physical; `G1 X<current>` and relative `G1 X0` no longer count phantom points |
 | Probe stats | Acting probes increment the points counter | Probes feed no counter (open item) | The designed probe is an ordinary move; whether non-G0/G1 motion counts is a product decision, not a side effect of clamp-era special cases |
 | G90/G91 equivalence | Not statable — G90/G91 are unregistered no-ops | Checked theorem: absolute and relative encodings of one path reach the identical physical state through one `applyCommand` | The headline property a positioning mode should have is designed in and machine-checked, not assumed |
-| Units equivalence | OPEN in v2 (`UnitsReadTimeOnly` untested as an encoding) | The D column: the same path as inch words agrees with the mm streams everywhere | Discharges the v2 open item on the new core |
+| Units equivalence | OPEN in the main bank (`UnitsReadTimeOnly` untested as an encoding) | The D column: the same path as inch words agrees with the mm streams everywhere | Discharges the main bank's open item on the new core |
 | Unknown-axis convention | Invariant "an unknown axis reads physical 0" | Dropped: relative moves accumulate on un-homed axes from the conventional 0 | The old invariant contradicts G91 semantics; its truth content survives inside the unguarded defining equation |
 
 Stated neutrally: the "current implementation" column describes pinned
-decisions of the shipping library as recorded in the v2 bank's authority
+decisions of the shipping library as recorded in the main bank's authority
 annotations; it files no defects.
 
 ## Unbound by design

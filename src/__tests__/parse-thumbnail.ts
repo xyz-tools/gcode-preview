@@ -157,9 +157,8 @@ describe('thumbnail spec trace replay', () => {
   const BAD_SIZE_TOKEN = 'qq';
 
   // Data payloads cycle through the whole base64 alphabet, so every
-  // character class the validity regex accepts appears in the corpus
-  // (v1 fed a single filler character); '=' is appended separately as the
-  // trailing pad run the event declares.
+  // character class the validity regex accepts appears in the corpus; '='
+  // is appended separately as the trailing pad run the event declares.
   const PALETTE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
   // Non-base64 comment lines by trimmed length; every entry contains at
@@ -272,7 +271,7 @@ describe('thumbnail spec trace replay', () => {
 
   const traceFiles = listTraceFiles(tracesDir);
 
-  test('the v2 traces directory exists and holds at least one ITF trace', () => {
+  test('the traces directory exists and holds at least one ITF trace', () => {
     // Fails (rather than silently skipping the replay) when the Quint traces
     // have not been generated into verification/quint/traces/thumbnail.
     expect(traceFiles.length, `expected *.itf.json traces in ${tracesDir}`).toBeGreaterThan(0);

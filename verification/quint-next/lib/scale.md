@@ -16,13 +16,13 @@ this down.
 
 ## Why it is restated here
 
-The quint-next bank is self-contained by design: it never imports from
-quint, so the two banks can evolve independently. The convention itself is
-unchanged from v2 — it conforms to Marlin/RepRap G20/G21 semantics (length
-words interpreted under the active unit) and 25.4 mm per inch is exact on the
+The quint-next bank is self-contained by design: it never imports from quint,
+so the two banks can evolve independently. The convention itself is the same as
+the main bank's — it conforms to Marlin/RepRap G20/G21 semantics (length words
+interpreted under the active unit) and 25.4 mm per inch is exact on the
 centi-mm grid.
 
 ## Open items
 
 Inch words that leave the integer centi-mm grid (fractions finer than 0.01 in)
-are out of model, as in v2. Nothing else is open.
+are out of model, as in the main bank. Nothing else is open.

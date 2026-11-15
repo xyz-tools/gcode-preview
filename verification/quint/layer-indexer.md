@@ -1,4 +1,4 @@
-# Layer assignment across streamed chunks, v2
+# Layer assignment across streamed chunks
 
 A companion to `layer-indexer.qnt`. This machine models the job's layer bookkeeping as G-code arrives chunk by chunk, one move line or one PrusaSlicer-style layer-comment block per step.
 
@@ -6,7 +6,7 @@ A companion to `layer-indexer.qnt`. This machine models the job's layer bookkeep
 
 Two strategies compete for the shared layer array. A tolerance fallback infers layers from upward z jumps between extrusions, while slicer LAYER_CHANGE comments feed a metadata mode that files paths against declared boundaries. The first path sorted after any metadata exists locks the choice to metadata forever, adopting the fallback-made layers; a non-planar extrusion before that point dissolves layer indexing for good.
 
-What v2 adds over the v1 machine is the whole partition. Every state carries, per layer, the number of path entries resident in its paths array, plus the job's total path count and the layer index recorded on the last path. The replay compares all of it after every step, so the chunk-boundary resume — pop the last path, remove it from the newest layer, re-sort it when the chunk ends — is transcribed move for move rather than abstracted away.
+The machine also tracks the whole partition. Every state carries, per layer, the number of path entries resident in its paths array, plus the job's total path count and the layer index recorded on the last path. The replay compares all of it after every step, so the chunk-boundary resume — pop the last path, remove it from the newest layer, re-sort it when the chunk ends — is transcribed move for move rather than abstracted away.
 
 All lengths are integers in centi-millimeters (`lib/scale.qnt`), so the real tolerances, a 0.05 mm fallback break and a 0.01 mm metadata z-match, stay exact under integer comparison.
 
@@ -78,7 +78,7 @@ flowchart TD
     G -- no --> M2["above all metadata: bootstrap one layer or join the newest, pointer stays"]
 ```
 
-The forward scan keeps its pinned details from v1: an entry with no stored z claims the path outright when its layer does not exist yet and is pinned by that path's z, and an undeclared or bootstrapped height defaults to 0.2 mm. A filed path gets its layer index recorded; the record is sticky, surviving drops, no-sort steps and the collapse itself.
+The forward scan carries two pinned details: an entry with no stored z claims the path outright when its layer does not exist yet and is pinned by that path's z, and an undeclared or bootstrapped height defaults to 0.2 mm. A filed path gets its layer index recorded; the record is sticky, surviving drops, no-sort steps and the collapse itself.
 
 ## Decisions and reasoning
 
@@ -88,59 +88,47 @@ The forward scan keeps its pinned details from v1: an entry with no stored z cla
 
 **Reasoning.** Layer z/height arrays alone cannot see a path moving between layers, a residence entry appearing twice, or a filing that lands in the right layer by the wrong route. Counts make the membership side of the partition mechanically bound.
 
-**Alternatives considered.** Comparing full path-identity lists per layer would bind even harder but needs path identities in the trace, which ITF cannot carry without naming every path; counts plus the last path's index catch the same transcription errors in practice.
-
-**What v1 did.** Compared only `layersZ`/`layersH` and, on positive assignments, the last path's `layerIndex`. Membership of earlier paths was never re-verified.
+**Alternatives considered.** Comparing full path-identity lists per layer would bind even harder but needs path identities in the trace, which ITF cannot carry without naming every path; counts plus the last path's index catch the same transcription errors in practice. Comparing only the layer z/height arrays plus, on positive assignments, the last path's index; rejected — those arrays cannot see a path moving between layers, and membership of earlier paths would never be re-verified.
 
 ### Negative outcomes assert something real
 
 **Decision.** `ev.outcome` distinguishes `filed`, `dropped`, `collapse` and `nosort`, and `s.last.idx` is asserted on every step: `-1` must read back as a path with no recorded layer index, and a sticky value must still be recorded, unchanged, after drops, no-sorts and the collapse.
 
-**Reasoning.** v1's `-1` skipped the assertion entirely, so a path wrongly filed during a "dropped" step passed. Modeling the recorded index as sticky state turns every negative step into an exact assertion.
+**Reasoning.** A `-1` that skips the assertion lets a path wrongly filed during a "dropped" step pass. Modeling the recorded index as sticky state turns every negative step into an exact assertion.
 
-**Alternatives considered.** Capturing the pre-step index in the harness and asserting "unchanged" would work without spec state, but moves the oracle into the harness; carrying the expected value in the trace keeps the harness a pure comparator.
-
-**What v1 did.** "Only positive assignments are asserted" — the harness comment said so outright.
+**Alternatives considered.** Capturing the pre-step index in the harness and asserting "unchanged" would work without spec state, but moves the oracle into the harness; carrying the expected value in the trace keeps the harness a pure comparator. Asserting only positive assignments; rejected — a path wrongly filed during a "dropped" step would pass.
 
 ### The chunk-boundary resume is transcribed, not abstracted
 
 **Decision.** Every step models the real pipeline order: resume (newest-layer removal), a re-sort of the broken path at the break, then the final sort at the chunk's end. `occ` tracks the live path's residences so the removal's hit-or-miss is exact.
 
-**Reasoning.** With resident counts in the contract, the two-sort shape of a type break and the newest-layer-only removal become observable; the single-sort abstraction v1 used would disagree with the real counts within a few steps of any adoption. The below-newest residence growth this produces is pinned behavior, stated neutrally and verified exactly (`metadataLockAdoptionResidenceTest`).
+**Reasoning.** With resident counts in the contract, the two-sort shape of a type break and the newest-layer-only removal become observable; a single-sort-per-step abstraction would disagree with the real counts within a few steps of any adoption. The below-newest residence growth this produces is pinned behavior, stated neutrally and verified exactly (`metadataLockAdoptionResidenceTest`).
 
-**Alternatives considered.** Keeping v1's single-sort abstraction and dropping counts from the contract — rejected, it is the critique's headline gap for this machine.
-
-**What v1 did.** One `sortPath` per step; the re-sorts' effects on membership were invisible to the compared observables.
+**Alternatives considered.** A single-sort-per-step abstraction with counts dropped from the contract — rejected, it leaves the re-sorts' effects on membership invisible to the compared observables.
 
 ### Every monotonicity claim is a checked invariant
 
 **Decision.** `ghostPrev` freezes the pointer, lock, collapse flag, metadata length, layer count and path count each step; `pointerMonotone`, `lockMonotone`, `collapseMonotone`, `metaMonotone`, `layersMonotoneUnlessCollapsed` and `pathsMonotone` check them. `partitionConservation` and `liveResidencySingleLayer` make the count bookkeeping falsifiable.
 
-**Reasoning.** v1's header claimed a "monotone metadata layer pointer" that no invariant checked. Mutation checks during construction confirmed the suite bites: breaking the `n` increment or the removal guard fails simulation in milliseconds, and a pointer-rewind mutation fails two semantic runs.
+**Reasoning.** A "monotone metadata layer pointer" claimed only in a header comment is checked by nothing. Mutation checks during construction confirmed the suite bites: breaking the `n` increment or the removal guard fails simulation in milliseconds, and a pointer-rewind mutation fails two semantic runs.
 
 **Alternatives considered.** Temporal operators under `quint verify` — no JVM on this machine; ghost state under simulation is equivalent here.
-
-**What v1 did.** `pointerBounded` and `unlockedPointerZero` only; monotonicity lived in comments and one scripted run.
 
 ### Parser-side metadata layers join the contract
 
 **Decision.** `s.meta` mirrors the parser's accumulated `layerMetadata`: stored-z and stored-height presence and values (including the cross-chunk derived height, which may be zero or negative when z regresses) and positional `layerIndex`. The replay compares them against `parser.metadata.layerMetadata` every step.
 
-**Reasoning.** The job's layers are a downstream projection; comparing the accumulator pins the metadata pipeline the indexer consumes — entry append, height derivation at chunk boundaries, positional numbering — where v1 kept it model-internal.
+**Reasoning.** The job's layers are a downstream projection; comparing the accumulator pins the metadata pipeline the indexer consumes — entry append, height derivation at chunk boundaries, positional numbering — rather than leaving it model-internal.
 
 **Alternatives considered.** Comparing `lineIndex` too; left out because modeling line counts would re-specify the accumulator arithmetic owned by the JL-4/PA-6 suites, for little added falsifiability here.
-
-**What v1 did.** `metaLayers` existed but was explicitly "not compared directly by the replay".
 
 ### Two state variables, sum types, no stutter
 
 **Decision.** Exactly `var s: SpecState` and `var ev: Event`; transitions are pure (`applyMove`, `applyComment`); `PathKind`, `EvKind`, `Outcome` and `StepKind` are sum types with strings derived once each; the machine has no stutter because a G-code stream never runs out of lines, so `step` is always enabled.
 
-**Reasoning.** House style (STYLE.md). Dropping v1's 1-in-20 stutter also stops spending trace budget on steps that assert nothing new.
+**Reasoning.** House style (STYLE.md). Having no stutter also stops spending trace budget on steps that assert nothing new.
 
-**Alternatives considered.** Importing `lib/printer-core.qnt` and folding moves through `applyCommand` — declined: this machine consumes only the z effect of moves (no shifts, units or E accounting are generated), so the core would add coupling to IS-* semantics without making any layer claim more falsifiable. The interpreter machine owns that surface.
-
-**What v1 did.** Fifteen scattered scalar vars, stringly-typed `cmd`/`lastPathType`, a hand-primed `stutterStep`.
+**Alternatives considered.** Importing `lib/printer-core.qnt` and folding moves through `applyCommand` — declined: this machine consumes only the z effect of moves (no shifts, units or E accounting are generated), so the core would add coupling to IS-* semantics without making any layer claim more falsifiable. The interpreter machine owns that surface. Scattered scalar state variables with stringly-typed kinds and a stutter step; rejected — against house style (STYLE.md), and the stutter spends trace budget on steps that assert nothing new.
 
 ### Generation is phase-weighted, sized to the rare modes
 
@@ -150,11 +138,9 @@ The forward scan keeps its pinned details from v1: an entry with no stored z cla
 
 **Alternatives considered.** One uniform menu with a bigger budget — measured, and the rare modes stayed rare (0–16 steps across whole corpora); the shape of the prefix, not the volume, was the gate.
 
-**What v1 did.** One `1.to(20).oneOf()` if-chain; the corpus reached the collapse in 2 of 15 traces and never exercised below-newest residence at all.
-
 ## Compared vs ignored
 
-The replay in `src/__tests__/indexers.ts` (`layer-indexer v2 spec trace replay`) drives one streaming `Parser`/`Interpreter`/`Job` per trace, one chunk per step.
+The replay in `src/__tests__/indexers.ts` (`layer-indexer spec trace replay`) drives one streaming `Parser`/`Interpreter`/`Job` per trace, one chunk per step.
 
 | Real-system observable                               | Replay treatment                                                            |
 | ---------------------------------------------------- | --------------------------------------------------------------------------- |
@@ -177,7 +163,7 @@ The metadata-pointer rewind on installing a different metadata array identity is
 
 ## Trace budget
 
-Sized to this machine's rare partition modes rather than v1's uniform 15×24: **25 traces × 30 steps × 2 seeds** (`0x67c0de2026` first, then `0xfab1e2026`), generated per seed with `npx quint run verification/quint/layer-indexer.qnt --invariant allInvariants --max-samples 25 --n-traces 25 --max-steps 30 --seed=<seed> --out-itf 'verification/quint/traces/layer-indexer/trace_<seed-tag>_{seq}.itf.json' --verbosity 1`.
+Sized to this machine's rare partition modes: **25 traces × 30 steps × 2 seeds** (`0x67c0de2026` first, then `0xfab1e2026`), generated per seed with `npx quint run verification/quint/layer-indexer.qnt --invariant allInvariants --max-samples 25 --n-traces 25 --max-steps 30 --seed=<seed> --out-itf 'verification/quint/traces/layer-indexer/trace_<seed-tag>_{seq}.itf.json' --verbosity 1`.
 
 Stated minima and measured counts over the committed corpus of 50 traces (1500 post-init steps; stutter share is 0 by construction — the machine has no stutter):
 
@@ -197,7 +183,7 @@ Stated minima and measured counts over the committed corpus of 50 traces (1500 p
 | Entries with no stored z (claim/pinning rule)        | ≥ 60    | 107               |
 | Merged re-files (filed with no new path)             | ≥ 400   | 656               |
 
-The collapse minimum is the one figure held below ~20 on purpose: the mode is absorbing, so each extra collapse trace converts its remaining steps into `nosort` tail, and 14 replayed collapses already dwarf v1's 2.
+The collapse minimum is the one figure held below ~20 on purpose: the mode is absorbing, so each extra collapse trace converts its remaining steps into `nosort` tail.
 
 ## Open items
 

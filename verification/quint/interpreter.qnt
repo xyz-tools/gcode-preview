@@ -1,6 +1,6 @@
 // -*- mode: Bluespec; -*-
 /**
- * interpreter — the v2 interpreter state machine, built on the shared
+ * interpreter — the interpreter state machine, built on the shared
  * printer core. The machine folds printer_core::applyCommand over a
  * nondeterministic G-code command stream and adds only what the core does
  * not own: the job-statistics fold (through the core's classifyLinear),
@@ -355,8 +355,8 @@ module interpreter {
   pure val LINEAR_CODE_MENU: List[LinearCode] = [G0, G1]
   pure val ARC_CODE_MENU: List[ArcCode] = [G2, G3]
   pure val PROBE_CODE_MENU: List[ProbeCode] = [G31, G38_2, G38_3, G38_4, G38_5]
-  /// Inches twice as likely as millimeters: v1's corpus under-sampled inch
-  /// mode, and the mm default means every trace starts there anyway.
+  /// Inches twice as likely as millimeters, so inch-mode steps clear the
+  /// coverage minimum; the mm default means every trace starts there anyway.
   pure val UNITS_MENU: List[UnitsMode] = [Inches, Inches, Millimeters]
   pure val EMODE_MENU: List[ExtrusionMode] = [AbsoluteE, RelativeE]
   pure val TOOL_MENU: List[int] = [0, 1, 2, 3, 4, 5, 6, 7]
@@ -575,8 +575,8 @@ module interpreter {
   /**
    * The step menu, 18 entries: linear 4, probe 3, G92 3, arc 2, units 2,
    * E-mode 1, home 1, G92.1 1, tool 1 — moves, workspace shifts and probes
-   * dominate, and the doubled units weight repairs v1's inch-mode
-   * under-sampling (measured counts live in the companion).
+   * dominate, and the doubled units weight keeps inch mode well
+   * sampled (measured counts live in the companion).
    *
    * Authority: none — generation scheduling.
    * Library stance: library-invented — a G-code stream never runs out of
@@ -701,7 +701,7 @@ module interpreter {
   pure def arcCmd(code: ArcCode, wx: Word, wy: Word, wz: Word, we: Word, wi: Word, wj: Word, wr: Word): Command =
     Arc({ code: code, x: wx, y: wy, z: wz, e: we, i: wi, j: wj, r: wr })
 
-  // --- semantic tests, ported from v1 onto the core (run with:
+  // --- semantic tests over the core (run with:
   // ---   npx quint test verification/quint/interpreter.qnt --main interpreter) ---
 
   /// G92 X10 followed by G1 X10 leaves the physical position unchanged

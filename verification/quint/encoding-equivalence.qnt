@@ -1,7 +1,7 @@
 // -*- mode: Bluespec; -*-
 /**
- * encoding_equivalence — v2 shift-frame encoding equivalence of the
- * gcode-preview interpreter, rebuilt to be falsifiable.
+ * encoding_equivalence — shift-frame encoding equivalence of the
+ * gcode-preview interpreter, built to be falsifiable.
  *
  * Unit: IS-3 (encoding equivalences, ShiftFrameEquivalence half) in
  *   .context/formal-verification/mapping-data.json. The UnitsReadTimeOnly
@@ -644,7 +644,7 @@ module encoding_equivalence {
       .expect(and { s.a.x.pos == -300, s.b.x.pos == -300, s.a.y.pos == 2000, s.b.y.pos == 2000, allInvariants })
 
   /// A word G92 AFTER content moves both shifts in lockstep; later moves
-  /// still agree. This is the post-frame G92 v1 forbade.
+  /// still agree.
   run postFrameG92Test =
     init
       .then(frameWith(FRAME_QUANTUM, 0, 0))

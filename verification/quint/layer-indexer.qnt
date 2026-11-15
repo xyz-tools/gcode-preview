@@ -1,6 +1,6 @@
 // -*- mode: Bluespec; -*-
 /**
- * layer_indexer — the v2 layer-indexing state machine. Models how a print
+ * layer_indexer — the layer-indexing state machine. Models how a print
  * job groups paths into layers while G-code arrives chunk by chunk, one
  * move line or one slicer layer-comment block per step: the
  * indexing-strategy lock (tolerance fallback until the first path sorted
@@ -8,7 +8,7 @@
  * adoption rewriting the fallback-made layers), the monotone metadata
  * layer pointer, tolerance-based layer creation in fallback mode, the
  * non-planar collapse that empties the layer array and removes the layer
- * indexer for good, and — new in v2 — the full layer partition: a
+ * indexer for good, and the full layer partition: a
  * per-layer resident-path count, maintained through the chunk-boundary
  * resume that removes the last path from the newest layer and the re-sort
  * that files it again.
@@ -17,7 +17,7 @@
  * words carry whole millimeters, so the real tolerances (0.05 mm fallback
  * break, 0.01 mm metadata z-match) stay exact under integer comparison.
  *
- * State shape (the v2 trace contract): exactly two variables. `s` is the
+ * State shape (the trace contract): exactly two variables. `s` is the
  * semantic machine state as one record, advanced only by pure transition
  * functions (`applyMove`, `applyComment`); `ev` is the event record in
  * plain strings/ints/bools, so an ITF trace doubles as an input program a
@@ -786,7 +786,7 @@ module layer_indexer {
 
   /// A travel before any extrusion is dropped: no layer exists to take it,
   /// and no layer index is ever recorded on it — the "dropped" outcome
-  /// asserts exactly that, where v1's -1 asserted nothing
+  /// asserts exactly that
   run travelBeforeFirstExtrusionDroppedTest =
     init
       .then(travelTo(2))

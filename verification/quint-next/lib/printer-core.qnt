@@ -818,8 +818,8 @@ module printer_core_next_test {
  * properties (P2), expressed over ghost previous-state and a flat event
  * record. It lives in this file (rather than at the bank root) because it
  * validates the library itself, like the sibling test module — a
- * deliberate deviation from the v2 lib-files-are-pure rule, recorded in
- * the companion.
+ * deliberate deviation from the main bank's lib-files-are-pure rule,
+ * recorded in the companion.
  *
  * Validate with:
  *   npx quint run verification/quint-next/lib/printer-core.qnt \
