@@ -747,15 +747,101 @@ describe('GCodePreview', () => {
       // held in the first yield: only the first slice has been parsed
       expect(preview.parser.parseGCode).toHaveBeenCalledTimes(1);
 
-      for (let i = 0; i < SLICES; i++) {
-        await Promise.resolve();
-        ManualChannel.opened[i]?.deliver();
+      for (let slice = 1; slice <= SLICES; slice++) {
+        await vi.waitFor(() => expect(ManualChannel.opened).toHaveLength(slice));
+        ManualChannel.opened[slice - 1].deliver();
       }
       await parsing;
 
       expect(preview.parser.parseGCode).toHaveBeenCalledTimes(SLICES);
       expect(parsedText()).toEqual(multiSlice.slice(0, -1));
       expect(mockSceneManager.renderAnimated).not.toHaveBeenCalled();
+    });
+
+    describe('where the browser has requestIdleCallback', () => {
+      /** Idle requests the test answers by hand, with the deadline it chooses. */
+      let idleRequests: { callback: IdleRequestCallback; options?: IdleRequestOptions }[];
+
+      /** A deadline that grants `slices` slices' worth of time: one check per slice. */
+      const deadlineFor = (slices: number, didTimeout = false): IdleDeadline => {
+        let checks = 0;
+        return { didTimeout, timeRemaining: () => (++checks < slices ? 5 : 0) };
+      };
+
+      beforeEach(() => {
+        idleRequests = [];
+        vi.stubGlobal('MessageChannel', ManualChannel);
+        vi.stubGlobal('requestIdleCallback', (callback: IdleRequestCallback, options?: IdleRequestOptions) => {
+          idleRequests.push({ callback, options });
+          return idleRequests.length;
+        });
+      });
+
+      it('lets the browser decide how many slices fit before the next pause', async () => {
+        exhaustBudgetOnEveryCheck();
+
+        const parsing = preview.processGCode(multiSlice);
+        // the first window is the fixed budget, spent by the first slice
+        expect(preview.parser.parseGCode).toHaveBeenCalledTimes(1);
+        expect(idleRequests).toHaveLength(1);
+
+        // the browser grants room for three slices
+        idleRequests[0].callback(deadlineFor(3));
+        await vi.waitFor(() => expect(idleRequests).toHaveLength(2));
+        expect(preview.parser.parseGCode).toHaveBeenCalledTimes(4);
+
+        // then room for everything that is left
+        idleRequests[1].callback(deadlineFor(SLICES));
+        await parsing;
+
+        expect(preview.parser.parseGCode).toHaveBeenCalledTimes(SLICES);
+        expect(parsedText()).toEqual(multiSlice.slice(0, -1));
+        // the browser did the scheduling: no MessageChannel was needed
+        expect(ManualChannel.opened).toHaveLength(0);
+      });
+
+      it('asks the browser to stop waiting for idle time after 50 ms', async () => {
+        exhaustBudgetOnEveryCheck();
+
+        void preview.processGCode(multiSlice);
+
+        expect(idleRequests[0].options).toEqual({ timeout: 50 });
+      });
+
+      it('falls back to the fixed budget when the browser was never idle', async () => {
+        const now = exhaustBudgetOnEveryCheck();
+
+        const parsing = preview.processGCode(multiSlice);
+        expect(preview.parser.parseGCode).toHaveBeenCalledTimes(1);
+
+        // a timed-out deadline reports no time left; parsing must still get a
+        // budget of its own, so let the clock stand still for one window
+        now.mockImplementation(() => 1000);
+        idleRequests[0].callback(deadlineFor(0, true));
+        // with the clock stopped the budget never runs out, so the rest goes in one window
+        await parsing;
+
+        expect(preview.parser.parseGCode).toHaveBeenCalledTimes(SLICES);
+        expect(idleRequests).toHaveLength(1);
+      });
+
+      it('stops when clear() swaps the job while waiting for idle time', async () => {
+        exhaustBudgetOnEveryCheck();
+
+        const parsing = preview.processGCode(multiSlice);
+        const oldParseGCode = preview.parser.parseGCode;
+        // a fresh Job, so the identity check sees the swap (see the test above)
+        vi.mocked(Job).mockImplementationOnce(function () {
+          return { ...mockJob };
+        } as never);
+        preview.clear();
+        idleRequests[0].callback(deadlineFor(SLICES));
+        await parsing;
+
+        expect(oldParseGCode).toHaveBeenCalledTimes(1);
+        expect(preview.parser.parseGCode).not.toHaveBeenCalled();
+        expect(mockSceneManager.renderAnimated).not.toHaveBeenCalled();
+      });
     });
   });
 

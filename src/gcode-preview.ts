@@ -15,6 +15,12 @@ const PARSE_SLICE_CHARS = 16 * 1024;
 const PARSE_BUDGET_MS = 10;
 
 /**
+ * How long to wait for the browser to go idle before parsing anyway. A page
+ * that redraws every frame on a slow device may never be idle at all.
+ */
+const IDLE_TIMEOUT_MS = 50;
+
+/**
  * Preview-level options, merged into {@link GCodePreviewOptions}.
  */
 type LibOptions = {
@@ -280,7 +286,9 @@ export class GCodePreview {
     const text = Array.isArray(gcode) ? gcode.join('\n') : gcode;
     const job = this.job;
     let tail = '';
-    let sliceStart = performance.now();
+    // the first window starts right away, so input that fits it is parsed
+    // before processGCode returns
+    let window = budgetWindow();
 
     for (let offset = 0; offset < text.length; offset += PARSE_SLICE_CHARS) {
       const split = splitChunk(tail, text.slice(offset, offset + PARSE_SLICE_CHARS));
@@ -292,10 +300,9 @@ export class GCodePreview {
         this.executeCommands(commands);
       }
 
-      if (performance.now() - sliceStart >= PARSE_BUDGET_MS) {
-        await yieldToBrowser();
+      if (window.timeRemaining() <= 0) {
+        window = await nextParseWindow();
         if (this.job !== job) return;
-        sliceStart = performance.now();
       }
     }
 
@@ -354,5 +361,34 @@ function yieldToBrowser(): Promise<void> {
       resolve();
     };
     channel.port2.postMessage(undefined);
+  });
+}
+
+/** A span of time parsing may use: the shape of the IdleDeadline requestIdleCallback hands out. */
+interface ParseWindow {
+  timeRemaining(): number;
+}
+
+/** A window of {@link PARSE_BUDGET_MS}, starting now. */
+function budgetWindow(): ParseWindow {
+  const end = performance.now() + PARSE_BUDGET_MS;
+  return { timeRemaining: () => end - performance.now() };
+}
+
+/**
+ * Waits for the browser's next chance to parse, and says how long it may run.
+ * @remarks
+ * Where requestIdleCallback exists, the browser picks the moment and the
+ * length: whatever is left of the frame once it has drawn. If it is never
+ * idle within {@link IDLE_TIMEOUT_MS}, parsing goes ahead with the fixed
+ * budget rather than one slice per timeout. Safari has no
+ * requestIdleCallback, so it yields a MessageChannel task and uses the budget.
+ */
+function nextParseWindow(): Promise<ParseWindow> {
+  if (typeof requestIdleCallback !== 'function') return yieldToBrowser().then(budgetWindow);
+  return new Promise((resolve) => {
+    requestIdleCallback((deadline) => resolve(deadline.didTimeout ? budgetWindow() : deadline), {
+      timeout: IDLE_TIMEOUT_MS
+    });
   });
 }
