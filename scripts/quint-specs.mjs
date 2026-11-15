@@ -51,6 +51,10 @@ export const SPECS = [
   // v2 machines: budgets sized per machine (see each companion's coverage table)
   v2('streaming', { nTraces: 20, maxSteps: 40 }),
   v2('interpreter', { nTraces: 25, maxSteps: 30 }),
+  v2('thumbnail', { nTraces: 25, maxSteps: 40 }),
+  v2('lifecycle', { nTraces: 15, maxSteps: 30 }),
+  v2('layer-indexer', { nTraces: 25, maxSteps: 30 }),
+  v2('slicer-detector', { nTraces: 40, maxSteps: 10 }),
   v2('encoding-equivalence', { main: 'encoding_equivalence', nTraces: 12, maxSteps: 30 })
 ];
 
