@@ -41,4 +41,11 @@ describe('SlicerMetadataParser base class', () => {
 
     expect(parser.detectSlicerName([comment('STUB_MARKER v1')])).toBe('Stub');
   });
+
+  it('parseExtrusionDimensions defaults to reporting none', () => {
+    // Only dialects announcing per-path dimensions override this.
+    const parser = new StubMetadataParser();
+
+    expect(parser.parseExtrusionDimensions([comment('WIDTH:0.45')])).toEqual([]);
+  });
 });

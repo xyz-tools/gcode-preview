@@ -1,4 +1,5 @@
 import type { CommandOf } from 'gcode-ast';
+import { toMillimeters } from '../../units';
 import { PathType } from '../../path';
 import type { Job } from '../../job';
 
@@ -30,15 +31,16 @@ type ProbeCommand = CommandOf<'G31' | 'G38.2' | 'G38.3' | 'G38.4' | 'G38.5'>;
  */
 export const probe = (command: ProbeCommand, job: Job): void => {
   const { state } = job;
+  const { units } = state;
 
   if (command.type === 'G31' && command.form !== 'move') {
     return;
   }
 
   const { positionShift } = state;
-  const x = command.x === undefined ? undefined : command.x + positionShift.x;
-  const y = command.y === undefined ? undefined : command.y + positionShift.y;
-  let z = command.z === undefined ? undefined : command.z + positionShift.z;
+  const x = command.x === undefined ? undefined : toMillimeters(command.x, units)! + positionShift.x;
+  const y = command.y === undefined ? undefined : toMillimeters(command.y, units)! + positionShift.y;
+  let z = command.z === undefined ? undefined : toMillimeters(command.z, units)! + positionShift.z;
 
   if (x === undefined && y === undefined && z === undefined) {
     return;
@@ -50,10 +52,7 @@ export const probe = (command: ProbeCommand, job: Job): void => {
 
   job.stats.points++;
 
-  let currentPath = job.inprogressPath;
-  if (currentPath === undefined || currentPath.travelType !== PathType.Travel) {
-    currentPath = job.breakPath(PathType.Travel);
-  }
+  const currentPath = job.continuePath(PathType.Travel);
 
   state.x = x ?? state.x;
   state.y = y ?? state.y;

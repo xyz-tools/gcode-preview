@@ -1,4 +1,5 @@
 import type { CommandOf } from 'gcode-ast';
+import { toMillimeters } from '../../units';
 import type { Job } from '../../job';
 
 /**
@@ -21,8 +22,12 @@ import type { Job } from '../../job';
  * line, the command word included, so a length of one is the real test.
  */
 export const setPosition = (command: CommandOf<'G92'>, job: Job): void => {
-  const { x, y, z, e } = command;
   const { state } = job;
+  const { units } = state;
+  const x = toMillimeters(command.x, units);
+  const y = toMillimeters(command.y, units);
+  const z = toMillimeters(command.z, units);
+  const e = toMillimeters(command.e, units);
   const { positionShift } = state;
   const physical = job.resolvePosition();
 

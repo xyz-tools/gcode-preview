@@ -1,15 +1,14 @@
-import { createApp, ref, watch, onMounted, watchEffect } from 'vue';
+import { createApp, ref, computed, watch, onMounted, watchEffect } from 'vue';
 import { presets } from './presets.js';
 import { GCodePreview } from 'gcode-preview';
 import { defaultSettings } from './default-settings.js';
-import { parseIntOrDefault } from './utils.js';
+import { humanFileSize, parseIntOrDefault } from './utils.js';
+import { saveCamera, restoreCamera } from './camera-storage.js';
 
 const defaultPreset = 'benchy'; // default preset to load
 const preferDarkMode = window.matchMedia('(prefers-color-scheme: dark)');
 const initialBackgroundColor = preferDarkMode.matches ? '#141414' : '#eee';
-const statsContainer = () => document.querySelector('.sidebar');
 
-const loadProgressive = ref(true);
 let observer = null;
 let preview = null;
 
@@ -19,12 +18,12 @@ export const app = (window.app = createApp({
     const selectedPreset = ref(defaultPreset);
     const thumbnail = ref(null);
     const layerCount = ref(0);
+    const fileName = ref(null);
     const fileSize = ref(0);
+    const formattedFileSize = computed(() => (fileSize.value ? humanFileSize(fileSize.value) : null));
     const slicerName = ref(null);
     const model = ref(null);
-    const dragging = ref(false);
     const settings = ref(Object.assign({}, defaultSettings));
-    const enableDevMode = ref(false);
 
     watch(selectedPreset, (preset) => {
       selectPreset(preset);
@@ -59,8 +58,6 @@ export const app = (window.app = createApp({
       };
 
       Object.assign(settings.value, currentSettings);
-
-      applyDevMode(enableDevMode.value);
     };
 
     const loadGCodeFromServer = async (filename) => {
@@ -69,6 +66,11 @@ export const app = (window.app = createApp({
         console.error('ERROR. Status Code: ' + response.status);
         return;
       }
+
+      fileName.value = filename.split('/').pop();
+      // the stream is consumed by the parser, so the size has to come from the
+      // response header; it stays unknown (and hidden) if the server omits it
+      fileSize.value = parseIntOrDefault(response.headers.get('content-length'));
 
       // drop the previous job before streaming in the new one, otherwise
       // processGCodeStream appends to the existing job and doubles memory
@@ -106,22 +108,8 @@ export const app = (window.app = createApp({
 
       Object.assign(settings.value, options);
 
-      // reset previous state
-      const lilGuiElement = document.querySelector('.lil-gui');
-      if (lilGuiElement) document.body.removeChild(lilGuiElement);
-      const stats = document.querySelector('.stats');
-      if (stats) stats.parentNode.removeChild(stats);
-      if (defaultSettings.devMode) defaultSettings.devMode.statsContainer = statsContainer();
-
       loadGCodeFromServer(preset.file);
     };
-
-    function applyDevMode(enabled) {
-      // these elements will be recreated when changing presets, so we'll look them up dynamically
-      document.querySelectorAll('.lil-gui, .stats').forEach((el) => (el.style.display = enabled ? 'block' : 'none'));
-    }
-
-    watch(enableDevMode, applyDevMode);
 
     onMounted(async () => {
       const canvas = document.querySelector('canvas.preview');
@@ -137,6 +125,12 @@ export const app = (window.app = createApp({
       if (observer) observer.disconnect();
       observer = new ResizeObserver(() => preview.sceneManager.resize());
       observer.observe(canvas);
+
+      // dropped files report their own name and size via this event
+      canvas.addEventListener('update', (evt) => {
+        fileName.value = evt.detail.filename;
+        fileSize.value = evt.detail.size;
+      });
 
       // to update the layer count and the thumbnail when available
       preview.onJobUpdated = () => updateUI();
@@ -209,6 +203,15 @@ export const app = (window.app = createApp({
       });
 
       selectPreset(defaultPreset);
+      // a returning visitor gets their last view back instead of the preset's
+      restoreCamera(preview.sceneManager);
+
+      // pagehide also fires on mobile and bfcache navigations where unload doesn't;
+      // read the camera at save time, since toggling orthographic replaces it
+      window.addEventListener('pagehide', () => saveCamera(preview.sceneManager));
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') saveCamera(preview.sceneManager);
+      });
     });
 
     return {
@@ -217,13 +220,12 @@ export const app = (window.app = createApp({
       selectedPreset,
       thumbnail,
       layerCount,
+      fileName,
       fileSize,
+      formattedFileSize,
       slicerName,
       model,
-      dragging,
       settings,
-      loadProgressive,
-      enableDevMode,
       selectTab,
       addColor,
       removeColor,

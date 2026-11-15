@@ -1,0 +1,71 @@
+name: Compare bundle with base branch
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - v3.x
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  LABEL: bundle unchanged
+
+jobs:
+  compare-bundle:
+    # The GITHUB_TOKEN of a PR from a fork is read-only, so it can't set labels
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+
+    steps:
+      # Default ref for pull_request is the merge commit (PR merged into the current base),
+      # so any difference with the base tip is caused by the PR alone.
+      - uses: actions/checkout@v4
+        with:
+          path: pr
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          path: base
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: 'pr/.nvmrc'
+
+      - name: Build PR
+        working-directory: pr
+        run: npm ci && npm run build
+
+      - name: Build base
+        working-directory: base
+        run: npm ci && npm run build
+
+      - name: Compare dist
+        id: diff
+        run: |
+          if diff -r base/dist pr/dist > bundle.diff; then
+            echo "identical=true" >> "$GITHUB_OUTPUT"
+            echo "Bundle is identical to \`${{ github.event.pull_request.base.ref }}\`." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "identical=false" >> "$GITHUB_OUTPUT"
+            echo "Bundle differs from \`${{ github.event.pull_request.base.ref }}\`:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            diff -rq base/dist pr/dist >> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Update label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh label create "$LABEL" --repo "$GITHUB_REPOSITORY" --color 0e8a16 \
+            --description "Built dist/ is identical to the base branch" 2>/dev/null || true
+          if [ "${{ steps.diff.outputs.identical }}" = "true" ]; then
+            gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --add-label "$LABEL"
+          else
+            gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --remove-label "$LABEL" || true
+          fi

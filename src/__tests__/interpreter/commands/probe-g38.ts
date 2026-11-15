@@ -30,6 +30,16 @@ describe('probe (G38.2-G38.5)', () => {
     expect(job.state.z).toEqual(0.039);
   });
 
+  test('a G38.2 with no axis words is ignored', () => {
+    // No target to probe toward, so there is no move to render -- the G31
+    // dock-sled form is rejected by its `form` instead, which the G38 nodes
+    // do not carry.
+    const job = run(['G0 Z0.5', 'G38.2'].join('\n'));
+
+    expect(job.stats.points).toEqual(1);
+    expect(job.paths[0].vertices).toEqual([0, 0, 0, 0, 0, 0.5]);
+  });
+
   test('an away probe to a clear target travels to the commanded target', () => {
     // G38.4/G38.5 probe away from the workpiece; a preview cannot observe the
     // contact break, so the move renders like any other probe

@@ -41,12 +41,23 @@ describe('public API surface', () => {
       expect(packageJson.types).toBe('dist/gcode-preview.d.ts');
       expect(packageJson.files).toEqual(['dist']);
     });
+
+    it('exposes exactly the documented package paths', () => {
+      expect(Object.keys(packageJson.exports)).toEqual(['.', './package.json']);
+    });
+
+    it('does not ship the debug GUI as a dependency', () => {
+      // gcode-ast is the parser's tokenizing front end; three is the renderer.
+      // Nothing else may become a runtime dependency of a library this size.
+      expect(Object.keys(packageJson.dependencies).sort()).toEqual(['gcode-ast', 'three']);
+      expect(packageJson.devDependencies['lil-gui']).toBeUndefined();
+    });
   });
 
   describe('module exports', () => {
     it('exposes exactly the documented runtime exports', () => {
-      // Type-only exports (GCodePreviewOptions, SceneManagerOptions,
-      // DevModeOptions) are erased at runtime and pinned in the .test-d file.
+      // Type-only exports (GCodePreviewOptions, SceneManagerOptions) are
+      // erased at runtime and pinned in the .test-d file.
       expect(Object.keys(api).sort()).toEqual(['GCodeCommand', 'GCodePreview', 'Job', 'Parser', 'SceneManager']);
     });
 
@@ -75,12 +86,13 @@ describe('public API surface', () => {
       expect(method).toHaveLength(arity);
     });
 
-    it.each(['sceneManager', 'parser', 'countLayers', 'devMode'])('has getter %s', (name) => {
+    it.each(['sceneManager', 'parser', 'countLayers'])('has getter %s', (name) => {
       expect(getterNames(GCodePreview.prototype)).toContain(name);
     });
 
-    it('has setter devMode', () => {
-      expect(setterNames(GCodePreview.prototype)).toContain('devMode');
+    it('has no setters', () => {
+      // devMode was the only one; it went with the debug GUI in 3.0.
+      expect(setterNames(GCodePreview.prototype)).toEqual([]);
     });
   });
 
@@ -100,10 +112,7 @@ describe('public API surface', () => {
       renderAnimated: 0,
       clear: 0,
       resize: 0,
-      dispose: 0,
-      saveCamera: 0,
-      loadCamera: 0,
-      clearCamera: 0
+      dispose: 0
     };
 
     it.each(Object.entries(methods))('has method %s with %d required parameter(s)', (name, arity) => {

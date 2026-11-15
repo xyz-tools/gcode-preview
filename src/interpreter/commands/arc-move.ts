@@ -1,3 +1,4 @@
+import { toMillimeters } from '../../units';
 import { PathType } from '../../path';
 import { ArcTessellator, ArcTessellatorOptions } from '../../arc-tessellator';
 import type { CommandOf } from 'gcode-ast';
@@ -16,47 +17,44 @@ import type { Job } from '../../job';
 export const makeArcMove = (options: ArcTessellatorOptions = {}) => {
   const arcTessellator = new ArcTessellator(options);
   return (command: CommandOf<'G2' | 'G3'>, job: Job): void => {
-    const { e, i, j, r } = command;
     const { state } = job;
+    const { units } = state;
+    const e = toMillimeters(command.e, units);
+    const i = toMillimeters(command.i, units);
+    const j = toMillimeters(command.j, units);
+    const r = toMillimeters(command.r, units);
     // The endpoint arrives in logical coordinates; translate it into physical
     // space up front so the tessellator's derived values agree with `from`.
     // I/J/R are relative distances and need no shift.
     const { positionShift } = state;
-    const x = command.x === undefined ? undefined : command.x + positionShift.x;
-    const y = command.y === undefined ? undefined : command.y + positionShift.y;
-    const z = command.z === undefined ? undefined : command.z + positionShift.z;
+    const x = command.x === undefined ? undefined : toMillimeters(command.x, units)! + positionShift.x;
+    const y = command.y === undefined ? undefined : toMillimeters(command.y, units)! + positionShift.y;
+    const z = command.z === undefined ? undefined : toMillimeters(command.z, units)! + positionShift.z;
     // Starting position for the arc, with any un-homed axis assumed at the origin.
     const from = job.resolvePosition();
 
     const cw = command.type === 'G2';
-    let currentPath = job.inprogressPath;
-    // `e > 0`, matching g0/g1: a negative E is a retraction, i.e. a travel move with no
-    // material laid down. The looser `e ?` used to misclassify a retracting arc as
-    // Extrusion, so it rendered as deposited filament and stretched the bounding box.
-    const pathType = e > 0 ? PathType.Extrusion : PathType.Travel;
+    // applyExtrusion keeps the extruder position in sync for the moves that follow; the
+    // arc itself derives no dimensions (Cura only emits arcs via plugins) and
+    // simply carries the state's current width and height like any move.
+    // Classified from the extruded length, matching g0/g1: a retraction -- or an
+    // absolute-mode E that decreases -- is a travel move with no material laid
+    // down, and used to render as deposited filament and stretch the bounding box.
+    const extruded = state.applyExtrusion(e);
+    const pathType = extruded > 0 ? PathType.Extrusion : PathType.Travel;
+    const currentPath = job.continuePath(pathType);
 
-    if (currentPath === undefined || currentPath.travelType !== pathType) {
-      currentPath = job.breakPath(pathType);
-    }
-
-    if (e > 0) {
-      job.stats.extrusionDistance += e;
-    }
+    job.stats.recordExtrusion(extruded);
 
     // The tessellator runs on the resolved position and emits every point,
     // ending with the exact endpoint -- which equals resolvePosition() after
     // the state update below, so no separate endpoint emission is needed.
-    arcTessellator.tessellate(
-      from,
-      { cw, x, y, z, i, j, r },
-      (px, py, pz) => {
-        currentPath.addPoint(px, py, pz);
-        if (pathType === PathType.Extrusion) {
-          job.boundingBox.update(px, py, pz);
-        }
-      },
-      state.units
-    );
+    arcTessellator.tessellate(from, { cw, x, y, z, i, j, r }, (px, py, pz) => {
+      currentPath.addPoint(px, py, pz);
+      if (pathType === PathType.Extrusion) {
+        job.boundingBox.update(px, py, pz);
+      }
+    });
 
     // `??` not `||`: an arc ending on X0, Y0 or Z0 used to silently keep the previous
     // coordinate. Safe now that the parser drops non-finite params -- `||` was also

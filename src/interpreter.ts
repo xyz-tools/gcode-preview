@@ -8,6 +8,9 @@ import {
   setUnits,
   home,
   setPosition,
+  resetPositionShift,
+  setAbsoluteExtrusion,
+  setRelativeExtrusion,
   probe,
   selectTool
 } from './interpreter/commands';
@@ -21,6 +24,26 @@ export interface InterpreterOptions {
    */
   arcChordTolerance?: number;
 }
+
+/**
+ * Handlers for commands the AST does not type yet, keyed by the mnemonic it
+ * reports on an `unknown` node.
+ *
+ * @remarks
+ * The escape hatch exists for exactly one command today: `G92.1` parses as
+ * `unknown` with mnemonic `'G92.1'`, so there is no union member to key a
+ * handler on. Everything here should move into {@link handlers} as gcode-ast
+ * grows the type.
+ */
+const untypedHandlers: Record<string, (command: CommandOf<'unknown'>, job: Job) => void> = {
+  'G92.1': resetPositionShift
+};
+
+/** Routes an untyped command to its handler by mnemonic, if it has one. */
+const dispatchUntyped = (command: CommandOf<'unknown'>, job: Job): void => {
+  if (command.mnemonic === null) return;
+  untypedHandlers[command.mnemonic]?.(command, job);
+};
 
 /**
  * Maps a command type to the handler that executes it.
@@ -61,7 +84,10 @@ export const handlers: HandlerRegistry = {
   'G38.4': probe,
   'G38.5': probe,
   G92: setPosition,
-  T: selectTool
+  M82: setAbsoluteExtrusion,
+  M83: setRelativeExtrusion,
+  T: selectTool,
+  unknown: dispatchUntyped
 };
 
 /**
@@ -71,8 +97,9 @@ export const handlers: HandlerRegistry = {
  * This class looks up each command's AST node in the handler registry and
  * executes it, translating commands into movements and state changes in the
  * print job. It supports linear moves (G0/G1), arcs (G2/G3), unit changes
- * (G20/G21), homing (G28), probing (G31, G38.2-G38.5), position setting (G92)
- * and tool selection (T). Commands without a registered handler are ignored.
+ * (G20/G21), homing (G28), probing (G31, G38.2-G38.5), position setting (G92),
+ * workspace-shift resets (G92.1), extrusion mode (M82/M83) and tool selection
+ * (T). Commands without a registered handler are ignored.
  */
 export class Interpreter {
   private handlers: HandlerRegistry;
@@ -106,6 +133,12 @@ export class Interpreter {
   execute(commands: GCodeCommand[], job = new Job()): Job {
     job.resumeLastPath();
     commands.forEach((command) => {
+      // one command per parsed line: this keeps the job's line counter in
+      // step with the parser, which is what maps line-indexed slicer
+      // metadata (e.g. extrusion dimension changes) onto the command stream.
+      // It runs before the node check so a line the AST could not type still
+      // advances the counter.
+      job.beginCommand();
       const node = command.node;
       if (node === undefined) return;
       // One lookup, then a call the registry's mapped type cannot express to

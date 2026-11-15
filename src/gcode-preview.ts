@@ -2,8 +2,6 @@ import { SceneManager, SceneManagerOptions } from './scene-manager';
 import { GCodeCommand, Parser } from './parser/gcode-parser';
 import { Interpreter } from './interpreter';
 import { Job } from './job';
-import { DevGUI, type DevModeOptions } from './dev-gui';
-import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { makeDroppable } from './extra/dom-utils';
 import { splitChunk } from './helpers/split-chunk';
 
@@ -14,8 +12,6 @@ const LIVE_RENDER_INTERVAL_MS = 250;
  * Preview-level options, merged into {@link GCodePreviewOptions}.
  */
 type LibOptions = {
-  /** Enable developer mode with additional controls */
-  devMode?: boolean | DevModeOptions;
   minLayerThreshold?: number;
   /** Enable drag and drop file handling */
   droppable?: boolean;
@@ -93,15 +89,6 @@ export class GCodePreview {
 
   private interpreter: Interpreter;
 
-  // dev mode
-  /** Developer mode configuration */
-  private _devMode?: boolean | DevModeOptions = false;
-  /** Performance stats */
-  private stats?: Stats;
-  /** Container for stats display */
-  private statsContainer?: HTMLElement;
-  private devGui?: DevGUI;
-
   /** The WebGL sceneManager instance for direct access to rendering properties */
   get sceneManager(): SceneManager {
     if (!this._sceneManager) {
@@ -110,12 +97,9 @@ export class GCodePreview {
     return this._sceneManager;
   }
 
-  /** Builds a SceneManager wired to feed the stats display. */
+  /** Builds a SceneManager for the current options and job. */
   private createSceneManager(): SceneManager {
-    const sceneManager = new SceneManager(this.opts, this.job);
-    sceneManager.onFrameRendered = () => this.stats?.update();
-
-    return sceneManager;
+    return new SceneManager(this.opts, this.job);
   }
 
   /** The G-code parser instance */
@@ -139,16 +123,6 @@ export class GCodePreview {
     return this.job.countLayers;
   }
 
-  get devMode(): boolean | DevModeOptions | undefined {
-    return this._devMode;
-  }
-
-  set devMode(value: boolean | DevModeOptions | undefined) {
-    this._devMode = value;
-    this.devGui?.destroy();
-    this.initGui();
-  }
-
   /**
    * Creates a new GCodePreview instance
    * @param opts - Configuration options for the preview
@@ -158,19 +132,13 @@ export class GCodePreview {
     this.interpreter = new Interpreter({ arcChordTolerance: opts.arcChordTolerance });
     this._parser = this.createParser();
     this.job = new Job({ minLayerThreshold: this.opts.minLayerThreshold });
-    // note: reads opts.devMode because this.devMode is only assigned below,
-    // once the scene manager needed by its setter exists
-    this.stats = opts.devMode ? new Stats() : undefined;
     this._sceneManager = this.createSceneManager();
-    // the devMode setter also creates the dev GUI, so no separate initGui() call
-    this.devMode = opts?.devMode;
 
-    this.initStats();
     if (opts.droppable) makeDroppable(this);
   }
 
   /**
-   * Clears the preview and resets the parser, sceneManager, gui and job
+   * Clears the preview and resets the parser, sceneManager and job
    */
   clear(): void {
     this._parser = this.createParser();
@@ -178,7 +146,6 @@ export class GCodePreview {
     this.sceneManager.clear();
     this.sceneManager.job = this.job;
     this.sceneManager.render();
-    this.devGui?.reset();
   }
 
   /**
@@ -230,6 +197,8 @@ export class GCodePreview {
 
   async readStream(stream: ReadableStream, options: { render?: boolean } = {}): Promise<void> {
     const reader = stream.getReader();
+    // the job this stream feeds; clear() swaps in a replacement
+    const job = this.job;
     let result;
     let tail = '';
     let size = 0;
@@ -237,6 +206,12 @@ export class GCodePreview {
 
     do {
       result = await reader.read();
+      // clear() ran while this chunk was in flight: the stream belongs to the
+      // discarded job, so cancel it rather than corrupt the replacement
+      if (this.job !== job) {
+        await reader.cancel();
+        return;
+      }
       const length = result.value?.length ?? 0;
       if (length === 0) {
         // TextDecoderStream can legitimately emit an empty chunk (e.g. one
@@ -248,6 +223,11 @@ export class GCodePreview {
       size += length;
       const split = splitChunk(tail, result.value);
       tail = split.tail;
+
+      // Parsing '' would still count a line -- ''.split('\n') is [''] -- and
+      // shift every lineIndex after it. Chunks complete nothing often: bytes
+      // arrive without a newline, or splitChunk holds a comment run back.
+      if (split.complete === '') continue;
 
       const { commands, metadata } = this.parser.parseGCode(split.complete);
 
@@ -295,44 +275,9 @@ export class GCodePreview {
    * Disposes of all resources and cleans up
    */
   dispose(): void {
-    this.devGui?.destroy();
-    this.devGui = undefined;
-
     // Dispose sceneManager (heaviest resource user)
     this._sceneManager?.dispose();
     this._sceneManager = null;
-
-    this.stats?.end();
-    this.stats?.dom?.remove();
-    this.stats = undefined;
-  }
-
-  /**
-   * Initializes the development GUI if enabled
-   * @private
-   */
-  private initGui(): void {
-    if (!this.opts || !this._sceneManager) return;
-    if (this.devMode === false || this.devMode === undefined) return;
-
-    if (typeof this.devMode === 'boolean' && this.devMode === true) {
-      this.devGui = new DevGUI(this);
-    } else if (typeof this.devMode === 'object') {
-      this.devGui = new DevGUI(this, this.devMode);
-    }
-  }
-
-  /**
-   * Initializes performance statistics display if enabled
-   */
-  private initStats() {
-    if (this.stats) {
-      if (typeof this.devMode === 'object') {
-        this.statsContainer = this.devMode.statsContainer;
-      }
-      (this.statsContainer ?? document.body).appendChild(this.stats.dom);
-      this.stats.dom.classList.add('stats');
-    }
   }
 }
 
@@ -342,5 +287,5 @@ export class GCodePreview {
  * This class provides a simple interface for rendering G-code previews.
  * Most properties and methods are available through the `sceneManager` property.
  */
-export { SceneManager, DevModeOptions, GCodeCommand, Parser, Job };
+export { SceneManager, GCodeCommand, Parser, Job };
 export type { SceneManagerOptions };
