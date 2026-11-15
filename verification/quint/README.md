@@ -56,6 +56,6 @@ When a spec and its sources drift apart, the replay suite fails CI — not a com
 
 ## Layout and running
 
-`lib/` holds pure modules validated by sibling `*_test` modules; runnable machines sit at the root with traces under `traces/<spec>/`. Conventions are codified in `STYLE.md`.
+`lib/` holds pure modules validated by sibling `*_test` modules; runnable machines sit at the root with traces under `traces/<spec>/`. Conventions are codified in `STYLE.md`. If you're changing implementation code the bank pins, read `AGENTS.md` first: it covers the inner loop, how to arbitrate a failing replay, and what never to do to get green.
 
 Two commands cover the bank: `npm run quint:test` (semantic runs, both invariant lanes, freshness gate) and `npm run quint:traces` (regenerate all corpora).

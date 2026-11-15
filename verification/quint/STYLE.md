@@ -4,7 +4,7 @@ One page, binding for every spec under `verification/quint/`. Library modules li
 
 ## State and event records
 
-A machine has exactly two state variables: `var s: <Spec>State`, a record holding all semantic state, and `var ev: Event`, the trace-contract record describing the step that was just taken. Transitions are pure: `pure def next(s, ...): <Spec>State`, with actions reduced to recording `ev` and `s' = next(s, ...)`. No scattered scalar vars, no `keep*` frame actions.
+A machine has exactly two state variables: `var s: <Spec>State`, a record holding all semantic state, and `var ev: Event`, the trace-contract record describing the step that was just taken. Transitions are pure defs named `apply<Event>` (`applyChunk`, `applyMove`, `applyStep`): `pure def applyX(s, ...): <Spec>State`, with actions reduced to recording `ev` and `s' = applyX(s, ...)`. Do not name a transition `next`: it is a Quint built-in. No scattered scalar vars, no `keep*` frame actions.
 
 Ghost fields used to make invariants falsifiable (logical positions, prev-value monotonicity ghosts, conservation counters) live inside `s` and are named `ghost*`. They exist for property expression; companions say so.
 

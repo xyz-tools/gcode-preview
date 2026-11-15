@@ -33,6 +33,14 @@
  * cursor reaches the end of the document, the chunked run's emitted lines
  * and carry equal the oneshot split of the whole document fed as one chunk
  * (`terminalConfluence`, over the `oneshot` ghost).
+ *
+ * Unit: ST-1 (the splitChunk carry buffer: chunking-invariance of the
+ *   line-splitting layer, the inductive base of streamed-refines-oneshot).
+ * Authority policy: verification/quint/STYLE.md ("Authority
+ *   annotations"). No firmware governs how a host library splits a byte
+ *   stream into lines, so every block below is Authority: none,
+ *   library-invented, with its exclusions named.
+ * Companion: streaming.md.
  */
 module streaming {
   // --- alphabet (see the character map above; keep it in sync with the
