@@ -229,6 +229,23 @@ export class Job {
     return this.state.lineHeight ?? this.derivedLineHeight;
   }
 
+  /**
+   * Whether any move can still change a dimension
+   * @internal
+   * @remarks
+   * Lets the move handlers skip `deriveMoveDimensions` entirely. With both
+   * dimensions supplied the call is a no-op -- the height block is skipped,
+   * the width arithmetic returns early, and the `lastExtrusionZ` it would
+   * still advance is only ever read by the height block it cannot reach --
+   * but it is one call and one object per extruding move to find that out,
+   * which cost about 5 ms of a 3DBenchy interpret.
+   */
+  get derivesAnything(): boolean {
+    return (
+      this.deriveDimensions && !(this.suppliedExtrusionWidth !== undefined && this.suppliedLineHeight !== undefined)
+    );
+  }
+
   deriveMoveDimensions(
     target: { x: number | undefined; y: number | undefined; z: number | undefined },
     extruded: number

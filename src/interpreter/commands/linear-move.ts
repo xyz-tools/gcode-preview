@@ -55,7 +55,7 @@ export const linearMove: CommandHandler = (command, job) => {
   // see also https://github.com/xyz-tools/gcode-preview/issues/179
   const extruded = state.applyExtrusion(e);
   const pathType = extruded > 0 ? PathType.Extrusion : PathType.Travel;
-  if (pathType === PathType.Extrusion) {
+  if (pathType === PathType.Extrusion && job.derivesAnything) {
     // may change the dimensions, which continuePath folds into the path
     job.deriveMoveDimensions({ x: targetX, y: targetY, z: targetZ }, extruded);
   }
