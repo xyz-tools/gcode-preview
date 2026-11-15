@@ -252,11 +252,32 @@ export class LayersMetadataIndexer extends Indexer {
    * @throws NonPlanarPathError if path is non-planar (fallback mode only)
    */
   sortIn(path: Path): void {
-    this.useMetadata ??= this.hasMetadata;
+    if (!this.useMetadata && this.hasMetadata) {
+      this.useMetadata = true;
+      this.adoptMetadataLayers();
+    }
     if (this.useMetadata) {
       this.sortWithMetadata(path);
     } else {
       this.fallbackIndexer.sortIn(path);
+    }
+  }
+
+  /**
+   * Restates the layers the fallback created before the metadata arrived.
+   * @remarks
+   * A slicer states its layers in comments that come after its start G-code, so
+   * the prime line is indexed before any of them have been read and its layer
+   * is described by the move that made it rather than by the slicer. A start
+   * G-code prints at one height, so there is only ever the one, and it is the
+   * layer the first metadata entry describes -- the declared values replace the
+   * observed ones, leaving the same layers a single-shot parse produces.
+   */
+  private adoptMetadataLayers(): void {
+    for (let i = 0; i < this.indexes.length && i < this.layerMetadata.length; i++) {
+      const metadata = this.layerMetadata[i];
+      if (metadata.z !== undefined) this.indexes[i].z = metadata.z;
+      if (metadata.height !== undefined) this.indexes[i].height = metadata.height;
     }
   }
 
@@ -307,8 +328,13 @@ export class LayersMetadataIndexer extends Indexer {
    */
   private findLayerIndexForZ(pathZ: number): number {
     for (let i = this.currentMetadataLayerIndex; i < this.layerMetadata.length; i++) {
-      const z = this.layerMetadata[i].z;
-      // Metadata without a Z falls back to plain layer order.
+      // Metadata without a Z is pinned by the first path filed into it, which
+      // `ensureLayersUpTo` records as the layer's own Z. Reading that back is
+      // what lets the search move on: matching purely on layer order would
+      // return this same index for every later path, at any Z, because the
+      // scan restarts from the pointer this entry is holding.
+      const z = this.layerMetadata[i].z ?? this.indexes[i]?.z;
+      // Nothing has landed here yet, so this path is what defines the layer.
       if (z === undefined) return i;
       if (pathZ <= z + LayersMetadataIndexer.Z_MATCH_TOLERANCE) return i;
     }

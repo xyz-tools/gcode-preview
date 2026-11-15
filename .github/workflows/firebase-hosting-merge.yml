@@ -13,6 +13,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
       - run: npm ci && npm run predeploy && npm run typedoc
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:

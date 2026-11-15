@@ -132,27 +132,6 @@ export const presets = {
       z: 0
     }
   },
-  menger: {
-    title: 'Level 4 Menger Sponge (350MB)',
-    file: 'https://storage.googleapis.com/gcode-preview.firebasestorage.app/menger_level_4.gcode',
-    model: {
-      name: 'Level 4 Menger Sponge',
-      designer: 'FlyByPC',
-      license: 'CC BY-NC-SA',
-      original: 'https://www.thingiverse.com/thing:3015907'
-    },
-    extrusionWidth: 0.45,
-    lineHeight: 0.2,
-    colors: ['#95b5df'],
-    travelColor: 'red',
-    topLayerColor: undefined,
-    lastSegmentColor: undefined,
-    buildVolume: {
-      x: 250,
-      y: 250,
-      z: 0
-    }
-  },
   calabaza: {
     title: 'Calabaza Sombrero (32MB)',
     file: 'https://storage.googleapis.com/gcode-preview.firebasestorage.app/calabaza-sombrero.gcode',

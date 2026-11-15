@@ -1,10 +1,8 @@
-# GCode Preview [![npm version](http://img.shields.io/npm/v/gcode-preview.svg?style=flat)](https://npmjs.org/package/gcode-preview "View this project on npm") [![MIT license](http://img.shields.io/badge/license-MIT-brightgreen.svg)](http://opensource.org/licenses/MIT)
+# GCode Preview [![npm version](http://img.shields.io/npm/v/gcode-preview.svg?style=flat)](https://npmjs.org/package/gcode-preview "View this project on npm") [![npm alpha](https://img.shields.io/npm/v/gcode-preview/alpha.svg?style=flat&label=alpha)](https://www.npmjs.com/package/gcode-preview?activeTab=versions "Latest alpha on npm") [![MIT license](http://img.shields.io/badge/license-MIT-brightgreen.svg)](http://opensource.org/licenses/MIT)
 A simple [G-code](https://en.wikipedia.org/wiki/G-code) parser & viewer lib with 3D printing in mind. Written in Typescript.
 
 Join us on <a href="https://discord.gg/w2bsGRE6S4">discord</a>
 
-## New org: XYZ Tools
-11-11-2024 This repo was moved to a brand new org which is a collaboration between @remcoder and @sophiedeziel for everything 3D printing related.
 
 ## Feature summary
 - multi-color
@@ -33,9 +31,37 @@ Click to see the [full-fledged demo](https://gcode-preview.web.app/):
 
 ## Installation
 
+The 3.0 release is currently in alpha. To install the latest alpha:
+
+`npm install gcode-preview@alpha`
+
+For the current stable 2.x release:
+
 `npm install gcode-preview`
 
 GCode Preview depends on [three.js](https://threejs.org/) and supports `three` `>=0.166.0 <0.186.0`.
+
+### Module format (3.0)
+
+The package is ESM-only. Import from `gcode-preview`; the only other public
+package path is `gcode-preview/package.json`. Deep imports such as
+`gcode-preview/dist/gcode-preview.es.js` are no longer supported, and the
+legacy UMD build / `GCodePreview` browser global has been removed.
+
+TypeScript supports `node16`, `nodenext`, and `bundler` module resolution.
+Legacy `moduleResolution: "node"` (`node10`) currently resolves the root import
+through `types`, but it is no longer tested or supported: TypeScript 6
+deprecates it and TypeScript 7 removes it. Switch to `bundler` for frontend
+apps, or `node16`/`nodenext` for Node.
+
+Consumers compile with their own TypeScript, not the library's. The packaging
+test typechecks the published declarations on both TypeScript 6 and 5.9, in all
+three supported resolution modes, with no extra ambient type packages.
+
+For native browser modules, map `three` in an import map and load
+`dist/gcode-preview.es.js` as a module. When self-hosting, copy the **entire
+`dist` directory**, including any chunks. The library adds nothing to the
+document beyond the canvas you hand it.
 
 ### Quick start
 
@@ -73,7 +99,7 @@ The main options accepted by `new GCodePreview({ ... })` (see the
 - camera: `orthographic`, `initialCameraPosition`
 - streaming: `liveRenderInterval` (throttles progressive rendering)
 - arcs: `arcChordTolerance` (tessellation precision for G2/G3)
-- misc: `droppable` (drag & drop g-code files onto the canvas), `devMode` (debug GUI + stats), `keepLines`, `minLayerThreshold`
+- misc: `droppable` (drag & drop g-code files onto the canvas), `keepLines`, `minLayerThreshold`
 
 After construction, most rendering properties live on the scene manager and can
 be changed at runtime, e.g. `preview.sceneManager.renderTubes = true`, followed
@@ -110,10 +136,12 @@ The interpreter currently handles:
 | `G31` | straight probe |
 | `G38.2`–`G38.5` | probe family |
 | `G92` | set position |
+| `G92.1` | reset coordinate system offsets |
 | `T0`–`T7` | tool selection |
 
 Commands without a handler are parsed but ignored by the interpreter.
 
+`G92.2` and `G92.3` are not supported.
 Standalone `;WIDTH:<mm>` and `;HEIGHT:<mm>` comments (emitted by PrusaSlicer,
 SuperSlicer, OrcaSlicer and Bambu Studio) are picked up by the slicer metadata
 pipeline and set the extrusion width and line height of the paths that follow,
@@ -145,11 +173,11 @@ Supported systems include:
  - and possibly more
 
 ### Render extrusion as tubes
-Extrusions are rendered as flat lines by default; pass the `renderTubes`
-constructor option to get true tube geometry (it can also be toggled at runtime
+Extrusions are rendered as tubes by default; pass `renderTubes: false` as a
+constructor option to render flat lines (it can also be toggled at runtime
 via `preview.sceneManager.renderTubes`):
 ```js
-new GCodePreview({ canvas, renderTubes: true });
+new GCodePreview({ canvas, renderTubes: false });
 ```
 
 ### G2/G3 arc support
@@ -237,6 +265,22 @@ Want to help out? We are open to your ideas and always willing to get you starte
 ### Preview doesn't render in Brave
 This is caused by the device recognition shield in Brave. By changing the setting for "Device Recognition" in Shield settings to "Allow all device recognition attemps" or "Only block cross-site device recognition attemps" you should not get this error.
 https://github.com/mrdoob/three.js/issues/16904
+
+### Compile errors from `@types/three` on TypeScript 6
+If you are on **TypeScript 6** and have **`@types/three` 0.181.0 – 0.183.1**
+pinned, `tsc` reports around 50 duplicate-identifier errors (TS2403, TS2687,
+TS2717, TS6200) inside `node_modules/@webgpu/types/dist/index.d.ts`.
+
+Any one of these resolves it:
+- upgrade `@types/three` to **0.184.0 or newer** (recommended),
+- or stay on `@types/three` **0.180.x or older**,
+- or set `"skipLibCheck": true` in your `tsconfig.json` — on by default in most
+  scaffolded projects, which is why this rarely shows up.
+
+## Brought to you by XYZ Tools
+11-11-2024 This repo was moved to a brand new org which is a collaboration between @remcoder and @sophiedeziel for everything 3D printing related.
+
+![logo](https://avatars.githubusercontent.com/u/188104494?s=200&v=4)
 
 ## Sponsors
 

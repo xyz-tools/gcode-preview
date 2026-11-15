@@ -20,9 +20,12 @@ prerelease builds both go through it — the only difference is the version numb
   in `package.json`**: a plain version (`3.1.0`) publishes to `latest`; a
   prerelease version (`3.1.0-alpha.1`) publishes to its prerelease id (`alpha`).
 - `.github/workflows/announce-release-in-discord.yml` runs on
-  `release: [released]` → posts the release body to Discord. Note this uses
-  `released`, **not** `published`, so **only stable releases ping Discord
-  `@everyone`** — prereleases publish to npm silently. That's intentional.
+  `release: [published]` → posts the release body to Discord. It uses
+  `published`, **not** `released`, so **every release is announced** — alphas
+  and prereleases included, since alphas are meant to be found and tested.
+  The `@everyone` ping is separate: `content` is set only when the release is
+  **not** a prerelease, so **stable releases ping `@everyone` and alphas
+  announce quietly**.
 - `.github/workflows/firebase-hosting-merge.yml` runs on **push to `develop`** →
   deploys the demo to https://gcode-preview.web.app (`predeploy` + `typedoc`).
 
@@ -30,6 +33,26 @@ prerelease builds both go through it — the only difference is the version numb
 > never pass `--tag` by hand. Bump to a plain version for a stable release, or a
 > `-alpha.N` version for an alpha, and the workflow does the rest. (There is no
 > separate `alpha` branch anymore — everything ships through a GitHub Release.)
+
+## Step 0 — Smoke-test the demo (every release, no exceptions)
+
+Before bumping anything, run a **small** browser smoke test of the demo from a
+user's point of view and keep the screenshots. The unit suite and the packaging
+test both pass against code that renders nothing in a real browser — three.js
+rendering, canvas setup and the demo wiring are exactly what they don't cover,
+and publishing goes straight to npm from the GitHub Release, so this is the only
+point where a human-shaped pair of eyes sees the thing work.
+
+```bash
+npm run demo            # build + live-server on http://localhost:8080
+```
+
+Load a G-code file from `demo/gcodes/` (e.g. `3DBenchy.gcode`), then check:
+- the model actually draws,
+- the layer slider and a couple of controls respond,
+- the browser console is clean.
+
+Screenshot the rendered result. If anything looks wrong, stop — don't release.
 
 ## Step 1 — Bump the version
 
@@ -84,7 +107,8 @@ title **and** the full curated body, exactly as it will appear on the Releases
 page — and **ask for feedback**:
 
 > Here's the full release as it will be published. Anything to change before I
-> publish it? (Remember: a stable release broadcasts this to Discord `@everyone`.)
+> publish it? (Remember: every release — alphas included — is broadcast to
+> Discord; a stable one also pings `@everyone`.)
 
 **Do not proceed to Step 5 until the user approves.** If they request changes,
 edit the notes and show the updated full release again — repeat until they're
@@ -92,27 +116,28 @@ happy. Only once they've explicitly signed off do you publish.
 
 ## Step 5 — Publish the release
 
-Once the notes are ready, publish it. Both kinds publish to npm; the flags only
-affect how GitHub labels the release and whether Discord is notified:
+Once the notes are ready, publish it. Both kinds publish to npm and both are
+announced in Discord; `--prerelease` is also what suppresses the `@everyone`
+ping:
 
 ```bash
 # Stable release — marked latest, pings Discord @everyone:
 gh release create <tag> --title "<title>" --notes-file <notes.md> --latest --verify-tag
 
-# Alpha / prerelease — marked pre-release, does NOT ping Discord:
+# Alpha / prerelease — marked pre-release, announced without the ping:
 gh release create <tag> --title "<title>" --notes-file <notes.md> --prerelease --verify-tag
 ```
 
 The npm dist-tag comes from the version number, not these flags — a
 `-alpha.N` version always lands on the `alpha` tag even though the publish
 happens via a GitHub Release. Mark alpha releases `--prerelease` so GitHub shows
-them correctly and Discord stays quiet.
+them correctly **and** so the Discord post doesn't ping `@everyone`.
 
 After publishing, confirm:
 - The **Node.js Package** workflow (npm-publish) went green and the version is
   live on https://www.npmjs.com/package/gcode-preview under the expected tag
   (`npm view gcode-preview dist-tags`).
-- For a stable release, the Discord announcement posted.
+- The Discord announcement posted.
 
 ## Release notes template
 
@@ -182,8 +207,9 @@ Notes on the template:
   notes do, especially first-time and external contributors.
 - Always keep the **Full Changelog** compare link at the bottom; `gh release
   create --generate-notes` adds it automatically — reuse it.
-- Because this hits Discord `@everyone`, proofread before publishing; edits after
-  the fact won't re-notify but the stale version stays broadcast.
+- Because this is broadcast to Discord (and pings `@everyone` on a stable
+  release), proofread before publishing; edits after the fact won't re-notify
+  but the stale version stays broadcast.
 
 ## Notes
 

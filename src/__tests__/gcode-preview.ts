@@ -2,29 +2,23 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GCodePreview } from '../gcode-preview';
 import { SceneManager } from '../scene-manager';
 import { Parser } from '../parser/gcode-parser';
-import { DevGUI } from '../dev-gui';
 import { Job } from '../job';
 import { Interpreter } from '../interpreter';
-import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { makeDroppable } from '../extra/dom-utils';
 
 // Mock the dependencies
 vi.mock('../scene-manager');
 vi.mock('../parser/gcode-parser');
-vi.mock('../dev-gui');
 vi.mock('../job');
 vi.mock('../interpreter');
-vi.mock('three/examples/jsm/libs/stats.module.js');
 vi.mock('../extra/dom-utils');
 
 describe('GCodePreview', () => {
   let mockCanvas: HTMLCanvasElement;
   let preview: GCodePreview;
   let mockSceneManager: ReturnType<typeof vi.fn>;
-  let mockDevGui: ReturnType<typeof vi.fn>;
   let mockJob: ReturnType<typeof vi.fn>;
   let mockInterpreter: ReturnType<typeof vi.fn>;
-  let mockStats: { update: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn>; dom: HTMLDivElement };
 
   beforeEach(() => {
     // Create mock canvas
@@ -55,11 +49,6 @@ describe('GCodePreview', () => {
       dispose: vi.fn()
     };
 
-    mockDevGui = {
-      reset: vi.fn(),
-      destroy: vi.fn()
-    };
-
     // Setup mocks
     // vitest v4 requires function keyword (not arrow functions) in mockImplementation
     // for mocked constructors — arrow functions cannot be called with `new`.
@@ -80,23 +69,10 @@ describe('GCodePreview', () => {
         metadata: { thumbnails: {} }
       };
     } as never);
-    vi.mocked(DevGUI).mockImplementation(function () {
-      return mockDevGui;
-    } as never);
-    mockStats = {
-      update: vi.fn(),
-      end: vi.fn(),
-      dom: document.createElement('div')
-    };
-    vi.mocked(Stats).mockImplementation(function () {
-      return mockStats;
-    } as never);
   });
 
   afterEach(() => {
     vi.clearAllMocks();
-    // initStats appends the stats dom to document.body by default
-    mockStats.dom.remove();
   });
 
   describe('constructor', () => {
@@ -125,38 +101,6 @@ describe('GCodePreview', () => {
       expect(preview.parser).toBeDefined();
       expect(preview.parser).toHaveProperty('parseGCode');
       expect(preview.job).toBe(mockJob);
-    });
-
-    it('should initialize dev GUI when devMode is true', () => {
-      const options = { canvas: mockCanvas, devMode: true };
-      preview = new GCodePreview(options);
-
-      expect(DevGUI).toHaveBeenCalledWith(preview);
-      // the devMode setter is the only construction site, so exactly one GUI
-      expect(DevGUI).toHaveBeenCalledTimes(1);
-    });
-
-    it('should initialize dev GUI with options when devMode is an object', () => {
-      const devModeOptions = { camera: false };
-      const options = { canvas: mockCanvas, devMode: devModeOptions };
-      preview = new GCodePreview(options);
-
-      expect(DevGUI).toHaveBeenCalledWith(preview, devModeOptions);
-      expect(DevGUI).toHaveBeenCalledTimes(1);
-    });
-
-    it('should not initialize dev GUI when devMode is false', () => {
-      const options = { canvas: mockCanvas, devMode: false };
-      preview = new GCodePreview(options);
-
-      expect(DevGUI).not.toHaveBeenCalled();
-    });
-
-    it('should not initialize dev GUI when devMode is undefined', () => {
-      const options = { canvas: mockCanvas };
-      preview = new GCodePreview(options);
-
-      expect(DevGUI).not.toHaveBeenCalled();
     });
 
     it('should initialize droppable when droppable option is true', () => {
@@ -195,13 +139,6 @@ describe('GCodePreview', () => {
         expect(preview.parser).not.toBe(originalParser);
         expect(Parser).toHaveBeenCalledTimes(2); // Once in constructor, once in clear
         expect(Job).toHaveBeenCalledTimes(2); // Once in constructor, once in clear
-      });
-
-      it('should reset devGui if it exists', () => {
-        preview = new GCodePreview({ canvas: mockCanvas, devMode: true });
-        preview.clear();
-
-        expect(mockDevGui.reset).toHaveBeenCalled();
       });
     });
 
@@ -340,55 +277,6 @@ describe('GCodePreview', () => {
         preview.dispose();
         expect(mockSceneManager.dispose).toHaveBeenCalled();
       });
-
-      it('should destroy and clear devGui if it exists', () => {
-        preview = new GCodePreview({ canvas: mockCanvas, devMode: true });
-        preview.dispose();
-
-        expect(mockDevGui.destroy).toHaveBeenCalled();
-        expect(mockSceneManager.dispose).toHaveBeenCalled();
-      });
-    });
-  });
-
-  describe('devMode getter/setter', () => {
-    it('should return devMode from options', () => {
-      preview = new GCodePreview({ canvas: mockCanvas, devMode: true });
-      expect(preview.devMode).toBe(true);
-    });
-
-    it('should update devMode and reinitialize GUI', () => {
-      preview = new GCodePreview({ canvas: mockCanvas });
-      expect(preview.devMode).toBeUndefined();
-
-      preview.devMode = true;
-      expect(preview.devMode).toBe(true);
-      expect(DevGUI).toHaveBeenCalledWith(preview);
-    });
-
-    it('should destroy existing GUI when changing devMode', () => {
-      preview = new GCodePreview({ canvas: mockCanvas, devMode: true });
-      const initialGui = mockDevGui;
-
-      // Create new mock for second DevGUI instance
-      const newMockDevGui = { reset: vi.fn(), destroy: vi.fn() };
-      vi.mocked(DevGUI).mockImplementationOnce(function () {
-        return newMockDevGui;
-      } as never);
-
-      preview.devMode = false;
-
-      expect(initialGui.destroy).toHaveBeenCalled();
-      expect(preview.devMode).toBe(false);
-    });
-
-    it('should handle devMode as object with options', () => {
-      preview = new GCodePreview({ canvas: mockCanvas });
-      const devModeOptions = { camera: true };
-
-      preview.devMode = devModeOptions;
-      expect(preview.devMode).toBe(devModeOptions);
-      expect(DevGUI).toHaveBeenCalledWith(preview, devModeOptions);
     });
   });
 
@@ -561,109 +449,60 @@ describe('GCodePreview', () => {
 
       await preview.readStream(stream);
 
-      // chunk 1 completes 'G0 X0 Y0', chunk 2 has no newline so it completes
-      // nothing (''), and the leftover tail is flushed after the stream ends
-      expect(preview.parser.parseGCode).toHaveBeenCalledTimes(3);
+      // chunk 2 has no newline, so it completes nothing and is skipped rather
+      // than parsed as an empty line; the tail is flushed after the stream ends
+      expect(preview.parser.parseGCode).toHaveBeenCalledTimes(2);
       expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(1, 'G0 X0 Y0');
       expect(preview.parser.parseGCode).toHaveBeenLastCalledWith('G1 X10 Y10');
-      expect(mockInterpreter.execute).toHaveBeenCalledTimes(3);
-    });
-  });
-
-  describe('initStats method', () => {
-    it('should not create stats when devMode is false', () => {
-      preview = new GCodePreview({ canvas: mockCanvas, devMode: false });
-      expect(Stats).not.toHaveBeenCalled();
-      expect(preview.stats).toBeUndefined();
+      expect(mockInterpreter.execute).toHaveBeenCalledTimes(2);
     });
 
-    it('should not create stats when devMode is not set', () => {
+    it('cancels the stream when clear() replaces the job mid-stream', async () => {
       preview = new GCodePreview({ canvas: mockCanvas });
-      expect(Stats).not.toHaveBeenCalled();
-      expect(preview.stats).toBeUndefined();
-    });
+      const onStreamEnd = vi.fn();
+      preview.onStreamEnd = onStreamEnd;
 
-    // regression: the constructor used to read this.devMode before assigning
-    // it from opts, so stats were never created even with devMode enabled
-    it('should create stats and append them to document.body when devMode is true', () => {
-      preview = new GCodePreview({ canvas: mockCanvas, devMode: true });
+      let controller!: ReadableStreamDefaultController<string>;
+      let cancelled = false;
+      const stream = new ReadableStream<string>({
+        start(streamController) {
+          controller = streamController;
+          controller.enqueue('G0 X0 Y0\n');
+        },
+        cancel() {
+          cancelled = true;
+        }
+      });
 
-      expect(Stats).toHaveBeenCalledTimes(1);
-      expect(mockStats.dom.parentElement).toBe(document.body);
-      expect(mockStats.dom.classList.contains('stats')).toBe(true);
-    });
+      let firstChunkProcessed!: () => void;
+      const firstChunk = new Promise<void>((resolve) => (firstChunkProcessed = resolve));
+      preview.onJobUpdated = () => firstChunkProcessed();
 
-    it('should append stats to the statsContainer from devMode options', () => {
-      const statsContainer = document.createElement('div');
-      preview = new GCodePreview({ canvas: mockCanvas, devMode: { statsContainer } });
+      const consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
+      const reading = preview.readStream(stream);
+      await firstChunk;
+      const oldParseGCode = preview.parser.parseGCode;
 
-      expect(mockStats.dom.parentElement).toBe(statsContainer);
-      expect(mockStats.dom.classList.contains('stats')).toBe(true);
-    });
+      // clear() builds a fresh Job; the shared mock would hand back the same
+      // object, which would hide the identity change the fix relies on
+      vi.mocked(Job).mockImplementationOnce(function () {
+        return { ...mockJob };
+      } as never);
+      preview.clear();
 
-    it('should fall back to document.body when devMode options have no statsContainer', () => {
-      preview = new GCodePreview({ canvas: mockCanvas, devMode: {} });
+      // simulate a delayed chunk from the old stream arriving after clear()
+      controller.enqueue('G1 X999 E1\n');
+      await reading;
 
-      expect(mockStats.dom.parentElement).toBe(document.body);
-    });
-  });
+      // only the pre-clear chunk was parsed and executed; the delayed chunk
+      // was dropped and the old reader cancelled without signalling stream end
+      expect(oldParseGCode).toHaveBeenCalledTimes(1);
+      expect(preview.parser.parseGCode).not.toHaveBeenCalled();
+      expect(mockInterpreter.execute).toHaveBeenCalledTimes(1);
+      expect(cancelled).toBe(true);
+      expect(onStreamEnd).not.toHaveBeenCalled();
 
-  describe('stats updates on rendered frames', () => {
-    it('should update stats when the sceneManager reports a rendered frame', () => {
-      preview = new GCodePreview({ canvas: mockCanvas, devMode: true });
-
-      mockSceneManager.onFrameRendered();
-
-      expect(mockStats.update).toHaveBeenCalledTimes(1);
-    });
-
-    it('should tolerate rendered frames when stats are disabled', () => {
-      preview = new GCodePreview({ canvas: mockCanvas });
-
-      expect(() => mockSceneManager.onFrameRendered()).not.toThrow();
-      expect(mockStats.update).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('dispose with stats', () => {
-    it('should handle dispose when stats do not exist', () => {
-      preview = new GCodePreview({ canvas: mockCanvas, devMode: false });
-
-      // Verify no stats were created
-      expect(preview.stats).toBeUndefined();
-
-      // Should not throw when disposing without stats
-      expect(() => preview.dispose()).not.toThrow();
-      expect(mockSceneManager.dispose).toHaveBeenCalled();
-    });
-
-    it('should stop stats and remove their dom element when stats exist', () => {
-      preview = new GCodePreview({ canvas: mockCanvas, devMode: true });
-      expect(mockStats.dom.parentElement).toBe(document.body);
-
-      preview.dispose();
-
-      expect(mockStats.end).toHaveBeenCalled();
-      expect(mockStats.dom.parentElement).toBeNull();
-    });
-  });
-
-  describe('initGui edge cases', () => {
-    it('should not create a dev GUI once the sceneManager is disposed', () => {
-      preview = new GCodePreview({ canvas: mockCanvas });
-      preview.dispose();
-
-      preview.devMode = true;
-
-      expect(DevGUI).not.toHaveBeenCalled();
-    });
-
-    it('should not create a dev GUI for a truthy devMode that is neither boolean nor object', () => {
-      preview = new GCodePreview({ canvas: mockCanvas });
-
-      preview.devMode = 'invalid' as never;
-
-      expect(DevGUI).not.toHaveBeenCalled();
+      consoleDebugSpy.mockRestore();
     });
   });
 

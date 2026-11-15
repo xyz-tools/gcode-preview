@@ -8,13 +8,6 @@ export const defaultSettings = {
   },
   initialCameraPosition: [-200, 232, 200], // resembles the angle of thumbnail
   lineHeight: 0.2,
-  devMode: {
-    camera: true,
-    renderer: true,
-    parser: true,
-    buildVolume: true,
-    devHelpers: true
-  },
   startLayer: undefined, // number | undefined
   endLayer: 1,
   singleLayerMode: false,

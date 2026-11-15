@@ -21,7 +21,7 @@ import {
 
 export type { BuildVolumeDef };
 
-// Orthographic camera constants
+// Camera constants
 const PERSPECTIVE_FOV = 25;
 const PERSPECTIVE_NEAR = 1;
 const PERSPECTIVE_FAR = 5000;
@@ -123,6 +123,8 @@ export class SceneManager {
   static readonly defaultExtrusionColor = ObjectsManager.defaultExtrusionColor;
   /** Animation frame ID */
   private animationFrameId?: number;
+  /** Frame ID of the incremental render loop, distinct from the continuous one */
+  private frameLoopId?: number;
   /** Previous start layer before single layer mode */
   private prevStartLayer = 0;
   // colors
@@ -181,7 +183,7 @@ export class SceneManager {
     }
 
     if (!opts.canvas) {
-      throw Error('Set either opts.canvas or opts.targetId');
+      throw Error('Set opts.canvas');
     }
 
     if (opts.extrusionColor !== undefined) {
@@ -226,7 +228,6 @@ export class SceneManager {
       this.controls.target.set(100, 0, -100);
     }
     this.disposables.push(this.controls);
-    this.loadCamera();
 
     this.initScene();
     this.animate();
@@ -497,6 +498,16 @@ export class SceneManager {
     const maxZ = topLayer?.z;
 
     this.objectsManager.updateClippingPlanes(minZ, maxZ);
+
+    // the highlight tracks the top of the *visible* range, so when a range change
+    // moves that top the overlay has to move with it — otherwise it stays floating
+    // above the clipped stack while the newly visible top keeps its tool color.
+    // The incremental path machinery only moves the highlight onto not-yet-drawn
+    // paths (streaming always advances), so landing on an already-drawn layer
+    // needs the full rebuild, which draws the highlight before the tool batches
+    if (this._topLayerColor === undefined && this._lastSegmentColor === undefined) return;
+    const topLayerIndex = (this._endLayer ?? this.job.layers.length) - 1;
+    if (topLayerIndex !== this._highlightedLayerIndex) this.render();
   }
 
   /**
@@ -519,7 +530,7 @@ export class SceneManager {
     }
 
     if (this._singleLayerMode === true) {
-      this.startLayer = this._endLayer - 1;
+      this.startLayer = this._endLayer;
     }
 
     this.updateClippingPlanes();
@@ -546,7 +557,7 @@ export class SceneManager {
 
     if (this._singleLayerMode) {
       this.prevStartLayer = this._startLayer;
-      this._startLayer = Math.max(this._endLayer - 1, 1);
+      this._startLayer = Math.max(this._endLayer, 1);
     } else {
       this._startLayer = this.prevStartLayer;
     }
@@ -628,7 +639,6 @@ export class SceneManager {
     return DEFAULT_FRUSTUM_SIZE;
   }
 
-  /** @internal */
   /**
    * Animation loop that continuously renders the scene
    * @internal
@@ -718,6 +728,7 @@ export class SceneManager {
    * @remarks
    * The cursor walks the job's combined path list; the ObjectsManager routes
    * each prefix by category and skips what it has already drawn.
+   * dispose() cancels the queued frame, leaving the promise unsettled.
    */
   private renderFrameLoop(pathCount: number): Promise<void> {
     return new Promise((resolve) => {
@@ -729,7 +740,7 @@ export class SceneManager {
         } else {
           drawnUpTo = Math.min(drawnUpTo + pathCount, this.job.paths.length);
           this.renderFrame(drawnUpTo);
-          requestAnimationFrame(loop);
+          this.frameLoopId = requestAnimationFrame(loop);
         }
       };
       loop();
@@ -823,6 +834,8 @@ export class SceneManager {
   private cancelAnimation(): void {
     if (this.animationFrameId !== undefined) cancelAnimationFrame(this.animationFrameId);
     this.animationFrameId = undefined;
+    if (this.frameLoopId !== undefined) cancelAnimationFrame(this.frameLoopId);
+    this.frameLoopId = undefined;
   }
 
   /**
@@ -948,39 +961,5 @@ export class SceneManager {
   private resetHighlightTracking(): void {
     this._highlightedLayerIndex = undefined;
     this._highlightedLastPath = undefined;
-  }
-
-  saveCamera() {
-    localStorage.setItem('cameraPosition', JSON.stringify(this.camera.position));
-    localStorage.setItem('cameraRotation', JSON.stringify(this.camera.rotation));
-    localStorage.setItem('cameraZoom', JSON.stringify(this.camera.zoom));
-    localStorage.setItem('cameraTarget', JSON.stringify(this.controls.target));
-  }
-  loadCamera() {
-    const position = JSON.parse(localStorage.getItem('cameraPosition'));
-    const rotation = JSON.parse(localStorage.getItem('cameraRotation'));
-    const zoom = JSON.parse(localStorage.getItem('cameraZoom'));
-    const target = JSON.parse(localStorage.getItem('cameraTarget'));
-    if (position && rotation && zoom && target) {
-      this.camera.position.x = position.x;
-      this.camera.position.y = position.y;
-      this.camera.position.z = position.z;
-      this.camera.rotation.x = rotation.x;
-      this.camera.rotation.y = rotation.y;
-      this.camera.rotation.z = rotation.z;
-      this.camera.zoom = zoom;
-      // this.camera.updateProjectionMatrix();
-      this.controls.target.x = target.x;
-      this.controls.target.y = target.y;
-      this.controls.target.z = target.z;
-      this.controls.update();
-    }
-  }
-
-  clearCamera() {
-    localStorage.removeItem('cameraPosition');
-    localStorage.removeItem('cameraRotation');
-    localStorage.removeItem('cameraZoom');
-    localStorage.removeItem('cameraTarget');
   }
 }
