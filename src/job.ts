@@ -164,10 +164,11 @@ export class Job {
    * index — which is how line-indexed slicer metadata is mapped onto the
    * command stream: extrusion dimension changes (`;WIDTH:` / `;HEIGHT:`
    * comments) recorded at or before this line are folded into the state here.
-   * The in-progress path is deliberately left alone: the move handlers break
-   * it via `continuePath` when the state no longer matches, which keeps a
+   * The in-progress path is deliberately left alone: the move handlers fold
+   * the state's dimensions into it via `continuePath`, which keeps a
    * streamed parse identical to a one-shot parse — the interpreter resumes
-   * the last path at every chunk boundary, undoing any break performed here.
+   * the last path at every chunk boundary, so anything done here to the
+   * in-progress path would be undone.
    */
   beginCommand(): void {
     const lineIndex = this.executedCommandCount++;
@@ -191,9 +192,9 @@ export class Job {
    * Runs for every dialect, unless the slicer metadata opted out; a path
    * carries the derived values as its own wherever the slicer announced
    * none, taking the same render-time precedence over the global fallback as
-   * comment-announced dimensions do. Move handlers call this for
-   * extruding moves before `continuePath`, so a change breaks the path
-   * exactly like a `;WIDTH:` / `;HEIGHT:` comment would.
+   * comment-announced dimensions do. Move handlers call this for extruding
+   * moves before `continuePath`, so a change folds into the path from the
+   * next point on, exactly like a `;WIDTH:` / `;HEIGHT:` comment would.
    *
    * Layer height is the Z step between consecutive extrusion moves (the
    * first one's Z stands in for the first layer). Only extrusion Zs are
@@ -206,7 +207,7 @@ export class Job {
    * cross-section — width = (ΔE × filament cross-section) / (length ×
    * height) — matching the box profile ExtrusionGeometry extrudes. The
    * result is quantized to 0.01 mm and kept within 2% of the current width,
-   * so E-value rounding noise cannot break the model into micro-paths, and
+   * so E-value rounding noise cannot taper every point differently, and
    * discarded entirely when implausible (outside 0.1–2.0 mm, or over a
    * segment too short to measure).
    */
@@ -378,24 +379,22 @@ export class Job {
    * @param pathType - Type of the move about to be added
    * @returns The in-progress path when it can continue, otherwise a fresh one
    * @remarks
-   * The in-progress path continues only while its type, its extrusion
-   * dimensions and its tool still match the state; dimension metadata (see
-   * `beginCommand`) or a tool change that altered the state since the path
-   * was started breaks it here, so every path carries a single width, height
-   * and tool. Deciding this lazily at move time (and not when the metadata or
-   * tool is applied) keeps streamed and one-shot parses identical: the
-   * interpreter resumes the last finished path at every chunk boundary, which
-   * would undo an eager break.
+   * The in-progress path continues only while its type and its tool still
+   * match the state; a tool change that altered the state since the path was
+   * started breaks it here. Extrusion dimension changes (see `beginCommand`)
+   * do NOT break the path — they are folded into it, so one path can span
+   * many `;WIDTH:` / `;HEIGHT:` changes and carry per-point dimensions.
+   * Breaking on every change instead used to multiply the path count on
+   * adaptive-layer-height files, which multiplied geometry build time (and
+   * crashed on very large files). Deciding all of this lazily at move time
+   * (and not when the metadata or tool is applied) keeps streamed and
+   * one-shot parses identical: the interpreter resumes the last finished
+   * path at every chunk boundary, which would undo an eager break.
    */
   continuePath(pathType: PathType): Path {
     const currentPath = this.inprogressPath;
-    if (
-      currentPath !== undefined &&
-      currentPath.travelType === pathType &&
-      currentPath.extrusionWidth === this.resolvedExtrusionWidth &&
-      currentPath.lineHeight === this.resolvedLineHeight &&
-      currentPath.tool === this.state.tool
-    ) {
+    if (currentPath !== undefined && currentPath.travelType === pathType && currentPath.tool === this.state.tool) {
+      currentPath.updateDimensions(this.resolvedExtrusionWidth, this.resolvedLineHeight);
       return currentPath;
     }
     return this.breakPath(pathType);

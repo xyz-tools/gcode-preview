@@ -139,40 +139,51 @@ describe('extrusion dimension metadata (;WIDTH: / ;HEIGHT:)', () => {
     expect(job.paths[0].lineHeight).toEqual(0.16);
   });
 
-  test('a HEIGHT change mid-path breaks the path, continuing from the same point', () => {
+  test('a HEIGHT change mid-path folds into the path instead of breaking it', () => {
+    // A dimension change used to break the path; on adaptive-layer-height
+    // files that multiplied the path count and the geometry build time.
     // The announced WIDTH keeps the derivation out of it: these moves extrude
-    // the same E over different lengths, so a derived width would change and
-    // break the path on its own.
+    // the same E over different lengths, so a derived width would vary too and
+    // this test is about the height.
     const job = run([';WIDTH:0.45', ';HEIGHT:0.2', 'G1 X10 Y10 E1', 'G1 X20 Y10 E1', ';HEIGHT:0.3', 'G1 X30 Y10 E1']);
 
-    expect(job.paths.length).toEqual(2);
-    expect(job.paths[0].lineHeight).toEqual(0.2);
-    expect(job.paths[1].lineHeight).toEqual(0.3);
-    // the new path starts where the finished one ended
-    expect(job.paths[0].vertices.slice(-3)).toEqual([20, 10, 0]);
-    expect(job.paths[1].vertices.slice(0, 3)).toEqual([20, 10, 0]);
+    expect(job.paths.length).toEqual(1);
+    expect(job.paths[0].hasVaryingDimensions).toBe(true);
+    // per point: the seed and the first two moves at 0.2, the last move at 0.3
+    expect(job.paths[0].lineHeightAt(0)).toEqual(0.2);
+    expect(job.paths[0].lineHeightAt(2)).toEqual(0.2);
+    expect(job.paths[0].lineHeightAt(3)).toEqual(0.3);
+    expect(job.paths[0].vertices.length).toEqual(12);
   });
 
-  test('a WIDTH comment after the first moves breaks the path', () => {
+  test('a WIDTH comment after the first moves keeps the earlier points unknown', () => {
     const job = run(['G1 X10 Y10 E1', ';WIDTH:0.42', 'G1 X20 Y10 E1']);
 
-    expect(job.paths.length).toEqual(2);
-    expect(job.paths[0].extrusionWidth).toBeUndefined();
-    expect(job.paths[1].extrusionWidth).toEqual(0.42);
+    expect(job.paths.length).toEqual(1);
+    expect(job.paths[0].hasVaryingDimensions).toBe(true);
+    // the scalar reflects the most recent width; the earlier points carry none
+    expect(job.paths[0].extrusionWidth).toEqual(0.42);
+    // per point: the seed and the first move predate the comment
+    expect([0, 1, 2].map((point) => job.paths[0].extrusionWidthAt(point))).toEqual([undefined, undefined, 0.42]);
   });
 
-  test('repeating the current value does not break the path', () => {
+  test('repeating the current value keeps the dimensions uniform', () => {
     const job = run([';WIDTH:0.45', ';HEIGHT:0.2', 'G1 X10 Y10 E1', ';WIDTH:0.45', ';HEIGHT:0.2', 'G1 X20 Y10 E1']);
 
     expect(job.paths.length).toEqual(1);
     expect(job.paths[0].extrusionWidth).toEqual(0.45);
+    expect(job.paths[0].hasVaryingDimensions).toBe(false);
   });
 
   test('an arc move also picks up the current dimensions', () => {
     const job = run(['G1 X10 Y10 E1', ';HEIGHT:0.12', 'G2 X20 Y10 I5 J0 E1']);
 
-    expect(job.paths.length).toEqual(2);
-    expect(job.paths[1].lineHeight).toEqual(0.12);
+    expect(job.paths.length).toEqual(1);
+    expect(job.paths[0].lineHeight).toEqual(0.12);
+    // every interpolated arc point carries the height set before the arc
+    const lastPoint = job.paths[0].vertices.length / 3 - 1;
+    expect(job.paths[0].lineHeightAt(lastPoint)).toEqual(0.12);
+    expect(job.paths[0].lineHeightAt(0)).toBeUndefined();
   });
 
   test('the metadata only applies when it has been assigned to the job', () => {
@@ -216,13 +227,15 @@ describe('extrusion dimension metadata (;WIDTH: / ;HEIGHT:)', () => {
     expect(job.extrusions[0].extrusionWidth).toBeGreaterThan(0);
   });
 
-  test('a derived width change breaks the path, like an announced one', () => {
+  test('a derived width change folds into the path, like an announced one', () => {
     // Same E over half the distance means twice the bead width (0.6 -> 1.2),
-    // so the second move cannot share a path with the first.
+    // which tapers the path at the second move rather than splitting it.
     const job = run(['M83', 'G0 X0 Y0 Z0.2', 'G1 X20 Y0 E1', 'G1 X30 Y0 E1']);
 
-    expect(job.extrusions.length).toEqual(2);
-    expect(job.extrusions[1].extrusionWidth).toBeGreaterThan(job.extrusions[0].extrusionWidth!);
+    expect(job.extrusions.length).toEqual(1);
+    const path = job.extrusions[0];
+    expect(path.hasVaryingDimensions).toBe(true);
+    expect(path.extrusionWidthAt(2)!).toBeGreaterThan(path.extrusionWidthAt(1)!);
   });
 });
 
@@ -259,7 +272,7 @@ describe('extrusion dimensions derived from the moves', () => {
 
   test('round-trips programmed widths and heights through the volumetric model', () => {
     // The E values are computed from the exact widths and heights the
-    // derivation should recover; a width change mid-layer must break the path.
+    // derivation should recover; a width change mid-layer tapers the path.
     const E = absoluteE();
     const job = run([
       ';LAYER:0',
@@ -273,14 +286,16 @@ describe('extrusion dimensions derived from the moves', () => {
       `G1 X10 Y10 E${E(0.4, 0.2, 10)}`
     ]);
 
+    // the travel to the next layer is what breaks the path, not the width
     expect(dimensions(job)).toEqual([
-      [0.4, 0.2],
       [0.6, 0.2],
       [0.4, 0.2]
     ]);
-    // the width change broke the path exactly at the FILL move
-    expect(job.extrusions[0].vertices).toEqual([10, 10, 0.2, 20, 10, 0.2, 20, 20, 0.2]);
-    expect(job.extrusions[1].vertices).toEqual([20, 20, 0.2, 10, 20, 0.2]);
+    expect(job.extrusions[0].vertices).toEqual([10, 10, 0.2, 20, 10, 0.2, 20, 20, 0.2, 10, 20, 0.2]);
+    // per point: the derived width steps up exactly at the FILL move. The seed
+    // point carries it too — unlike a comment, the derivation runs on the very
+    // move that opens the path, so its start is already measured.
+    expect([0, 1, 2, 3].map((point) => job.extrusions[0].extrusionWidthAt(point))).toEqual([0.4, 0.4, 0.4, 0.6]);
   });
 
   test('recovers an adaptive layer height sequence from the Z steps', () => {
@@ -343,10 +358,9 @@ describe('extrusion dimensions derived from the moves', () => {
       `G1 X10 Y10 E${eFor(0.6, 0.2, 10).toFixed(5)}`
     ]);
 
-    expect(dimensions(job)).toEqual([
-      [0.4, 0.2],
-      [0.6, 0.2]
-    ]);
+    expect(job.extrusions.length).toEqual(1);
+    expect([0, 1, 2].map((point) => job.extrusions[0].extrusionWidthAt(point))).toEqual([0.4, 0.4, 0.6]);
+    expect([0, 1, 2].map((point) => job.extrusions[0].lineHeightAt(point))).toEqual([0.2, 0.2, 0.2]);
   });
 
   test('ironing re-extrudes at the same Z without disturbing the dimensions', () => {

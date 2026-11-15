@@ -56,7 +56,7 @@ export const linearMove: CommandHandler = (command, job) => {
   const extruded = state.applyExtrusion(e);
   const pathType = extruded > 0 ? PathType.Extrusion : PathType.Travel;
   if (pathType === PathType.Extrusion) {
-    // may change the state's dimensions, which continuePath breaks on
+    // may change the dimensions, which continuePath folds into the path
     job.deriveMoveDimensions({ x: targetX, y: targetY, z: targetZ }, extruded);
   }
   const currentPath = job.continuePath(pathType);
