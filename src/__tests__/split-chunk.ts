@@ -1,7 +1,9 @@
+import { join } from 'node:path';
 import { test, expect, describe } from 'vitest';
 
 import { splitChunk } from '../helpers/split-chunk';
 import { Parser } from '../parser/gcode-parser';
+import { listTraceFiles, readTrace, itfInt, itfStr, itfList, itfRecord, type ItfValue } from './helpers/itf-replay';
 
 describe('splitChunk', () => {
   test('keeps the newline out of the tail', () => {
@@ -129,4 +131,144 @@ describe('streaming across a chunk boundary', () => {
 
     expect(parser.lines).toEqual(['G1 X0', ';LAYER_CHANGE', ';Z:0.2', 'G1 Z0.2']);
   });
+});
+
+describe('streaming spec trace replay', () => {
+  // Replays ITF traces produced from verification/quint/streaming.qnt
+  // against the real splitChunk. Each trace state holds exactly two records:
+  // `s` (the machine state: doc, cursor, carry, cumulative lines) and `ev`
+  // (the step's event: kind, the chunk fed, the lines it completed). Tokens
+  // map 1:1 to characters, so a trace doubles as a chunking schedule whose
+  // exact chunk strings drive the real splitter. All numbers here are token
+  // counts, compared integer-exactly with ===; nothing is scaled.
+  const tracesDir = join(process.cwd(), 'verification', 'quint', 'traces', 'streaming');
+
+  // The spec's token alphabet, mapped 1:1 to characters (token = array index);
+  // keep in sync with streaming.qnt's header and streaming.md.
+  const TOKEN_CHARS = ['a', 'b', ' ', ';', '\n'];
+
+  /** A token list decoded into the string it stands for */
+  const tokenText = (value: ItfValue | undefined, key: string): string =>
+    itfList(value, key)
+      .map((token, i) => {
+        const char = TOKEN_CHARS[itfInt(token, `${key}[${i}]`)];
+        if (char === undefined) throw new Error(`token out of alphabet at "${key}[${i}]"`);
+        return char;
+      })
+      .join('');
+
+  /** A list of token lists decoded into an array of line strings */
+  const tokenLines = (value: ItfValue | undefined, key: string): string[] =>
+    itfList(value, key).map((line, i) => tokenText(line, `${key}[${i}]`));
+
+  // The decoded step: the semantic fields the replay compares. The spec's
+  // model-internal ghosts (phase, prevCursor) are deliberately not decoded.
+  type SpecStep = {
+    kind: string;
+    chunk: string;
+    emitted: string[];
+    doc: string;
+    cursor: number;
+    carry: string;
+    lines: string[];
+  };
+
+  const decodeStep = (raw: Record<string, ItfValue>): SpecStep => {
+    const s = itfRecord(raw.s, 's');
+    const ev = itfRecord(raw.ev, 'ev');
+    return {
+      kind: itfStr(ev.kind, 'ev.kind'),
+      chunk: tokenText(ev.chunk, 'ev.chunk'),
+      emitted: tokenLines(ev.emitted, 'ev.emitted'),
+      doc: tokenText(s.doc, 's.doc'),
+      cursor: itfInt(s.cursor, 's.cursor'),
+      carry: tokenText(s.carry, 's.carry'),
+      lines: tokenLines(s.lines, 's.lines')
+    };
+  };
+
+  /** The spec's emitted-line accounting applied to a real splitChunk call:
+   * exactly one newline is consumed per completing step, so `complete` split
+   * on '\n' is the step's lines (an empty completion that still consumed a
+   * separator is one empty line), and no separator means no lines. */
+  const realStepLines = (fedLength: number, complete: string, nextTail: string): string[] => {
+    const sepLength = fedLength - complete.length - nextTail.length;
+    if (sepLength !== 0 && sepLength !== 1) {
+      throw new Error(`splitChunk consumed ${sepLength} separators; the accounting expects 0 or 1`);
+    }
+    if (sepLength === 0 && complete !== '') {
+      throw new Error(`splitChunk completed ${JSON.stringify(complete)} without consuming a separator`);
+    }
+    return sepLength === 1 ? complete.split('\n') : [];
+  };
+
+  const traceFiles = listTraceFiles(tracesDir);
+
+  test('the traces directory exists and holds at least one ITF trace', () => {
+    // Fails (rather than silently skipping the replay) when the Quint traces
+    // have not been generated into verification/quint/traces/streaming.
+    expect(traceFiles.length, `expected *.itf.json traces in ${tracesDir}`).toBeGreaterThan(0);
+  });
+
+  for (const traceFile of traceFiles) {
+    test(`replays ${traceFile} through splitChunk`, () => {
+      const states = readTrace(tracesDir, traceFile).map(decodeStep);
+
+      expect(states[0].kind, `${traceFile} step 0: the first state must be the init state`).toBe('init');
+      expect(states[0].carry, `${traceFile} step 0: the carry must start empty`).toBe('');
+      expect(states[0].lines, `${traceFile} step 0: no lines may be emitted yet`).toEqual([]);
+
+      // The real splitter's running state, built only from its own outputs.
+      let tail = '';
+      const emitted: string[] = [];
+      let consumed = '';
+      let confluenceChecked = false;
+
+      for (let step = 1; step < states.length; step++) {
+        const spec = states[step];
+        // A stutter records that the document was exhausted: nothing is fed.
+        if (spec.kind === 'stutter') continue;
+        expect(spec.kind, `${traceFile} step ${step}: unknown spec event kind "${spec.kind}"`).toBe('chunk');
+
+        const at = (field: string, expected: unknown, actual: unknown): string =>
+          `${traceFile} step ${step} (chunk ${JSON.stringify(spec.chunk)}) field ${field}: ` +
+          `expected ${JSON.stringify(expected)}, actual ${JSON.stringify(actual)}`;
+
+        const { complete, tail: nextTail } = splitChunk(tail, spec.chunk);
+        const stepLines = realStepLines(tail.length + spec.chunk.length, complete, nextTail);
+
+        expect(stepLines, at('ev.emitted', spec.emitted, stepLines)).toEqual(spec.emitted);
+        expect(nextTail, at('s.carry', spec.carry, nextTail)).toBe(spec.carry);
+
+        emitted.push(...stepLines);
+        expect(emitted, at('s.lines', spec.lines, emitted)).toEqual(spec.lines);
+
+        consumed += spec.chunk;
+        expect(consumed.length, at('s.cursor', spec.cursor, consumed.length)).toBe(spec.cursor);
+        expect(consumed, at('consumed doc prefix', spec.doc.slice(0, spec.cursor), consumed)).toBe(
+          spec.doc.slice(0, spec.cursor)
+        );
+
+        tail = nextTail;
+
+        // Terminal confluence, replayed on the real splitter: once the whole
+        // document has been fed under the trace's chunking, the emitted lines
+        // and the carry must equal a oneshot split of the document.
+        if (spec.cursor === spec.doc.length) {
+          const oneshot = splitChunk('', spec.doc);
+          const oneshotLines = realStepLines(spec.doc.length, oneshot.complete, oneshot.tail);
+          expect(emitted, at('oneshot lines', oneshotLines, emitted)).toEqual(oneshotLines);
+          expect(tail, at('oneshot carry', oneshot.tail, tail)).toBe(oneshot.tail);
+          confluenceChecked = true;
+        }
+      }
+
+      // Traces whose document outlives the step budget legitimately skip the
+      // confluence check; those that exhausted must have performed it.
+      const lastState = states[states.length - 1];
+      if (lastState.cursor === lastState.doc.length) {
+        expect(confluenceChecked, `${traceFile}: exhausted trace never ran the confluence check`).toBe(true);
+      }
+    });
+  }
 });
