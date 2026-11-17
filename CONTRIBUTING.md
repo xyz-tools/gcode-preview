@@ -176,6 +176,14 @@ one-off warning, callback or `console.log` alongside a fix.
 Changes in this area want a test that feeds the malformed snippet through the
 pipeline and asserts what _did_ render, not just that nothing threw.
 
+## Decisions
+
+Changes with hard impact, ones that rule something out or are costly to
+reverse, need a short decision record in [`docs/decisions/`](docs/decisions/).
+These are typically made by the maintainers, so raise the change in an issue
+or the PR first; you're welcome to draft the record. See
+[0000](docs/decisions/0000-record-decisions.md) for what counts.
+
 ## Review standards
 
 Every change, **intended or not**, must be:

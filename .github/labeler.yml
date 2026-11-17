@@ -1,0 +1,5 @@
+# Labels applied by .github/workflows/labeler.yml based on changed paths
+decision:
+  - changed-files:
+      # Numbered records only; edits to the folder's README don't count
+      - any-glob-to-any-file: 'docs/decisions/[0-9]*.md'

@@ -9,7 +9,7 @@ dist/*
 demo/build/*
 demo/dist
 demo/lib
-docs
+demo/docs
 
 # Test coverage
 coverage
