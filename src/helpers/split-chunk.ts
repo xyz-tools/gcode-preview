@@ -58,9 +58,15 @@ function joinTail(held: string, partial: string): string {
  * The returned `tail` excludes the newline itself, so prepending it to the
  * next chunk never fabricates an empty line at a chunk boundary.
  *
- * A chunk containing no newline at all completes nothing: the whole chunk is
- * carried into the tail, so a line is only ever parsed once its terminating
- * newline (or the end of the stream) has arrived.
+ * `complete` keeps its final newline: every newline in it terminates one
+ * line, which is exactly how the parser reads strings. A trailing newline
+ * would otherwise be ambiguous — `'A\n'` completing lines `A` and `''` here,
+ * but line `A` alone in a whole-file parse.
+ *
+ * A chunk containing no newline at all completes nothing: `complete` is empty
+ * (which parses to zero lines) and the whole chunk is carried into the tail,
+ * so a line is only ever parsed once its terminating newline (or the end of
+ * the stream) has arrived.
  *
  * Comment lines that end a chunk are carried too. A slicer describes a layer
  * in a run of them -- `;LAYER_CHANGE`, then `;Z:`, then `;HEIGHT:` -- and a
@@ -78,5 +84,10 @@ export function splitChunk(tail: string, chunk: string): { complete: string; tai
 
   const { parse, hold } = splitOffCommentRun(tail + chunk.slice(0, idxNewLine));
 
-  return { complete: parse, tail: joinTail(hold, chunk.slice(idxNewLine + 1)) };
+  // When the held run is all that completed, nothing is ready to parse. An
+  // empty `parse` alongside an empty `hold` is different: the only completed
+  // line was blank, and it must stay a line rather than vanish.
+  const complete = parse === '' && hold !== '' ? '' : parse + '\n';
+
+  return { complete, tail: joinTail(hold, chunk.slice(idxNewLine + 1)) };
 }
