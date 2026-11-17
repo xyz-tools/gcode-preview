@@ -8,6 +8,18 @@ import { splitChunk } from './helpers/split-chunk';
 /** While streaming, how often (at most) the paths parsed so far are drawn. */
 const LIVE_RENDER_INTERVAL_MS = 250;
 
+/** How much G-code text is parsed between checks of the time budget. */
+const PARSE_SLICE_CHARS = 16 * 1024;
+
+/** How long parsing may hold the main thread before yielding to the browser. */
+const PARSE_BUDGET_MS = 10;
+
+/**
+ * How long to wait for the browser to go idle before parsing anyway. A page
+ * that redraws every frame on a slow device may never be idle at all.
+ */
+const IDLE_TIMEOUT_MS = 50;
+
 /**
  * Preview-level options, merged into {@link GCodePreviewOptions}.
  */
@@ -162,17 +174,18 @@ export class GCodePreview {
    * Processes G-code and renders the preview
    * @param gcode - G-code string or array of lines
    * @returns Promise that resolves when the animated render has completed
+   * @remarks
+   * A large file is parsed in slices, with the browser getting a turn between
+   * them, so the page stays responsive while it loads. That means `job` fills
+   * in asynchronously: read it once the returned promise resolves, or follow
+   * along with `onJobUpdated`, which fires once per slice.
    */
   processGCode(gcode: string | string[]): Promise<void> {
-    // Parse the gcode using our managed parser
-    const { commands, metadata } = this.parser.parseGCode(gcode);
-    this.job.metadata = metadata;
-
-    // Pass the parsed commands to the sceneManager
-    this.executeCommands(commands);
-
-    // Render the result
-    return this.sceneManager.renderAnimated();
+    const job = this.job;
+    return this.parseInSlices(gcode).then(() => {
+      // cleared while parsing: there is nothing of ours to draw
+      if (this.job === job) return this.sceneManager.renderAnimated();
+    });
   }
 
   /**
@@ -189,9 +202,7 @@ export class GCodePreview {
     if (gcode instanceof ReadableStream) {
       await this.readStream(gcode, { render: options.render });
     } else {
-      const { commands, metadata } = this.parser.parseGCode(gcode);
-      this.job.metadata = metadata;
-      this.executeCommands(commands);
+      await this.parseInSlices(gcode);
     }
 
     if (!this.job.isPlanar) {
@@ -273,6 +284,46 @@ export class GCodePreview {
   }
 
   /**
+   * Parses a whole document in slices, yielding to the browser whenever a
+   * slice pushes the time spent past {@link PARSE_BUDGET_MS}.
+   * @remarks
+   * Each slice goes through splitChunk and the per-chunk steps of readStream,
+   * so the result is the same as streaming the text, which the ingestion
+   * equivalence harness holds equal to a one-shot parse. A `clear()` during a
+   * yield abandons the rest, as it does for a stream.
+   */
+  private async parseInSlices(gcode: string | string[]): Promise<void> {
+    const text = Array.isArray(gcode) ? gcode.join('\n') : gcode;
+    const job = this.job;
+    let tail = '';
+    // the first window starts right away, so input that fits it is parsed
+    // before processGCode returns
+    let window = budgetWindow();
+
+    for (let offset = 0; offset < text.length; offset += PARSE_SLICE_CHARS) {
+      const split = splitChunk(tail, text.slice(offset, offset + PARSE_SLICE_CHARS));
+      tail = split.tail;
+      // see readStream: parsing '' would still count a line
+      if (split.complete !== '') {
+        const { commands, metadata } = this.parser.parseGCode(split.complete);
+        this.job.metadata = metadata;
+        this.executeCommands(commands);
+      }
+
+      if (window.timeRemaining() <= 0) {
+        window = await nextParseWindow();
+        if (this.job !== job) return;
+      }
+    }
+
+    // a last line without a trailing newline, flushed like readStream does
+    if (tail !== '') {
+      const { commands } = this.parser.parseGCode(tail);
+      this.executeCommands(commands);
+    }
+  }
+
+  /**
    * Folds parsed commands into the job and announces the result.
    * @param commands - Parsed G-code commands
    */
@@ -299,3 +350,55 @@ export class GCodePreview {
  */
 export { SceneManager, GCodeCommand, Parser, Job };
 export type { SceneManagerOptions };
+
+/**
+ * Lets the browser draw a frame and handle input before parsing continues.
+ * @remarks
+ * A MessageChannel task, chosen by measurement (3DBenchy in Chrome):
+ * - `scheduler.yield()` resumes ahead of rendering, so no frame got drawn
+ *   during the whole parse: no better than not yielding at all.
+ * - `setTimeout(0)` is clamped to 4 ms once nested, which made parsing a
+ *   third slower on a fast machine.
+ * - A posted message runs as an ordinary task, without the clamp, so frames
+ *   interleave (~50 fps) and parsing takes as long as without yielding.
+ * A resolved promise would not do either: microtasks run before rendering.
+ */
+function yieldToBrowser(): Promise<void> {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      channel.port1.close();
+      resolve();
+    };
+    channel.port2.postMessage(undefined);
+  });
+}
+
+/** A span of time parsing may use: the shape of the IdleDeadline requestIdleCallback hands out. */
+interface ParseWindow {
+  timeRemaining(): number;
+}
+
+/** A window of {@link PARSE_BUDGET_MS}, starting now. */
+function budgetWindow(): ParseWindow {
+  const end = performance.now() + PARSE_BUDGET_MS;
+  return { timeRemaining: () => end - performance.now() };
+}
+
+/**
+ * Waits for the browser's next chance to parse, and says how long it may run.
+ * @remarks
+ * Where requestIdleCallback exists, the browser picks the moment and the
+ * length: whatever is left of the frame once it has drawn. If it is never
+ * idle within {@link IDLE_TIMEOUT_MS}, parsing goes ahead with the fixed
+ * budget rather than one slice per timeout. Safari has no
+ * requestIdleCallback, so it yields a MessageChannel task and uses the budget.
+ */
+function nextParseWindow(): Promise<ParseWindow> {
+  if (typeof requestIdleCallback !== 'function') return yieldToBrowser().then(budgetWindow);
+  return new Promise((resolve) => {
+    requestIdleCallback((deadline) => resolve(deadline.didTimeout ? budgetWindow() : deadline), {
+      timeout: IDLE_TIMEOUT_MS
+    });
+  });
+}

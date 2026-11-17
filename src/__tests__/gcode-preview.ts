@@ -143,20 +143,21 @@ describe('GCodePreview', () => {
     });
 
     describe('processGCode', () => {
-      it('should parse gcode and execute commands', () => {
-        const gcode = 'G0 X0 Y0\nG1 X10 Y10';
-        preview.processGCode(gcode);
+      it('should parse gcode and execute commands', async () => {
+        await preview.processGCode('G0 X0 Y0\nG1 X10 Y10');
 
-        expect(preview.parser.parseGCode).toHaveBeenCalledWith(gcode);
+        // the last line has no newline, so it is flushed on its own after the slice
+        expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(1, 'G0 X0 Y0');
+        expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(2, 'G1 X10 Y10');
         expect(mockInterpreter.execute).toHaveBeenCalledWith(['G0 X0 Y0', 'G1 X10 Y10'], mockJob);
         expect(mockSceneManager.renderAnimated).toHaveBeenCalled();
       });
 
-      it('should handle array of gcode lines', () => {
-        const gcode = ['G0 X0 Y0', 'G1 X10 Y10'];
-        preview.processGCode(gcode);
+      it('should handle array of gcode lines', async () => {
+        await preview.processGCode(['G0 X0 Y0', 'G1 X10 Y10']);
 
-        expect(preview.parser.parseGCode).toHaveBeenCalledWith(gcode);
+        expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(1, 'G0 X0 Y0');
+        expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(2, 'G1 X10 Y10');
         expect(mockInterpreter.execute).toHaveBeenCalled();
         expect(mockSceneManager.renderAnimated).toHaveBeenCalled();
       });
@@ -503,6 +504,344 @@ describe('GCodePreview', () => {
       expect(onStreamEnd).not.toHaveBeenCalled();
 
       consoleDebugSpy.mockRestore();
+    });
+  });
+
+  describe('parsing in slices', () => {
+    // 'G1 X1\n' never divides the 16 KB slice evenly, so lines straddle every
+    // slice boundary; 20k lines make 120000 chars, i.e. 8 slices
+    const LINE = 'G1 X1\n';
+    const LINE_COUNT = 20_000;
+    const SLICES = Math.ceil((LINE.length * LINE_COUNT) / (16 * 1024));
+    const multiSlice = LINE.repeat(LINE_COUNT);
+
+    /**
+     * A MessageChannel whose message is only delivered when the test says so,
+     * so a test can hold parsing inside a yield.
+     */
+    class ManualChannel {
+      static opened: ManualChannel[] = [];
+      port1 = { onmessage: null as (() => void) | null, close: vi.fn() };
+      port2 = { postMessage: vi.fn() };
+
+      constructor() {
+        ManualChannel.opened.push(this);
+      }
+
+      deliver() {
+        this.port1.onmessage!();
+      }
+    }
+
+    /** Advances performance.now() past the 10 ms budget on every read, so every slice yields. */
+    const exhaustBudgetOnEveryCheck = () => {
+      let now = 0;
+      return vi.spyOn(performance, 'now').mockImplementation(() => (now += 10));
+    };
+
+    /** Everything parseGCode received, rejoined: the slices must cover the input exactly once. */
+    const parsedText = () =>
+      vi
+        .mocked(preview.parser.parseGCode)
+        .mock.calls.map(([text]) => text)
+        .join('\n');
+
+    beforeEach(() => {
+      ManualChannel.opened = [];
+      preview = new GCodePreview({ canvas: mockCanvas });
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    });
+
+    it('parses in slices that cover the input exactly once', async () => {
+      exhaustBudgetOnEveryCheck();
+
+      await preview.processGCode(multiSlice);
+
+      expect(preview.parser.parseGCode).toHaveBeenCalledTimes(SLICES);
+      // the final newline ends the last line; nothing is left as a tail
+      expect(parsedText()).toEqual(multiSlice.slice(0, -1));
+      expect(mockInterpreter.execute).toHaveBeenCalledTimes(SLICES);
+      expect(mockSceneManager.renderAnimated).toHaveBeenCalledTimes(1);
+    });
+
+    it('fills the job asynchronously, firing onJobUpdated once per slice', async () => {
+      exhaustBudgetOnEveryCheck();
+      const onJobUpdated = vi.fn();
+      preview.onJobUpdated = onJobUpdated;
+
+      const parsing = preview.processGCode(multiSlice);
+
+      // only the first slice ran before the first yield
+      expect(preview.parser.parseGCode).toHaveBeenCalledTimes(1);
+      expect(onJobUpdated).toHaveBeenCalledTimes(1);
+      expect(mockSceneManager.renderAnimated).not.toHaveBeenCalled();
+
+      await parsing;
+
+      expect(onJobUpdated).toHaveBeenCalledTimes(SLICES);
+      expect(onJobUpdated).toHaveBeenCalledWith(mockJob);
+      expect(mockSceneManager.renderAnimated).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not yield while the time budget lasts', async () => {
+      vi.stubGlobal('MessageChannel', ManualChannel);
+      vi.spyOn(performance, 'now').mockReturnValue(0);
+
+      const parsing = preview.processGCode(multiSlice);
+
+      // the clock never moves, so every slice is parsed in one synchronous run
+      expect(preview.parser.parseGCode).toHaveBeenCalledTimes(SLICES);
+      await parsing;
+      expect(ManualChannel.opened).toHaveLength(0);
+    });
+
+    it('yields through a MessageChannel task, one per spent budget', async () => {
+      vi.stubGlobal('MessageChannel', ManualChannel);
+      exhaustBudgetOnEveryCheck();
+
+      const parsing = preview.processGCode(multiSlice);
+
+      for (let slice = 1; slice < SLICES; slice++) {
+        // parsing waits on the posted message, and resumes only on its delivery
+        await vi.waitFor(() => expect(ManualChannel.opened).toHaveLength(slice));
+        const channel = ManualChannel.opened[slice - 1];
+        expect(channel.port2.postMessage).toHaveBeenCalledTimes(1);
+        expect(preview.parser.parseGCode).toHaveBeenCalledTimes(slice);
+        channel.deliver();
+        // each channel is closed once used, so none is left open
+        expect(channel.port1.close).toHaveBeenCalledTimes(1);
+      }
+
+      // the last slice spends the budget too, and so yields once more
+      await vi.waitFor(() => expect(ManualChannel.opened).toHaveLength(SLICES));
+      ManualChannel.opened[SLICES - 1].deliver();
+      await parsing;
+
+      expect(preview.parser.parseGCode).toHaveBeenCalledTimes(SLICES);
+    });
+
+    it('yields a real macrotask: queued microtasks all drain before parsing resumes', async () => {
+      exhaustBudgetOnEveryCheck();
+      // A chain of microtasks, each queueing the next. A promise-based yield
+      // (a bare `await` or Promise.resolve()) would resume parsing after a
+      // tick or two, midway through the chain; a task resumes only after the
+      // whole microtask queue -- and, in a browser, a render -- has run.
+      const CHAIN = 100;
+      let drained = 0;
+      const drain = (): Promise<void> | void => {
+        if (++drained < CHAIN) return Promise.resolve().then(drain);
+      };
+      const drainedAtSlice: number[] = [];
+      preview.onJobUpdated = () => {
+        drainedAtSlice.push(drained);
+        if (drainedAtSlice.length === 1) void Promise.resolve().then(drain);
+      };
+
+      await preview.processGCode(multiSlice);
+
+      expect(drainedAtSlice[0]).toEqual(0);
+      expect(drainedAtSlice[1]).toEqual(CHAIN);
+    });
+
+    it('stops parsing and skips the render when clear() swaps the job during a yield', async () => {
+      vi.stubGlobal('MessageChannel', ManualChannel);
+      exhaustBudgetOnEveryCheck();
+      const onJobUpdated = vi.fn();
+      preview.onJobUpdated = onJobUpdated;
+
+      const parsing = preview.processGCode(multiSlice);
+      expect(ManualChannel.opened).toHaveLength(1);
+      const oldParseGCode = preview.parser.parseGCode;
+
+      // clear() builds a fresh Job; the shared mock would hand back the same
+      // object, which would hide the identity change the bail-out relies on
+      const freshJob = { ...mockJob };
+      vi.mocked(Job).mockImplementationOnce(function () {
+        return freshJob;
+      } as never);
+      preview.clear();
+      ManualChannel.opened[0].deliver();
+      await parsing;
+
+      // the old job got the first slice and nothing more; the new one nothing
+      expect(oldParseGCode).toHaveBeenCalledTimes(1);
+      expect(preview.parser.parseGCode).not.toHaveBeenCalled();
+      expect(mockInterpreter.execute).toHaveBeenCalledTimes(1);
+      expect(mockInterpreter.execute).toHaveBeenCalledWith(expect.anything(), mockJob);
+      expect(onJobUpdated).toHaveBeenCalledTimes(1);
+      expect(preview.job).toBe(freshJob);
+      expect(ManualChannel.opened).toHaveLength(1);
+      expect(mockSceneManager.renderAnimated).not.toHaveBeenCalled();
+    });
+
+    it('keeps a last line that has no trailing newline', async () => {
+      await preview.processGCode('G0 X0 Y0\nG1 X10 Y10');
+
+      expect(preview.parser.parseGCode).toHaveBeenCalledTimes(2);
+      expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(1, 'G0 X0 Y0');
+      expect(preview.parser.parseGCode).toHaveBeenLastCalledWith('G1 X10 Y10');
+      expect(mockInterpreter.execute).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps the metadata from the slices, not from the flushed last line', async () => {
+      const sliceMetadata = { thumbnails: {}, slicerName: 'from the slice' };
+      const tailMetadata = { thumbnails: {}, slicerName: 'from the tail' };
+      vi.mocked(preview.parser.parseGCode)
+        .mockReturnValueOnce({ commands: [], metadata: sliceMetadata } as never)
+        .mockReturnValueOnce({ commands: [], metadata: tailMetadata } as never);
+
+      await preview.processGCode('G0 X0 Y0\nG1 X10 Y10');
+
+      // like readStream's tail flush: the parser accumulates metadata in one
+      // object, so the flush has nothing new to hand the job
+      expect(preview.job.metadata).toBe(sliceMetadata);
+    });
+
+    it('joins string[] input with newlines before slicing it', async () => {
+      await preview.processGCode(['G0 X0 Y0', 'G1 X10 Y10', 'G1 X20 Y20']);
+
+      expect(preview.parser.parseGCode).toHaveBeenNthCalledWith(1, 'G0 X0 Y0\nG1 X10 Y10');
+      expect(preview.parser.parseGCode).toHaveBeenLastCalledWith('G1 X20 Y20');
+    });
+
+    it('parses string[] input the same as the joined string', async () => {
+      exhaustBudgetOnEveryCheck();
+      await preview.processGCode(multiSlice);
+      const fromString = vi.mocked(preview.parser.parseGCode).mock.calls;
+
+      preview = new GCodePreview({ canvas: mockCanvas });
+      await preview.processGCode(multiSlice.split('\n'));
+
+      expect(vi.mocked(preview.parser.parseGCode).mock.calls).toEqual(fromString);
+    });
+
+    it('parses nothing for empty input, but still renders', async () => {
+      await preview.processGCode('');
+
+      expect(preview.parser.parseGCode).not.toHaveBeenCalled();
+      expect(mockSceneManager.renderAnimated).toHaveBeenCalledTimes(1);
+    });
+
+    it('resolves only after the animated render has completed', async () => {
+      let renderDone = false;
+      mockSceneManager.renderAnimated.mockImplementation(() =>
+        Promise.resolve().then(() => {
+          renderDone = true;
+        })
+      );
+
+      await preview.processGCode('G0 X0 Y0\n');
+
+      expect(renderDone).toBe(true);
+    });
+
+    it('slices string input to processGCodeStream the same way', async () => {
+      vi.stubGlobal('MessageChannel', ManualChannel);
+      exhaustBudgetOnEveryCheck();
+
+      const parsing = preview.processGCodeStream(multiSlice, { render: false });
+      // held in the first yield: only the first slice has been parsed
+      expect(preview.parser.parseGCode).toHaveBeenCalledTimes(1);
+
+      for (let slice = 1; slice <= SLICES; slice++) {
+        await vi.waitFor(() => expect(ManualChannel.opened).toHaveLength(slice));
+        ManualChannel.opened[slice - 1].deliver();
+      }
+      await parsing;
+
+      expect(preview.parser.parseGCode).toHaveBeenCalledTimes(SLICES);
+      expect(parsedText()).toEqual(multiSlice.slice(0, -1));
+      expect(mockSceneManager.renderAnimated).not.toHaveBeenCalled();
+    });
+
+    describe('where the browser has requestIdleCallback', () => {
+      /** Idle requests the test answers by hand, with the deadline it chooses. */
+      let idleRequests: { callback: IdleRequestCallback; options?: IdleRequestOptions }[];
+
+      /** A deadline that grants `slices` slices' worth of time: one check per slice. */
+      const deadlineFor = (slices: number, didTimeout = false): IdleDeadline => {
+        let checks = 0;
+        return { didTimeout, timeRemaining: () => (++checks < slices ? 5 : 0) };
+      };
+
+      beforeEach(() => {
+        idleRequests = [];
+        vi.stubGlobal('MessageChannel', ManualChannel);
+        vi.stubGlobal('requestIdleCallback', (callback: IdleRequestCallback, options?: IdleRequestOptions) => {
+          idleRequests.push({ callback, options });
+          return idleRequests.length;
+        });
+      });
+
+      it('lets the browser decide how many slices fit before the next pause', async () => {
+        exhaustBudgetOnEveryCheck();
+
+        const parsing = preview.processGCode(multiSlice);
+        // the first window is the fixed budget, spent by the first slice
+        expect(preview.parser.parseGCode).toHaveBeenCalledTimes(1);
+        expect(idleRequests).toHaveLength(1);
+
+        // the browser grants room for three slices
+        idleRequests[0].callback(deadlineFor(3));
+        await vi.waitFor(() => expect(idleRequests).toHaveLength(2));
+        expect(preview.parser.parseGCode).toHaveBeenCalledTimes(4);
+
+        // then room for everything that is left
+        idleRequests[1].callback(deadlineFor(SLICES));
+        await parsing;
+
+        expect(preview.parser.parseGCode).toHaveBeenCalledTimes(SLICES);
+        expect(parsedText()).toEqual(multiSlice.slice(0, -1));
+        // the browser did the scheduling: no MessageChannel was needed
+        expect(ManualChannel.opened).toHaveLength(0);
+      });
+
+      it('asks the browser to stop waiting for idle time after 50 ms', async () => {
+        exhaustBudgetOnEveryCheck();
+
+        void preview.processGCode(multiSlice);
+
+        expect(idleRequests[0].options).toEqual({ timeout: 50 });
+      });
+
+      it('falls back to the fixed budget when the browser was never idle', async () => {
+        const now = exhaustBudgetOnEveryCheck();
+
+        const parsing = preview.processGCode(multiSlice);
+        expect(preview.parser.parseGCode).toHaveBeenCalledTimes(1);
+
+        // a timed-out deadline reports no time left; parsing must still get a
+        // budget of its own, so let the clock stand still for one window
+        now.mockImplementation(() => 1000);
+        idleRequests[0].callback(deadlineFor(0, true));
+        // with the clock stopped the budget never runs out, so the rest goes in one window
+        await parsing;
+
+        expect(preview.parser.parseGCode).toHaveBeenCalledTimes(SLICES);
+        expect(idleRequests).toHaveLength(1);
+      });
+
+      it('stops when clear() swaps the job while waiting for idle time', async () => {
+        exhaustBudgetOnEveryCheck();
+
+        const parsing = preview.processGCode(multiSlice);
+        const oldParseGCode = preview.parser.parseGCode;
+        // a fresh Job, so the identity check sees the swap (see the test above)
+        vi.mocked(Job).mockImplementationOnce(function () {
+          return { ...mockJob };
+        } as never);
+        preview.clear();
+        idleRequests[0].callback(deadlineFor(SLICES));
+        await parsing;
+
+        expect(oldParseGCode).toHaveBeenCalledTimes(1);
+        expect(preview.parser.parseGCode).not.toHaveBeenCalled();
+        expect(mockSceneManager.renderAnimated).not.toHaveBeenCalled();
+      });
     });
   });
 

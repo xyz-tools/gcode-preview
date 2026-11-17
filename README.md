@@ -75,8 +75,12 @@ document beyond the canvas you hand it.
   
   // draw a diagonal line
   const gcode = 'G0 X0 Y0 Z0.2\nG1 X42 Y42 E10';
-  preview.processGCode(gcode);
+  await preview.processGCode(gcode);
 ```
+
+Large files are parsed in slices, so the page stays responsive while they load.
+That means `preview.job` fills in asynchronously: read it once the returned
+promise resolves.
 
 G-code can also be streamed in and rendered progressively:
 

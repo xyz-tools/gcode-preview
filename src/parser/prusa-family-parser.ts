@@ -101,6 +101,12 @@ export class PrusaFamilyMetadataParser extends SlicerMetadataParser {
 
     for (let i = 0; i < commands.length; i++) {
       const comment = commands[i].comment;
+      // The block is the run of comments right after ;LAYER_CHANGE; the first
+      // real command ends it. PrusaSlicer repeats ;HEIGHT: further down the
+      // layer whenever the extrusion height changes, and those must not
+      // overwrite the layer's own height. Leaving the block open made the
+      // result depend on where a stream chunk happened to end.
+      if (commands[i].gcode) inLayerChange = false;
       if (!comment) continue;
 
       if (

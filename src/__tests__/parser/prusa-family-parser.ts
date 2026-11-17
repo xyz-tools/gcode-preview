@@ -62,6 +62,22 @@ describe('PrusaFamilyMetadataParser', () => {
   });
 
   describe('parseLayerMetadata', () => {
+    it('takes the height from the layer change block, not a later ;HEIGHT: in the layer', () => {
+      // PrusaSlicer repeats ;HEIGHT: mid-layer whenever the extrusion height
+      // changes; those used to overwrite the layer's own height, so a one-shot
+      // parse and a streamed one (which stops at a chunk end) disagreed.
+      const commands: GCodeCommand[] = [
+        { comment: 'LAYER_CHANGE' },
+        { comment: 'Z:0.2' },
+        { comment: 'HEIGHT:0.2' },
+        { gcode: 'G1 X5 Y1 E1' },
+        { comment: 'HEIGHT:0.15' },
+        { gcode: 'G1 X5 Y5 E1' }
+      ];
+
+      expect(parser.parseLayerMetadata(commands)).toEqual([{ layerIndex: 0, z: 0.2, height: 0.2, lineIndex: 0 }]);
+    });
+
     it('should parse single layer with complete metadata', () => {
       const commands: GCodeCommand[] = [
         { comment: 'LAYER_CHANGE' },
