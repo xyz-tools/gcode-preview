@@ -1,13 +1,14 @@
 import { test, expect, describe } from 'vitest';
 import { Parser } from '../../../parser/gcode-parser';
 import { Interpreter, handlers } from '../../../interpreter';
+import type { CommandType } from 'gcode-ast';
 import { PathType } from '../../../path';
 
 describe('probe (G38.2-G38.5)', () => {
   const run = (gcode: string) => new Interpreter().execute(new Parser().parseGCode(gcode).commands);
 
   test.each(['G38.2', 'G38.3', 'G38.4', 'G38.5'])('%s is handled by the same handler as G31', (gcode) => {
-    expect(handlers.get(gcode.toLowerCase())).toBe(handlers.get('g31'));
+    expect(handlers[gcode as CommandType]).toBe(handlers.G31);
   });
 
   test.each(['G38.2', 'G38.3', 'G38.4', 'G38.5'])(
@@ -27,6 +28,16 @@ describe('probe (G38.2-G38.5)', () => {
 
     expect(job.state.positionShift.z).toEqual(0.039);
     expect(job.state.z).toEqual(0.039);
+  });
+
+  test('a G38.2 with no axis words is ignored', () => {
+    // No target to probe toward, so there is no move to render -- the G31
+    // dock-sled form is rejected by its `form` instead, which the G38 nodes
+    // do not carry.
+    const job = run(['G0 Z0.5', 'G38.2'].join('\n'));
+
+    expect(job.stats.points).toEqual(1);
+    expect(job.paths[0].vertices).toEqual([0, 0, 0, 0, 0, 0.5]);
   });
 
   test('an away probe to a clear target travels to the commanded target', () => {

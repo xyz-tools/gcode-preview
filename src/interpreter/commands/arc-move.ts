@@ -1,7 +1,8 @@
 import { toMillimeters } from '../../units';
 import { PathType } from '../../path';
 import { ArcTessellator, ArcTessellatorOptions } from '../../arc-tessellator';
-import type { CommandHandler } from '../../interpreter';
+import type { CommandOf } from 'gcode-ast';
+import type { Job } from '../../job';
 
 /**
  * Builds an arc move handler (G2/G3) around its own tessellator
@@ -13,26 +14,26 @@ import type { CommandHandler } from '../../interpreter';
  * resulting points into the current path and updates the job state.
  * G2 is for clockwise arcs, G3 is for counter-clockwise arcs.
  */
-export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler => {
+export const makeArcMove = (options: ArcTessellatorOptions = {}) => {
   const arcTessellator = new ArcTessellator(options);
-  return (command, job) => {
+  return (command: CommandOf<'G2' | 'G3'>, job: Job): void => {
     const { state } = job;
     const { units } = state;
-    const e = toMillimeters(command.params.e, units);
-    const i = toMillimeters(command.params.i, units);
-    const j = toMillimeters(command.params.j, units);
-    const r = toMillimeters(command.params.r, units);
+    const e = toMillimeters(command.e, units);
+    const i = toMillimeters(command.i, units);
+    const j = toMillimeters(command.j, units);
+    const r = toMillimeters(command.r, units);
     // The endpoint arrives in logical coordinates; translate it into physical
     // space up front so the tessellator's derived values agree with `from`.
     // I/J/R are relative distances and need no shift.
     const { positionShift } = state;
-    const x = command.params.x === undefined ? undefined : toMillimeters(command.params.x, units)! + positionShift.x;
-    const y = command.params.y === undefined ? undefined : toMillimeters(command.params.y, units)! + positionShift.y;
-    const z = command.params.z === undefined ? undefined : toMillimeters(command.params.z, units)! + positionShift.z;
+    const x = command.x === undefined ? undefined : toMillimeters(command.x, units)! + positionShift.x;
+    const y = command.y === undefined ? undefined : toMillimeters(command.y, units)! + positionShift.y;
+    const z = command.z === undefined ? undefined : toMillimeters(command.z, units)! + positionShift.z;
     // Starting position for the arc, with any un-homed axis assumed at the origin.
     const from = job.resolvePosition();
 
-    const cw = command.gcode === 'g2';
+    const cw = command.type === 'G2';
     // applyExtrusion keeps the extruder position in sync for the moves that follow; the
     // arc itself derives no dimensions (Cura only emits arcs via plugins) and
     // simply carries the state's current width and height like any move.
@@ -66,4 +67,4 @@ export const makeArcMove = (options: ArcTessellatorOptions = {}): CommandHandler
 };
 
 /** Executes an arc move command (G2/G3) with the default chord tolerance */
-export const arcMove: CommandHandler = makeArcMove();
+export const arcMove = makeArcMove();

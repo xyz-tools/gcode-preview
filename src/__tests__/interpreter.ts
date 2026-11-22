@@ -1,11 +1,12 @@
 import { test, expect, describe } from 'vitest';
+import { parsed } from './interpreter/command-fixtures';
 import { GCodeCommand, Parser } from '../parser/gcode-parser';
 import { Interpreter, handlers } from '../interpreter';
 import { Job } from '../job';
 
 describe('.execute', () => {
   test('returns a stateful job', () => {
-    const command = new GCodeCommand('G0 X1 Y2 Z3', 'g0', { x: 1, y: 2, z: 3 });
+    const command = parsed('G0 X1 Y2 Z3');
     const interpreter = new Interpreter();
 
     const result = interpreter.execute([command]);
@@ -31,7 +32,7 @@ describe('.execute', () => {
   });
 
   test('ignores unknown commands', () => {
-    const command = new GCodeCommand('G42', 'g42', {});
+    const command = parsed('G42');
     const interpreter = new Interpreter();
 
     const result = interpreter.execute([command]);
@@ -45,9 +46,23 @@ describe('.execute', () => {
     expect(result.state.isHomed).toBe(false);
   });
 
+  test('ignores a command word with no number', () => {
+    // `G` on its own parses as an untyped command with no mnemonic, so there is
+    // nothing to look a handler up by. G92.1 reaches its handler this way, and
+    // this is the other side of that lookup.
+    const command = parsed('G');
+    const interpreter = new Interpreter();
+
+    const result = interpreter.execute([command]);
+
+    expect(result.paths.length).toEqual(0);
+    expect(result.state.x).toBeUndefined();
+    expect(result.state.isHomed).toBe(false);
+  });
+
   test('runs multiple commands', () => {
-    const command1 = new GCodeCommand('G0 X1 Y2 Z3', 'g0', { x: 1, y: 2, z: 3 });
-    const command2 = new GCodeCommand('G0 X4 Y5 Z6', 'g0', { x: 4, y: 5, z: 6 });
+    const command1 = parsed('G0 X1 Y2 Z3');
+    const command2 = parsed('G0 X4 Y5 Z6');
     const interpreter = new Interpreter();
 
     const result = interpreter.execute([command1, command2, command1, command2]);
@@ -61,7 +76,7 @@ describe('.execute', () => {
 
   test('runs on an existing job', () => {
     const job = new Job();
-    const command = new GCodeCommand('G0 X1 Y2 Z3', 'g0', { x: 1, y: 2, z: 3 });
+    const command = parsed('G0 X1 Y2 Z3');
     const interpreter = new Interpreter();
 
     const result = interpreter.execute([command], job);
@@ -74,7 +89,7 @@ describe('.execute', () => {
 
   test('finishes the current path at the end of the job', () => {
     const job = new Job();
-    const command = new GCodeCommand('G0 X1 Y2 Z3', 'g0', { x: 1, y: 2, z: 3 });
+    const command = parsed('G0 X1 Y2 Z3');
     const interpreter = new Interpreter();
     interpreter.execute([command], job);
 
@@ -84,8 +99,8 @@ describe('.execute', () => {
 
   test('resumes the current path when doing incremental execution', () => {
     const job = new Job();
-    const command1 = new GCodeCommand('G0 X1 Y2 Z3', 'g0', { x: 1, y: 2, z: 3 });
-    const command2 = new GCodeCommand('G0 X4 Y5 Z6', 'g0', { x: 4, y: 5, z: 6 });
+    const command1 = parsed('G0 X1 Y2 Z3');
+    const command2 = parsed('G0 X4 Y5 Z6');
     const interpreter = new Interpreter();
 
     interpreter.execute([command1], job);
@@ -101,11 +116,11 @@ describe('.execute', () => {
 
 describe('handler registry', () => {
   test('G1 is handled by the same handler as G0', () => {
-    expect(handlers.get('g1')).toBe(handlers.get('g0'));
+    expect(handlers.G1).toBe(handlers.G0);
   });
 
   test('G3 is handled by the same handler as G2', () => {
-    expect(handlers.get('g3')).toBe(handlers.get('g2'));
+    expect(handlers.G3).toBe(handlers.G2);
   });
 });
 

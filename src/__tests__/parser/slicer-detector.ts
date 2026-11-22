@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { detectSlicer, parseSlicerMetadata, getAvailableParsers } from '../../parser/slicer-detector';
+import { detectSlicer, parseSlicerMetadata } from '../../parser/slicer-detector';
 import { GCodeCommand } from '../../parser/gcode-parser';
 
 function createCommand(src: string, comment?: string, params = {}): GCodeCommand {
@@ -96,16 +96,6 @@ test('parseSlicerMetadata returns empty result for unknown slicer', () => {
 
   expect(result.slicerName).toBeUndefined();
   expect(result.layers).toHaveLength(0);
-});
-
-test('getAvailableParsers returns all parsers', () => {
-  const parsers = getAvailableParsers();
-
-  expect(parsers).toHaveLength(4);
-  expect(parsers[0].slicerName).toBe('PrusaFamily');
-  expect(parsers[1].slicerName).toBe('Simplify3D');
-  expect(parsers[2].slicerName).toBe('Slic3r');
-  expect(parsers[3].slicerName).toBe('Cura');
 });
 
 test('parseSlicerMetadata handles empty commands array', () => {
