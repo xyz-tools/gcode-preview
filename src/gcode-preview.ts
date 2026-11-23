@@ -234,9 +234,9 @@ export class GCodePreview {
       const split = splitChunk(tail, result.value);
       tail = split.tail;
 
-      // Parsing '' would still count a line -- ''.split('\n') is [''] -- and
-      // shift every lineIndex after it. Chunks complete nothing often: bytes
-      // arrive without a newline, or splitChunk holds a comment run back.
+      // Chunks complete nothing often: bytes arrive without a newline, or
+      // splitChunk holds a comment run back. Parsing '' yields zero lines,
+      // so skipping it just saves a no-op round through the parser.
       if (split.complete === '') continue;
 
       const { commands, metadata } = this.parser.parseGCode(split.complete);
@@ -273,10 +273,22 @@ export class GCodePreview {
   }
 
   /**
-   * Folds parsed commands into the job and announces the result.
-   * @param commands - Parsed G-code commands
+   * Executes already-parsed commands into the current job, without rendering.
+   * @param commands - Parsed G-code commands (e.g. from `parser.parseGCode(...).commands`)
+   *
+   * @remarks
+   * Feeds the commands to the interpreter, which folds the resulting paths and
+   * state changes into `job`, then fires {@link onJobUpdated}. Nothing is
+   * drawn: call `sceneManager.render()` (or a processGCode variant) to see the
+   * result.
+   *
+   * Safe to call repeatedly: each call resumes the job's in-progress path
+   * before executing and finishes it after, so commands delivered across many
+   * calls accumulate into the job exactly as one big call would. This is how
+   * the streaming path executes each chunk, and it lets external tools (such
+   * as debuggers) step through a file command by command.
    */
-  private executeCommands(commands: GCodeCommand[]): void {
+  executeCommands(commands: GCodeCommand[]): void {
     this.interpreter.execute(commands, this.job);
     this.onJobUpdated?.(this.job);
   }

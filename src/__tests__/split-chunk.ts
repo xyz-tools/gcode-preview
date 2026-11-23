@@ -7,22 +7,34 @@ describe('splitChunk', () => {
   test('keeps the newline out of the tail', () => {
     const { complete, tail } = splitChunk('', 'G1 X0\nG1 X1\nG1 X');
 
-    expect(complete).toEqual('G1 X0\nG1 X1');
+    // complete keeps its final newline: to the parser a newline terminates a
+    // line, so 'G1 X0\nG1 X1\n' is exactly the two completed lines
+    expect(complete).toEqual('G1 X0\nG1 X1\n');
     expect(tail).toEqual('G1 X');
   });
 
   test('prepends the previous tail to the complete lines', () => {
     const { complete, tail } = splitChunk('G1 X', '2\nG1 X3\nG1 X4');
 
-    expect(complete).toEqual('G1 X2\nG1 X3');
+    expect(complete).toEqual('G1 X2\nG1 X3\n');
     expect(tail).toEqual('G1 X4');
   });
 
   test('a chunk ending on a newline leaves an empty tail', () => {
     const { complete, tail } = splitChunk('', 'G1 X0\nG1 X1\n');
 
-    expect(complete).toEqual('G1 X0\nG1 X1');
+    expect(complete).toEqual('G1 X0\nG1 X1\n');
     expect(tail).toEqual('');
+  });
+
+  test('a blank line completing at a chunk boundary stays a line', () => {
+    // The previous chunk ended right after 'A\n'; this chunk opens with the
+    // newline that terminates a blank line. It must complete as '\n' (one
+    // empty line), not vanish.
+    const { complete, tail } = splitChunk('', '\nG1 X1\nG1 ');
+
+    expect(complete).toEqual('\nG1 X1\n');
+    expect(tail).toEqual('G1 ');
   });
 
   test('a chunk with no newline carries fully into the tail', () => {
@@ -74,20 +86,39 @@ describe('streaming across a chunk boundary', () => {
     expect(parser.lineCount).toEqual(3);
   });
 
+  test('a mid-file blank line survives chunking; a trailing newline adds none', () => {
+    // The boundary falls right after the blank line's newline, and the input
+    // ends on a newline: the blank line must be kept as exactly one empty
+    // line, while the terminating newline must not add a phantom one.
+    const chunks = ['G1 X0\n\nG1', ' X1\n'];
+
+    const parser = new Parser({ keepLines: true });
+    let tail = '';
+    for (const chunk of chunks) {
+      const split = splitChunk(tail, chunk);
+      tail = split.tail;
+      parser.parseGCode(split.complete);
+    }
+    if (tail !== '') parser.parseGCode(tail);
+
+    expect(parser.lines).toEqual(['G1 X0', '', 'G1 X1']);
+    expect(parser.lineCount).toEqual(3);
+  });
+
   test('carries a trailing comment run into the next chunk', () => {
     // A slicer describes a layer in a run of comments. Handing over half of
     // one leaves whatever reads them looking at a layer whose values are in
     // the next chunk (#445), so the run waits for the line that closes it.
     const { complete, tail } = splitChunk('', 'G1 X0\n;LAYER_CHANGE\n;Z:0.2\n');
 
-    expect(complete).toEqual('G1 X0');
+    expect(complete).toEqual('G1 X0\n');
     expect(tail).toEqual(';LAYER_CHANGE\n;Z:0.2\n');
   });
 
   test('releases the held comments once a G-code line closes the run', () => {
     const { complete, tail } = splitChunk(';LAYER_CHANGE\n;Z:0.2\n', 'G1 Z0.2\nG1 X1');
 
-    expect(complete).toEqual(';LAYER_CHANGE\n;Z:0.2\nG1 Z0.2');
+    expect(complete).toEqual(';LAYER_CHANGE\n;Z:0.2\nG1 Z0.2\n');
     expect(tail).toEqual('G1 X1');
   });
 
@@ -102,7 +133,7 @@ describe('streaming across a chunk boundary', () => {
     // The line carries G-code, so it ends the run rather than joining it.
     const { complete, tail } = splitChunk('', 'G28 ; home all axes\nG1 X1');
 
-    expect(complete).toEqual('G28 ; home all axes');
+    expect(complete).toEqual('G28 ; home all axes\n');
     expect(tail).toEqual('G1 X1');
   });
 
@@ -112,7 +143,7 @@ describe('streaming across a chunk boundary', () => {
     const first = splitChunk('', 'G1 X0\n;Z:0.2\n');
     const second = splitChunk(first.tail, 'G1 X1\n');
 
-    expect(second.complete).toEqual(';Z:0.2\nG1 X1');
+    expect(second.complete).toEqual(';Z:0.2\nG1 X1\n');
   });
 
   test('1-character chunks keep a comment block whole', () => {
