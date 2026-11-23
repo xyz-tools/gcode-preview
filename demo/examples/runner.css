@@ -1,0 +1,200 @@
+/* Page chrome for the examples: the code panel, the output frame and the
+   toolbar around them. Nothing here is part of any example — the example is
+   the code in the editor plus the page setup shown under it. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #fff;
+  --fg: #222;
+  --muted: #666;
+  --line: #ddd;
+  --panel: #f6f6f6;
+  --accent: #2b7a4b;
+  --error: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17181a;
+    --fg: #e6e6e6;
+    --muted: #9a9a9a;
+    --line: #333;
+    --panel: #202225;
+    --accent: #6cc08b;
+    --error: #f2836b;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font:
+    14px/1.5 system-ui,
+    sans-serif;
+}
+
+header {
+  flex: none;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+header a {
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+header a:hover {
+  text-decoration: underline;
+}
+
+header h1 {
+  margin: 2px 0 0;
+  font-size: 17px;
+}
+
+header p {
+  margin: 2px 0 0;
+  max-width: 70ch;
+  color: var(--muted);
+}
+
+main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 5fr);
+  min-height: 0;
+}
+
+/* Output */
+
+iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: #eee;
+}
+
+/* Code panel */
+
+.code {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.toolbar {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.toolbar button {
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.toolbar button:hover {
+  border-color: var(--muted);
+}
+
+.toolbar button.primary {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.toolbar kbd {
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+}
+
+#status {
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+#status.error {
+  color: var(--error);
+}
+
+textarea {
+  flex: 1;
+  padding: 12px;
+  border: 0;
+  outline-offset: -2px;
+  background: var(--bg);
+  color: inherit;
+  font:
+    13px/1.55 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+  resize: none;
+  tab-size: 2;
+}
+
+details {
+  flex: none;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+
+summary {
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+details pre {
+  max-height: 30vh;
+  margin: 0;
+  padding: 0 12px 12px;
+  overflow: auto;
+  font:
+    12px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+}
+
+@media (max-width: 860px) {
+  main {
+    grid-template-columns: none;
+    grid-template-rows: minmax(220px, 2fr) minmax(0, 3fr);
+  }
+
+  iframe {
+    order: -1;
+    border-left: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}

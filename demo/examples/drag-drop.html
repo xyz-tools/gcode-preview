@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Drag & drop — gcode-preview</title>
+    <link rel="stylesheet" href="runner.css" />
+  </head>
+  <body>
+    <header>
+      <a href="index.html">← all examples</a>
+      <h1>Drag & drop</h1>
+      <p>Drop a .gcode file on the canvas — the library reads it and tells you what it found.</p>
+    </header>
+
+    <main>
+      <section class="code">
+        <div class="toolbar">
+          <button id="run" class="primary">Run</button>
+          <button id="reset">Reset</button>
+          <kbd>⌘/Ctrl + ↵</kbd>
+          <span id="status"></span>
+        </div>
+        <textarea spellcheck="false" aria-label="Example code"></textarea>
+        <details>
+          <summary>The rest of the page</summary>
+          <pre id="setup"></pre>
+        </details>
+      </section>
+      <iframe title="Example output"></iframe>
+    </main>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../lib/three/build/three.module.min.js",
+          "gcode-preview": "../dist/gcode-preview.es.js"
+        }
+      }
+    </script>
+
+    <template id="output">
+      <style>
+        canvas { display: block; width: 100vw; height: 100vh; }
+        #hint {
+          position: fixed; inset: 0; display: grid; place-content: center;
+          color: #fff; font: 15px/1.4 system-ui, sans-serif; pointer-events: none;
+        }
+      </style>
+      <canvas></canvas>
+      <div id="hint">Drop a .gcode file here</div>
+    </template>
+
+    <script type="text/plain" id="code">
+      import { GCodePreview } from 'gcode-preview';
+
+      const canvas = document.querySelector('canvas');
+      const hint = document.querySelector('#hint');
+
+      const preview = new GCodePreview({
+        canvas,
+        // Wires the drag & drop handlers onto the canvas for you.
+        droppable: true,
+        buildVolume: { x: 220, y: 220, z: 250 },
+        backgroundColor: '#1a1a2e'
+      });
+
+      // Dispatched on the canvas once a dropped file has been read and rendered.
+      canvas.addEventListener('update', (event) => {
+        const { filename, layers, paths } = event.detail;
+        hint.textContent = `${filename} — ${layers} layers, ${paths} paths`;
+      });
+
+      // The renderer is sized once, at construction. Nothing in the library
+      // watches the canvas, so tell it when the canvas changes size.
+      new ResizeObserver(() => preview.sceneManager.resize()).observe(canvas);
+
+      // Keep the viewpoint across a reload — and so across Run, which loads
+      // the page again. saveCamera()/loadCamera() persist position, rotation,
+      // zoom and orbit target to localStorage.
+      preview.sceneManager.loadCamera();
+      preview.sceneManager.controls.addEventListener('end', () => preview.sceneManager.saveCamera());
+    </script>
+
+    <script type="module" src="runner.js"></script>
+  </body>
+</html>
