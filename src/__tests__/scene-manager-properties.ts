@@ -761,6 +761,60 @@ describe('SceneManager properties', () => {
       expect(sceneManager.endLayer).toBeUndefined();
     });
 
+    test('clear() reopens the range instead of pinning it to the cleared job', () => {
+      const fresh = createSceneManager({ job: threeLayerJob() });
+      fresh.endLayer = 3;
+      fresh.startLayer = 2;
+
+      fresh.clear();
+
+      expect(fresh.endLayer).toBeUndefined();
+      expect(fresh.startLayer).toBeUndefined();
+
+      fresh.dispose();
+    });
+
+    test('the file loaded after clear() renders in full', () => {
+      // the two layer job stands in for the smaller file that is cleared away
+      const fresh = createSceneManager();
+      fresh.endLayer = 2;
+      fresh.clear();
+
+      // a taller file takes the place of the cleared one, as GCodePreview.clear does
+      fresh.job = threeLayerJob();
+      const spy = vi.spyOn(objectsManager(fresh), 'updateClippingPlanes');
+      fresh.updateClippingPlanes();
+
+      expect(spy).toHaveBeenCalledWith(undefined, undefined);
+
+      fresh.dispose();
+    });
+
+    test('constructor bounds survive the empty job they are set on', () => {
+      // GCodePreview hands the SceneManager an empty job, so the bounds cannot be
+      // clamped yet: they belong to the file that is loaded next
+      const fresh = createSceneManager({ job: new Job(), startLayer: 2, endLayer: 4 });
+
+      expect(fresh.startLayer).toBe(2);
+      expect(fresh.endLayer).toBe(4);
+
+      fresh.dispose();
+    });
+
+    test('constructor bounds clip the file that is loaded next', () => {
+      const fresh = createSceneManager({ job: new Job(), startLayer: 2, endLayer: 4 });
+
+      fresh.job = threeLayerJob();
+      const spy = vi.spyOn(objectsManager(fresh), 'updateClippingPlanes');
+      fresh.updateClippingPlanes();
+
+      // the lower bound bites; the upper one sits past the top layer, so that side
+      // stays open rather than clipping the file away
+      expect(spy).toHaveBeenCalledWith(expect.any(Number), undefined);
+
+      fresh.dispose();
+    });
+
     test('updates the clipping planes when the range moves', () => {
       const spy = vi.spyOn(objectsManager(sceneManager), 'updateClippingPlanes');
 

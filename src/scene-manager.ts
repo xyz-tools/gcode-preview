@@ -30,6 +30,15 @@ const ORTHO_FAR = 10000;
 const FRUSTUM_PADDING = 1.2; // 20% margin around model/volume
 const DEFAULT_FRUSTUM_SIZE = 500; // fallback when no model or build volume is loaded
 
+/**
+ * Normalizes a 1-based layer bound coming from the constructor options.
+ * Anything that is not a finite layer number — including `Infinity`, which reads
+ * as "no limit" — leaves that side of the range unbounded.
+ */
+function asLayerBound(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
 export type SceneManagerOptions = {
   /** Build volume dimensions */
   buildVolume?: BuildVolumeDef;
@@ -165,8 +174,15 @@ export class SceneManager {
     if (opts.backgroundColor !== undefined) {
       this.backgroundColor = new Color(opts.backgroundColor);
     }
-    this.endLayer = opts.endLayer;
-    this.startLayer = opts.startLayer;
+    // assign the backing fields directly: the job is still empty here, so the
+    // setters would clamp both bounds against a job with no layers and discard
+    // them. updateClippingPlanes resolves an out-of-range bound to an open side,
+    // so the requested range applies to the file that is loaded next instead.
+    this._endLayer = asLayerBound(opts.endLayer);
+    this._startLayer = asLayerBound(opts.startLayer);
+    // the setters would have done this; objectsManager keeps the bounds and
+    // applies them to the materials initScene() builds further down
+    this.updateClippingPlanes();
 
     if (opts.buildVolume) {
       this.objectsManager.setBuildVolume(opts.buildVolume);
@@ -776,8 +792,12 @@ export class SceneManager {
       ? { x: buildVolume.x, y: buildVolume.y, z: buildVolume.z, smallGrid: buildVolume.smallGrid }
       : undefined;
 
-    this.startLayer = undefined;
-    this.endLayer = Infinity;
+    // reset the range directly: the setters clamp against the job that is still
+    // attached here, so they would pin endLayer to the layer count of the file
+    // being cleared and clip the next file to the old file's height
+    this._startLayer = undefined;
+    this._endLayer = undefined;
+    this.prevStartLayer = 0;
     this._singleLayerMode = false;
     this.job = undefined;
 
