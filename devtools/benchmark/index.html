@@ -21,6 +21,71 @@
 
     td.delta-better { color: var(--dt-good); }
     td.delta-worse { color: var(--dt-bad); }
+
+    /* harvest history: one row per commit, one column per metric */
+    .history-head {
+      font-size: 0.9rem;
+      color: var(--dt-text-strong);
+      margin: 1.5rem 0 0.5rem;
+    }
+
+    /* seven metric columns don't fit a phone; the table scrolls, the page doesn't */
+    .history-scroll {
+      overflow-x: auto;
+    }
+
+    table.bench-history {
+      white-space: nowrap;
+    }
+
+    table.bench-history td.subject {
+      max-width: 22rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    table.bench-history .delta {
+      display: block;
+      font-size: 0.7rem;
+      color: var(--dt-text-muted);
+    }
+
+    table.bench-history .delta.delta-better { color: var(--dt-good); }
+    table.bench-history .delta.delta-worse { color: var(--dt-bad); }
+
+    button.row-remove {
+      background: none;
+      border: 0;
+      color: var(--dt-text-muted);
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+    }
+
+    button.row-remove:hover { color: var(--dt-bad); }
+
+    .checkbox-group {
+      flex-direction: row !important;
+      align-items: center;
+      gap: 0.4rem !important;
+    }
+
+    /* .bench-controls sets display:flex on every group, which would otherwise
+       win over the [hidden] attribute the mode switch toggles */
+    .bench-controls .control-group[hidden] {
+      display: none;
+    }
+
+    /* single version being measured — don't leave half the row empty */
+    .bench-viewports:has(#viewport-b[hidden]) {
+      grid-template-columns: 1fr;
+    }
+
+    .history-title {
+      font-size: 1.1rem;
+      color: var(--dt-text-strong);
+      margin: 2rem 0 0.5rem;
+    }
   </style>
 </head>
 
@@ -37,10 +102,20 @@
 
     <div class="bench-controls">
       <div class="control-group">
+        <label for="mode">Mode</label>
+        <div class="bulma-select">
+          <select id="mode">
+            <option value="compare">Compare A/B</option>
+            <option value="harvest">Harvest one version</option>
+            <option value="sweep">Sweep commit builds</option>
+          </select>
+        </div>
+      </div>
+      <div class="control-group" id="version-a-group">
         <label for="version-a">Version A</label>
         <div class="bulma-select"><select id="version-a"></select></div>
       </div>
-      <div class="control-group">
+      <div class="control-group" id="version-b-group">
         <label for="version-b">Version B</label>
         <div class="bulma-select"><select id="version-b"></select></div>
       </div>
@@ -67,17 +142,27 @@
           </select>
         </div>
       </div>
+      <div class="control-group checkbox-group" id="skip-done-group">
+        <input type="checkbox" id="skip-done" checked />
+        <label for="skip-done">Skip already harvested</label>
+      </div>
       <button id="run-benchmark" class="bench-run">Run benchmark</button>
+      <button id="stop-sweep" class="bench-copy" type="button" hidden>Stop</button>
     </div>
 
     <div id="status" class="bench-status">Pick two versions and a file, then hit run.</div>
 
+    <div id="hidden-warning" class="verdict bad" hidden>
+      This tab is in the background — requestAnimationFrame is throttled, so the FPS phase is stalled.
+      Bring the tab back to the foreground to let the run finish.
+    </div>
+
     <div class="bench-viewports">
-      <div class="bench-viewport">
-        <header><span>Version A</span><span id="label-a"></span></header>
+      <div class="bench-viewport" id="viewport-a">
+        <header><span id="viewport-a-title">Version A</span><span id="label-a"></span></header>
         <div class="frame-holder" id="frame-a"></div>
       </div>
-      <div class="bench-viewport">
+      <div class="bench-viewport" id="viewport-b">
         <header><span>Version B</span><span id="label-b"></span></header>
         <div class="frame-holder" id="frame-b"></div>
       </div>
@@ -85,11 +170,17 @@
 
     <div id="results"></div>
 
+    <h2 class="history-title">Harvested runs</h2>
+    <div id="history"></div>
+
     <p class="bench-note">
       Versions run one at a time, each in a fresh iframe with its own copy of the library and three.js,
       so runs don't contaminate each other. Peak heap needs Chrome (<code>performance.memory</code>);
       other numbers work in any browser. Published versions load from jsDelivr; "local build" uses
       <code>dist/gcode-preview.es.js</code> from this checkout (run <code>npm run build</code> first).
+      Commit builds come from <code>node devtools/sweep/build-commits.mjs</code>, which builds every commit in a
+      range into <code>devtools/dist/</code> against this checkout's three.js — so a sweep varies the library
+      and nothing else.
     </p>
   </div>
 

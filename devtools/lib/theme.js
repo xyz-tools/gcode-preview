@@ -7,6 +7,24 @@
 (() => {
   const KEY = 'gcode-preview-devtools:theme';
 
+  // The pages link /style.css, which is the demo's stylesheet only when the
+  // demo is the server root; under a repo-root server it lives at /demo/.
+  // Both are linked and whichever isn't there 404s harmlessly — a probe would
+  // have to be async, and a stylesheet arriving late is a flash of unstyled
+  // page. This script is classic and synchronous, so currentScript is us.
+  //
+  // It goes in NEXT TO the existing link, not here at the script: theme.css is
+  // linked between the two and must keep winning over the demo's stylesheet
+  // (its whole contract is "linked AFTER /style.css").
+  const here = document.currentScript?.src;
+  const demoStylesheet = document.querySelector('link[rel="stylesheet"][href="/style.css"]');
+  if (here && demoStylesheet) {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = new URL('../../demo/style.css', here).href;
+    demoStylesheet.parentNode.insertBefore(link, demoStylesheet.nextSibling);
+  }
+
   const readStored = () => {
     try {
       const value = localStorage.getItem(KEY);
