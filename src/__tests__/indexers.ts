@@ -1,4 +1,5 @@
-import { test, expect, describe } from 'vitest';
+import { join } from 'node:path';
+import { test, expect, describe, vi } from 'vitest';
 import { Path, PathType } from '../path';
 import { Layer } from '../layer';
 import {
@@ -10,6 +11,20 @@ import {
   TravelTypeIndexer
 } from '../indexers';
 import { LayerMetadata } from '../parser/metadata-parser-base';
+import { Parser } from '../parser/gcode-parser';
+import { Interpreter } from '../interpreter';
+import { Job } from '../job';
+import {
+  listTraceFiles,
+  readTrace,
+  itfInt,
+  itfBool,
+  itfStr,
+  itfList,
+  itfRecord,
+  centiMismatch,
+  type ItfState
+} from './helpers/itf-replay';
 
 function makePath(travelType: PathType, points: [number, number, number][] = [], tool: number = 0): Path {
   const path = new Path(travelType, 0.6, 0.2, tool);
@@ -548,4 +563,220 @@ describe('LayersMetadataIndexer strategy selection', () => {
     expect(layers[0].z).toBe(0.28);
     expect(layers[0].height).toBe(0.28);
   });
+});
+
+describe('layer-indexer spec trace replay', () => {
+  // Replays ITF traces produced from verification/quint/layer-indexer.qnt
+  // against the real parser + interpreter + job pipeline. Each trace state
+  // holds two records: `ev` (the event taken: a move line or a
+  // PrusaSlicer-style layer-comment block, with its whole-millimeter words
+  // and the sort outcome) and `s` (the expected observables, lengths in
+  // centi-millimeters). Each step is rebuilt as its own chunk and fed
+  // through one streaming Parser/Job — exactly how GCodePreview.processGCode
+  // drives the layer indexer. After every step the replay compares the FULL
+  // layer partition (count, z, height and resident path count per layer),
+  // the parser's accumulated layer metadata, the job's path count, and the
+  // layer index recorded on the job's last path — so "dropped" and "nosort"
+  // outcomes assert real facts (no index was ever recorded / the recorded
+  // index did not change) instead of asserting nothing.
+  const tracesDir = join(process.cwd(), 'verification', 'quint', 'traces', 'layer-indexer');
+
+  type SpecLayer = { z: number; h: number; n: number };
+  type SpecMetaEntry = { hasZ: boolean; z: number; hasH: boolean; h: number };
+
+  // The decoded step: the event plus every compared observable. The spec's
+  // model-internal fields (occ, pointer, locked, ghost*) are not decoded.
+  type SpecStep = {
+    kind: string;
+    hasZ: boolean;
+    z: number;
+    hasH: boolean;
+    h: number;
+    outcome: string;
+    assigned: number;
+    layers: SpecLayer[];
+    meta: SpecMetaEntry[];
+    pathsCount: number;
+    lastIdx: number;
+  };
+
+  const decodeStep = (raw: ItfState): SpecStep => {
+    const s = itfRecord(raw.s, 's');
+    const ev = itfRecord(raw.ev, 'ev');
+    return {
+      kind: itfStr(ev.kind, 'ev.kind'),
+      hasZ: itfBool(ev.hasZ, 'ev.hasZ'),
+      z: itfInt(ev.z, 'ev.z'),
+      hasH: itfBool(ev.hasH, 'ev.hasH'),
+      h: itfInt(ev.h, 'ev.h'),
+      outcome: itfStr(ev.outcome, 'ev.outcome'),
+      assigned: itfInt(ev.assigned, 'ev.assigned'),
+      layers: itfList(s.layers, 's.layers').map((layer, i) => {
+        const record = itfRecord(layer, `s.layers[${i}]`);
+        return {
+          z: itfInt(record.z, `s.layers[${i}].z`),
+          h: itfInt(record.h, `s.layers[${i}].h`),
+          n: itfInt(record.n, `s.layers[${i}].n`)
+        };
+      }),
+      meta: itfList(s.meta, 's.meta').map((entry, i) => {
+        const record = itfRecord(entry, `s.meta[${i}]`);
+        return {
+          hasZ: itfBool(record.hz, `s.meta[${i}].hz`),
+          z: itfInt(record.z, `s.meta[${i}].z`),
+          hasH: itfBool(record.hh, `s.meta[${i}].hh`),
+          h: itfInt(record.h, `s.meta[${i}].h`)
+        };
+      }),
+      pathsCount: itfInt(s.pathsCount, 's.pathsCount'),
+      lastIdx: itfInt(itfRecord(s.last, 's.last').idx, 's.last.idx')
+    };
+  };
+
+  // Builds the input chunk a step's event describes. Moves get a fresh X
+  // destination and a monotonically growing absolute E from the step index,
+  // so every move adds a vertex and every E word reads as a real extrusion.
+  const buildChunk = (spec: SpecStep, stepIndex: number): string => {
+    switch (spec.kind) {
+      case 'travel':
+        return `G0 X${stepIndex} Z${spec.z}`;
+      case 'extrude':
+        return `G1 X${stepIndex} E${stepIndex}`;
+      case 'extrudeup':
+        return `G1 X${stepIndex} Z${spec.z} E${stepIndex}`;
+      case 'layercomment': {
+        const lines = [';LAYER_CHANGE'];
+        if (spec.hasZ) lines.push(`;Z:${spec.z}`);
+        if (spec.hasH) lines.push(`;HEIGHT:${spec.h}`);
+        return lines.join('\n');
+      }
+      default:
+        throw new Error(`unknown spec event "${spec.kind}"`);
+    }
+  };
+
+  // The full per-step comparison from the trace contract. Every assertion
+  // message names the trace file, step index, input, field, and values.
+  const compareStep = (
+    traceFile: string,
+    stepIndex: number,
+    input: string,
+    job: Job,
+    parser: Parser,
+    spec: SpecStep
+  ): void => {
+    const at = (field: string, expected: unknown, actual: unknown) =>
+      `${traceFile} step ${stepIndex} (${input}) field ${field}: expected ${String(expected)}, actual ${String(actual)}`;
+
+    // The whole partition: layer count, each layer's z/height, and the
+    // number of path entries resident in each layer's paths array.
+    expect(job.layers.length, at('layers.length', spec.layers.length, job.layers.length)).toBe(spec.layers.length);
+    for (let i = 0; i < spec.layers.length; i++) {
+      expect(
+        centiMismatch(job.layers[i].z, spec.layers[i].z),
+        at(`layers[${i}].z`, spec.layers[i].z / 100, job.layers[i].z)
+      ).toBeNull();
+      expect(
+        centiMismatch(job.layers[i].height, spec.layers[i].h),
+        at(`layers[${i}].height`, spec.layers[i].h / 100, job.layers[i].height)
+      ).toBeNull();
+      expect(
+        job.layers[i].paths.length,
+        at(`layers[${i}].paths.length`, spec.layers[i].n, job.layers[i].paths.length)
+      ).toBe(spec.layers[i].n);
+    }
+
+    // The parser-side accumulated layer metadata: entry count, stored z and
+    // height (presence and exact value), and positional layer numbering.
+    // lineIndex is deliberately not compared (see the companion).
+    const metaLayers = parser.metadata.layerMetadata ?? [];
+    expect(metaLayers.length, at('metadata.layers.length', spec.meta.length, metaLayers.length)).toBe(spec.meta.length);
+    for (let i = 0; i < spec.meta.length; i++) {
+      const entry = metaLayers[i];
+      expect(entry.z !== undefined, at(`metadata.layers[${i}].z presence`, spec.meta[i].hasZ, entry.z)).toBe(
+        spec.meta[i].hasZ
+      );
+      if (spec.meta[i].hasZ) {
+        expect(
+          centiMismatch(entry.z!, spec.meta[i].z),
+          at(`metadata.layers[${i}].z`, spec.meta[i].z / 100, entry.z)
+        ).toBeNull();
+      }
+      expect(
+        entry.height !== undefined,
+        at(`metadata.layers[${i}].height presence`, spec.meta[i].hasH, entry.height)
+      ).toBe(spec.meta[i].hasH);
+      if (spec.meta[i].hasH) {
+        expect(
+          centiMismatch(entry.height!, spec.meta[i].h),
+          at(`metadata.layers[${i}].height`, spec.meta[i].h / 100, entry.height)
+        ).toBeNull();
+      }
+      expect(entry.layerIndex, at(`metadata.layers[${i}].layerIndex`, i, entry.layerIndex)).toBe(i);
+    }
+
+    // The last path's recorded layer index, asserted on EVERY step: a filed
+    // step must show the assigned layer, and a dropped/nosort step must show
+    // the sticky previous value (or no value at all), so negative outcomes
+    // are real assertions.
+    expect(job.paths.length, at('paths.length', spec.pathsCount, job.paths.length)).toBe(spec.pathsCount);
+    if (spec.pathsCount > 0) {
+      const lastPath = job.paths[job.paths.length - 1];
+      expect(lastPath, at('paths[last]', 'a finished path', lastPath)).toBeDefined();
+      if (spec.lastIdx >= 0) {
+        expect(lastPath.layerIndex, at('paths[last].layerIndex', spec.lastIdx, lastPath.layerIndex)).toBe(spec.lastIdx);
+      } else {
+        expect(lastPath.layerIndex, at('paths[last].layerIndex', 'undefined', lastPath.layerIndex)).toBeUndefined();
+      }
+      if (spec.outcome === 'filed') {
+        expect(lastPath.layerIndex, at('filed layerIndex', spec.assigned, lastPath.layerIndex)).toBe(spec.assigned);
+      }
+      if (spec.outcome === 'dropped') {
+        expect(lastPath.layerIndex, at('dropped layerIndex', 'undefined', lastPath.layerIndex)).toBeUndefined();
+      }
+    }
+  };
+
+  const traceFiles = listTraceFiles(tracesDir);
+
+  test('the traces directory exists and holds at least one ITF trace', () => {
+    // Fails (rather than silently skipping the replay) when the Quint traces
+    // have not been generated into verification/quint/traces/layer-indexer.
+    expect(traceFiles.length, `expected *.itf.json traces in ${tracesDir}`).toBeGreaterThan(0);
+  });
+
+  for (const traceFile of traceFiles) {
+    test(`replays ${traceFile} through the parser + interpreter + job`, () => {
+      const states = readTrace(tracesDir, traceFile).map(decodeStep);
+
+      // One job, parser and interpreter per trace: layer state, the growing
+      // metadata array and the strategy lock all persist across the steps.
+      const job = new Job();
+      const interpreter = new Interpreter();
+      const parser = new Parser();
+
+      // A non-planar extrusion makes the job warn once while it clears the
+      // layer index; that collapse is part of the modeled behavior.
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      try {
+        expect(states[0].kind, `${traceFile} step 0: the first state must be the init state`).toBe('init');
+        compareStep(traceFile, 0, '<init>', job, parser, states[0]);
+
+        for (let step = 1; step < states.length; step++) {
+          const spec = states[step];
+          const input = buildChunk(spec, step);
+          const { commands, metadata } = parser.parseGCode(input);
+          // forward metadata before executing, like GCodePreview.processGCode
+          job.metadata = metadata;
+          interpreter.execute(commands, job);
+          if (spec.outcome === 'collapse') {
+            expect(warnSpy, `${traceFile} step ${step}: the collapse must warn`).toHaveBeenCalledTimes(1);
+          }
+          compareStep(traceFile, step, input, job, parser, spec);
+        }
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+  }
 });

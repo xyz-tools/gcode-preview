@@ -16,8 +16,9 @@ export default defineConfig({
   test: {
     include: ['src/__tests__/**/*.ts'],
     // *.test-d.ts files are compile-time-only pins, run by the typecheck
-    // pass below rather than as runtime tests.
-    exclude: [...defaultExclude, 'src/__tests__/**/*.test-d.ts'],
+    // pass below rather than as runtime tests. helpers/ holds shared test
+    // utilities, not test suites.
+    exclude: [...defaultExclude, 'src/__tests__/**/*.test-d.ts', 'src/__tests__/helpers/**'],
     environment: 'happy-dom',
     globals: true,
     typecheck: {
